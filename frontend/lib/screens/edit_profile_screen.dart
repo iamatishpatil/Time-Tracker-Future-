@@ -98,7 +98,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     );
 
     if (source != null) {
-      final XFile? image = await picker.pickImage(source: source);
+      final XFile? image = await picker.pickImage(
+        source: source,
+        preferredCameraDevice: CameraDevice.front,
+      );
       if (image != null) {
         setState(() => _imageFile = image);
       }
@@ -137,9 +140,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Edit Profile')),
-      body: _currentUser == null 
+    return Container(
+      color: const Color(0xFFF3E5F5),
+      child: _currentUser == null 
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
               padding: const EdgeInsets.all(24),
@@ -154,7 +157,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         backgroundImage: _imageFile != null 
                             ? FileImage(File(_imageFile!.path)) 
                             : (_currentUser!['profilePicture'] != null 
-                                ? NetworkImage('http://192.168.1.33:3000${_currentUser!['profilePicture']}')
+                                ? NetworkImage(ApiService.getImageUrl(_currentUser!['profilePicture']))
                                 : null) as ImageProvider?,
                         child: (_imageFile == null && _currentUser!['profilePicture'] == null) 
                             ? const Icon(Icons.camera_alt, size: 40) 

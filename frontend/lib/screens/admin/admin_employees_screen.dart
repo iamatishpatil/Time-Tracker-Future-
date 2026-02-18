@@ -1,7 +1,7 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import '../../services/api_service.dart';
+import '../../widgets/common/glass_card.dart';
+import 'employee_form_screen.dart';
 
 class AdminEmployeesScreen extends StatefulWidget {
   const AdminEmployeesScreen({super.key});
@@ -11,20 +11,20 @@ class AdminEmployeesScreen extends StatefulWidget {
 }
 
 class _AdminEmployeesScreenState extends State<AdminEmployeesScreen> {
-  List<dynamic> _users = [];
+  List<dynamic> _employees = [];
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _loadUsers();
+    _loadEmployees();
   }
 
-  Future<void> _loadUsers() async {
+  Future<void> _loadEmployees() async {
     setState(() => _isLoading = true);
     try {
       final data = await ApiService.getAllUsers();
-      if (mounted) setState(() => _users = data);
+      if (mounted) setState(() => _employees = data);
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
     } finally {
@@ -32,167 +32,144 @@ class _AdminEmployeesScreenState extends State<AdminEmployeesScreen> {
     }
   }
 
-  Future<void> _deleteUser(int id) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Confirm Delete'),
-        content: const Text('Are you sure you want to delete this employee? This will also remove their attendance and leave records.'),
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Manage Employees'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          IconButton(
+            icon: const Icon(Icons.person_add),
+            onPressed: () async {
+              final result = await Navigator.push(
+                context, 
+                MaterialPageRoute(builder: (_) => EmployeeFormScreen())
+              );
+              if (result == true) _loadEmployees();
+            },
+          ),
+        ],
+      ),
+      body: _isLoading 
+          ? const Center(child: CircularProgressIndicator())
+          : _employees.isEmpty
+              ? const Center(child: Text('No employees found.'))
+              : ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: _employees.length,
+                  itemBuilder: (context, index) {
+                    final employee = _employees[index];
+                    return _buildEmployeeCard(employee);
+                  },
+                ),
+    );
+  }
+
+  Widget _buildEmployeeCard(Map<String, dynamic> employee) {
+    final bool isActive = employee['isActive'] == 1 || employee['isActive'] == true;
+    
+    return GlassCard(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      borderRadius: 20,
+      child: Row(
+          children: [
+            CircleAvatar(
+              radius: 30,
+              backgroundImage: employee['profilePicture'] != null 
+                ? NetworkImage(ApiService.getImageUrl(employee['profilePicture']))
+                : null,
+              child: employee['profilePicture'] == null ? const Icon(Icons.person, size: 30) : null,
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    employee['fullName'] ?? 'User',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                  ),
+                  Text(
+                    '${employee['role'] ?? 'Employee'} | ${employee['shiftName'] ?? 'No Shift'}',
+                    style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(Icons.phone, size: 12, color: Colors.grey[600]),
+                      const SizedBox(width: 4),
+                      Text(employee['mobileNumber'] ?? 'N/A', style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            Column(
+              children: [
+                Switch(
+                  value: isActive,
+                  onChanged: (val) async {
+                    try {
+                      await ApiService.updateUser(employee['id'], {'isActive': val ? 1 : 0});
+                      _loadEmployees();
+                    } catch (e) {
+                      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+                    }
+                  },
+                  activeColor: const Color(0xFF00BFA5),
+                ),
+                Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.edit_outlined, color: Colors.blue),
+                      onPressed: () async {
+                        final result = await Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => EmployeeFormScreen(employee: employee))
+                        );
+                        if (result == true) _loadEmployees();
+                      },
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline, color: Colors.red),
+                      onPressed: () => _confirmDelete(employee),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ],
+        ), 
+    );
+  }
+
+  Future<void> _confirmDelete(Map<String, dynamic> employee) async {
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Employee'),
+        content: Text('Are you sure you want to delete ${employee['fullName']}? This action cannot be undone.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('CANCEL')),
           TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+            onPressed: () => Navigator.pop(context, true), 
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('DELETE'),
           ),
         ],
       ),
     );
 
-    if (confirm == true) {
+    if (confirmed == true) {
       try {
-        await ApiService.deleteUser(id);
-        _loadUsers();
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Employee deleted')));
+        await ApiService.deleteUser(employee['id']);
+        _loadEmployees();
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Employee deleted.')));
       } catch (e) {
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
       }
     }
   }
-
-  void _showAddUserDialog() {
-    final nameController = TextEditingController();
-    final mobileController = TextEditingController();
-    final emailController = TextEditingController();
-    final passwordController = TextEditingController();
-    String selectedRole = 'User';
-    XFile? pickedImage;
-    final ImagePicker picker = ImagePicker();
-
-    showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          title: const Text('Add New Employee'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                GestureDetector(
-                  onTap: () async {
-                    final ImageSource? source = await showModalBottomSheet<ImageSource>(
-                      context: context,
-                      builder: (ctx) => Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          ListTile(
-                            leading: const Icon(Icons.photo_library),
-                            title: const Text('Gallery'),
-                            onTap: () => Navigator.pop(ctx, ImageSource.gallery),
-                          ),
-                          ListTile(
-                            leading: const Icon(Icons.camera_alt),
-                            title: const Text('Camera'),
-                            onTap: () => Navigator.pop(ctx, ImageSource.camera),
-                          ),
-                        ],
-                      ),
-                    );
-                    if (source != null) {
-                      final XFile? image = await picker.pickImage(source: source);
-                      if (image != null) {
-                        setDialogState(() => pickedImage = image);
-                      }
-                    }
-                  },
-                  child: CircleAvatar(
-                    radius: 40,
-                    backgroundColor: Colors.grey[200],
-                    backgroundImage: pickedImage != null ? FileImage(File(pickedImage!.path)) : null,
-                    child: pickedImage == null ? const Icon(Icons.add_a_photo, size: 32) : null,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Full Name')),
-                TextField(controller: mobileController, decoration: const InputDecoration(labelText: 'Mobile Number'), keyboardType: TextInputType.phone),
-                TextField(controller: emailController, decoration: const InputDecoration(labelText: 'Email'), keyboardType: TextInputType.emailAddress),
-                TextField(controller: passwordController, decoration: const InputDecoration(labelText: 'Password'), obscureText: true),
-                DropdownButton<String>(
-                  value: selectedRole,
-                  isExpanded: true,
-                  onChanged: (val) => setDialogState(() => selectedRole = val!),
-                  items: ['User', 'Admin'].map((r) => DropdownMenuItem(value: r, child: Text(r))).toList(),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-            ElevatedButton(
-              onPressed: () async {
-                try {
-                  await ApiService.createUser({
-                    'fullName': nameController.text,
-                    'mobileNumber': mobileController.text,
-                    'email': emailController.text,
-                    'password': passwordController.text,
-                    'role': selectedRole,
-                  }, image: pickedImage);
-                  if (mounted) {
-                    Navigator.pop(ctx);
-                    _loadUsers();
-                  }
-                } catch (e) {
-                  if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
-                }
-              },
-              child: const Text('Create'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('All Employees')),
-      body: _isLoading 
-          ? const Center(child: CircularProgressIndicator())
-          : ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: _users.length,
-              itemBuilder: (context, index) {
-                final user = _users[index];
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  child: ListTile(
-                    leading: CircleAvatar(
-                      backgroundImage: user['profilePicture'] != null 
-                          ? NetworkImage('http://192.168.1.8:3000${user['profilePicture']}')
-                          : null,
-                      child: user['profilePicture'] == null ? const Icon(Icons.person) : null,
-                    ),
-                    title: Text(user['fullName'] ?? 'Unknown', style: const TextStyle(fontWeight: FontWeight.bold)),
-                    subtitle: Text(user['email'] ?? ''),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(user['role'] ?? 'User', style: TextStyle(color: user['role'] == 'Admin' ? Colors.red : Colors.blue)),
-                        IconButton(
-                          icon: const Icon(Icons.delete, color: Colors.red, size: 20),
-                          onPressed: () => _deleteUser(user['id']),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _showAddUserDialog,
-        child: const Icon(Icons.add),
-      ),
-    );
-  }
 }
+

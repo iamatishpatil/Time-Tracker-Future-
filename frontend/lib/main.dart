@@ -11,6 +11,9 @@ import 'screens/admin/admin_leaves_screen.dart';
 import 'screens/attendance_history_screen.dart';
 import 'screens/leave_screen.dart';
 import 'screens/edit_profile_screen.dart';
+import 'screens/change_password_screen.dart';
+import 'screens/main_container.dart';
+import 'screens/notification_screen.dart';
 import 'services/api_service.dart';
 
 void main() {
@@ -41,7 +44,7 @@ class TimeTrackerApp extends StatelessWidget {
         
         // Typography - Modern & Clean
         textTheme: GoogleFonts.outfitTextTheme(
-          Theme.of(context).textTheme,
+          Typography.material2021().black,
         ).apply(
           bodyColor: const Color(0xFF1A1A1D), 
           displayColor: const Color(0xFF1A1A1D),
@@ -108,17 +111,18 @@ class TimeTrackerApp extends StatelessWidget {
           size: 24,
         ),
       ),
-      initialRoute: '/login',
+      // Rely on 'home' logic for initial entry point
+
       routes: {
         '/login': (context) => const LoginScreen(),
         '/register': (context) => const RegisterScreen(),
-        '/home': (context) => const HomeScreen(),
+        '/home': (context) => const MainContainer(),
         '/history': (context) => const AttendanceHistoryScreen(),
         '/leave': (context) => const LeaveScreen(),
-        '/admin': (context) => const AdminDashboardScreen(),
-        '/admin-attendance': (context) => const AdminAttendanceScreen(),
-        '/admin-employees': (context) => const AdminEmployeesScreen(),
-        '/admin-leaves': (context) => const AdminLeavesScreen(),
+        '/admin': (context) => AdminDashboardScreen(),
+        '/admin-attendance': (context) => AdminAttendanceScreen(),
+        '/admin-employees': (context) => AdminEmployeesScreen(),
+        '/admin-leaves': (context) => AdminLeavesScreen(),
         '/edit-profile': (context) {
           return FutureBuilder(
             future: ApiService.getStoredUser(),
@@ -129,13 +133,7 @@ class TimeTrackerApp extends StatelessWidget {
                 );
               }
               if (snapshot.hasData && snapshot.data != null) {
-                return EditProfileScreen(
-                  user: snapshot.data as Map<String, dynamic>,
-                  onUserUpdated: (updatedUser) async {
-                    // Update stored user
-                    await ApiService.getStoredUser();
-                  },
-                );
+                return MainContainer(); // Now profile is part of navigation
               }
               return const Scaffold(
                 body: Center(child: Text('Unable to load user data')),
@@ -143,6 +141,9 @@ class TimeTrackerApp extends StatelessWidget {
             },
           );
         },
+        '/change-password': (context) => ChangePasswordScreen(),
+        '/notifications': (context) => NotificationScreen(),
+        '/checkout': (context) => const CheckoutScreen(),
       },
       home: FutureBuilder(
         future: ApiService.getStoredUser(),
@@ -153,11 +154,11 @@ class TimeTrackerApp extends StatelessWidget {
           if (snapshot.hasData && snapshot.data != null) {
             final user = snapshot.data as Map<String, dynamic>;
             if (user['role'] == 'Admin') {
-              return const AdminDashboardScreen();
+              return AdminDashboardScreen();
             }
-            return const HomeScreen();
+            return MainContainer(); // Use the new container
           }
-          return const LoginScreen();
+          return LoginScreen();
         },
       ),
     );

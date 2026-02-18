@@ -48,6 +48,10 @@ db.serialize(() => {
     latitude REAL,
     longitude REAL,
     profilePicture TEXT,
+    salary REAL DEFAULT 0,
+    department TEXT,
+    shiftId INTEGER,
+    isActive INTEGER DEFAULT 1,
     createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
 
@@ -81,6 +85,7 @@ db.serialize(() => {
   db.run(`CREATE TABLE IF NOT EXISTS leaves (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     userId INTEGER,
+    leaveType TEXT DEFAULT 'Casual Leave',
     startDate TEXT NOT NULL,
     endDate TEXT NOT NULL,
     reason TEXT NOT NULL,
@@ -89,12 +94,153 @@ db.serialize(() => {
     createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(userId) REFERENCES users(id)
   )`);
+
+  // Notifications Table
+  db.run(`CREATE TABLE IF NOT EXISTS notifications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    userId INTEGER,
+    title TEXT NOT NULL,
+    message TEXT NOT NULL,
+    isRead INTEGER DEFAULT 0,
+    createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(userId) REFERENCES users(id)
+  )`);
+
+  // Leave Policies Table
+  db.run(`CREATE TABLE IF NOT EXISTS leave_policies (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    leaveType TEXT NOT NULL UNIQUE,
+    daysPerYear INTEGER DEFAULT 10,
+    isPaid INTEGER DEFAULT 1
+  )`);
+
+  // Leave Balances Table (admin overrides)
+  db.run(`CREATE TABLE IF NOT EXISTS leave_balances (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    userId INTEGER,
+    leaveType TEXT NOT NULL,
+    totalDays INTEGER DEFAULT 10,
+    UNIQUE(userId, leaveType),
+    FOREIGN KEY(userId) REFERENCES users(id)
+  )`);
+
+  // Holidays Table
+  db.run(`CREATE TABLE IF NOT EXISTS holidays (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    date TEXT NOT NULL UNIQUE
+  )`);
 });
 
 // Helper for sending OTP (Mocked)
 const sendOtpMock = (type, value, otp) => {
   console.log(`[VERIFICATION] Sent ${type} OTP to ${value}: ${otp}`);
 };
+
+// Helper to create notification
+const createNotification = (userId, title, message) => {
+  db.run(`INSERT INTO notifications (userId, title, message) VALUES (?, ?, ?)`, [userId, title, message], (err) => {
+    if (err) console.error('Error creating notification:', err);
+  });
+};
+
+// Distance calculation helper (Haversine formula)
+const calculateDistance = (lat1, lon1, lat2, lon2) => {
+  const R = 6371e3; // metres
+  const φ1 = lat1 * Math.PI/180;
+  const φ2 = lat2 * Math.PI/180;
+  const Δφ = (lat2-lat1) * Math.PI/180;
+  const Δλ = (lon2-lon1) * Math.PI/180;
+
+  const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+          Math.cos(φ1) * Math.cos(φ2) *
+          Math.sin(Δλ/2) * Math.sin(Δλ/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+  return R * c; // in metres
+};
+
+
+// --- Shifts ---
+
+// --- Shifts ---
+
+db.serialize(() => {
+  db.run(`CREATE TABLE IF NOT EXISTS shifts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    startTime TEXT NOT NULL,
+    endTime TEXT NOT NULL,
+    gracePeriodMins INTEGER DEFAULT 0,
+    overtimeRate REAL DEFAULT 1.0
+  )`);
+
+  // --- Company Settings ---
+
+  db.run(`CREATE TABLE IF NOT EXISTS settings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    companyName TEXT,
+    officeLat REAL,
+    officeLong REAL,
+    officeRadiusMeters REAL DEFAULT 100,
+    workingDays TEXT DEFAULT '["Mon","Tue","Wed","Thu","Fri"]',
+    weekendDays TEXT DEFAULT '["Sat","Sun"]'
+  )`);
+
+  db.run(`ALTER TABLE users ADD COLUMN shiftId INTEGER`, (err) => {
+    if (!err) console.log('Added shiftId column to users');
+  });
+  db.run(`ALTER TABLE users ADD COLUMN salary REAL DEFAULT 0`, (err) => {
+    if (!err) console.log('Added salary column to users');
+  });
+  db.run(`ALTER TABLE users ADD COLUMN department TEXT`, (err) => {
+    if (!err) console.log('Added department column to users');
+  });
+  db.run(`ALTER TABLE users ADD COLUMN isActive INTEGER DEFAULT 1`, (err) => {
+    if (!err) console.log('Added isActive column to users');
+  });
+  db.run(`ALTER TABLE shifts ADD COLUMN latePenaltyPerMin REAL DEFAULT 0`, (err) => {});
+  db.run(`ALTER TABLE leaves ADD COLUMN leaveType TEXT DEFAULT 'Casual Leave'`, (err) => {});
+  db.run(`ALTER TABLE settings ADD COLUMN workingDays TEXT`, (err) => {});
+  db.run(`ALTER TABLE settings ADD COLUMN weekendDays TEXT`, (err) => {});
+  
+  // Ensure 'status' and 'overtimeHours' exist in attendance
+  db.run(`ALTER TABLE attendance ADD COLUMN status TEXT`, (err) => {});
+  db.run(`ALTER TABLE attendance ADD COLUMN overtimeHours REAL DEFAULT 0`, (err) => {});
+  db.run(`ALTER TABLE attendance ADD COLUMN isManual INTEGER DEFAULT 0`, (err) => {});
+  db.run(`ALTER TABLE attendance ADD COLUMN editedBy INTEGER`, (err) => {});
+});
+
+// Helper for users with shift info
+const getUserWithShift = (id) => {
+  return new Promise((resolve, reject) => {
+    db.get(`SELECT u.*, s.name as shiftName, s.startTime as shiftStart, s.endTime as shiftEnd 
+            FROM users u 
+            LEFT JOIN shifts s ON u.shiftId = s.id 
+            WHERE u.id = ?`, [id], (err, row) => {
+      if (err) reject(err);
+      else resolve(row);
+    });
+  });
+};
+
+// --- Notifications ---
+
+app.get('/api/notifications/:userId', (req, res) => {
+  db.all('SELECT * FROM notifications WHERE userId = ? ORDER BY createdAt DESC', [req.params.userId], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
+app.put('/api/notifications/:id/read', (req, res) => {
+  db.run('UPDATE notifications SET isRead = 1 WHERE id = ?', [req.params.id], (err) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ message: 'Marked as read' });
+  });
+});
+
+// ... (Existing OTP Endpoints) ...
 
 // ============ API ENDPOINTS ============
 
@@ -127,30 +273,52 @@ app.post('/api/otp/verify', (req, res) => {
     });
 });
 
-app.post('/api/reset-password', (req, res) => {
+app.post('/api/reset-password', async (req, res) => {
   const { mobileNumber, otp, newPassword } = req.body;
   db.get(`SELECT * FROM otps WHERE mobileNumber = ? AND otp = ? AND expiresAt > ? ORDER BY id DESC LIMIT 1`,
     [mobileNumber, otp, new Date().toISOString()],
-    (err, row) => {
+    async (err, row) => {
       if (err) return res.status(500).json({ error: err.message });
       if (!row) return res.status(400).json({ error: 'Verification failed' });
       
-      db.run(`UPDATE users SET password = ? WHERE mobileNumber = ?`, [newPassword, mobileNumber], (err) => {
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      db.run(`UPDATE users SET password = ? WHERE mobileNumber = ?`, [hashedPassword, mobileNumber], (err) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ message: 'Password updated' });
       });
     });
 });
 
+app.post('/api/change-password', (req, res) => {
+  const { userId, oldPassword, newPassword } = req.body;
+  if (!userId || !oldPassword || !newPassword) {
+    return res.status(400).json({ error: 'All fields are required' });
+  }
+
+  db.get('SELECT * FROM users WHERE id = ?', [userId], async (err, user) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const isMatch = await bcrypt.compare(oldPassword, user.password);
+    if (!isMatch) return res.status(400).json({ error: 'Incorrect old password' });
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    db.run('UPDATE users SET password = ? WHERE id = ?', [hashedPassword, userId], (err) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ message: 'Password changed successfully' });
+    });
+  });
+});
+
 // --- Registration & Login ---
 
 app.post('/api/register', upload.single('profilePicture'), (req, res) => {
-  const { fullName, email, mobileNumber, gender, password, role, company, department, experience, technologies, address, latitude, longitude } = req.body;
+  const { fullName, email, mobileNumber, gender, password, role, company, department, experience, technologies, address, latitude, longitude, shiftId, isActive } = req.body;
   const profilePicture = req.file ? `/uploads/${req.file.filename}` : null;
 
-  db.run(`INSERT INTO users (fullName, email, mobileNumber, gender, password, role, company, department, experience, technologies, address, latitude, longitude, profilePicture) 
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [fullName, email, mobileNumber, gender, password, role || 'User', company, department, experience, technologies, address, latitude, longitude, profilePicture],
+  db.run(`INSERT INTO users (fullName, email, mobileNumber, gender, password, role, company, department, experience, technologies, address, latitude, longitude, profilePicture, shiftId, isActive) 
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [fullName, email, mobileNumber, gender, password, role || 'User', company, department, experience, technologies, address, latitude, longitude, profilePicture, shiftId, isActive !== undefined ? isActive : 1],
     function(err) {
       if (err) return res.status(500).json({ error: err.message });
       res.json({ message: 'User registered', id: this.lastID });
@@ -160,11 +328,15 @@ app.post('/api/register', upload.single('profilePicture'), (req, res) => {
 
 app.post('/api/login', async (req, res) => {
   const { mobileNumber, password } = req.body;
+  console.log(`[LOGIN ATTEMPT] Mobile: ${mobileNumber}`);
   
   try {
     // Use promisified db.get
     const user = await new Promise((resolve, reject) => {
-      db.get('SELECT * FROM users WHERE mobileNumber = ?', [mobileNumber], (err, row) => {
+      db.get(`SELECT u.*, s.name as shiftName, s.startTime as shiftStart, s.endTime as shiftEnd 
+              FROM users u 
+              LEFT JOIN shifts s ON u.shiftId = s.id 
+              WHERE u.mobileNumber = ?`, [mobileNumber], (err, row) => {
         if (err) reject(err);
         else resolve(row);
       });
@@ -172,6 +344,10 @@ app.post('/api/login', async (req, res) => {
     
     if (!user) {
       return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    if (user.isActive === 0) {
+      return res.status(403).json({ error: 'Account is deactivated. Please contact admin.' });
     }
     
     // Compare hashed password
@@ -187,14 +363,17 @@ app.post('/api/login', async (req, res) => {
 });
 
 app.get('/api/user/:id', (req, res) => {
-  db.get('SELECT * FROM users WHERE id = ?', [req.params.id], (err, row) => {
+  db.get(`SELECT u.*, s.name as shiftName, s.startTime as shiftStart, s.endTime as shiftEnd 
+          FROM users u 
+          LEFT JOIN shifts s ON u.shiftId = s.id 
+          WHERE u.id = ?`, [req.params.id], (err, row) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(row);
   });
 });
 
 app.put('/api/user/:id', upload.single('profilePicture'), (req, res) => {
-  const { fullName, email, gender, company, department, experience, technologies, address, latitude, longitude } = req.body;
+  const { fullName, email, gender, company, department, experience, technologies, address, latitude, longitude, shiftId, isActive } = req.body;
   const userId = req.params.id;
   const profilePicture = req.file ? `/uploads/${req.file.filename}` : null;
 
@@ -213,24 +392,38 @@ app.put('/api/user/:id', upload.single('profilePicture'), (req, res) => {
   if (latitude !== undefined) { updateFields.push('latitude = ?'); values.push(latitude); }
   if (longitude !== undefined) { updateFields.push('longitude = ?'); values.push(longitude); }
   if (profilePicture) { updateFields.push('profilePicture = ?'); values.push(profilePicture); }
+  if (shiftId !== undefined) { updateFields.push('shiftId = ?'); values.push(shiftId); }
+  if (isActive !== undefined) { updateFields.push('isActive = ?'); values.push(isActive); }
+  if (req.body.salary !== undefined) { updateFields.push('salary = ?'); values.push(req.body.salary); }
 
-  if (updateFields.length === 0) {
-    return res.status(400).json({ error: 'No fields to update' });
-  }
+  const executeUpdate = async () => {
+    if (req.body.password) {
+      const hashedPassword = await bcrypt.hash(req.body.password, 10);
+      updateFields.push('password = ?');
+      values.push(hashedPassword);
+    }
 
-  values.push(userId);
-  const query = `UPDATE users SET ${updateFields.join(', ')} WHERE id = ?`;
+    if (updateFields.length === 0) {
+      return res.status(400).json({ error: 'No fields to update' });
+    }
 
-  db.run(query, values, function(err) {
-    if (err) return res.status(500).json({ error: err.message });
-    
-    // Fetch and return updated user data
-    db.get('SELECT * FROM users WHERE id = ?', [userId], (err, row) => {
+    values.push(userId);
+    const query = `UPDATE users SET ${updateFields.join(', ')} WHERE id = ?`;
+
+    db.run(query, values, function(err) {
       if (err) return res.status(500).json({ error: err.message });
-      res.json({ message: 'Profile updated', user: row });
+      
+      // Fetch and return updated user data
+      db.get('SELECT * FROM users WHERE id = ?', [userId], (err, row) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ message: 'Profile updated', user: row });
+      });
     });
-  });
+  };
+
+  executeUpdate();
 });
+
 
 // --- Attendance ---
 
@@ -239,33 +432,117 @@ app.post('/api/checkin', upload.single('photo'), (req, res) => {
   const photo = req.file ? `/uploads/${req.file.filename}` : null;
   const now = new Date().toISOString();
 
-  // Check if already checked in
+  // 1. Check if already checked in
   db.get('SELECT * FROM attendance WHERE userId = ? AND checkOutTime IS NULL', [userId], (err, row) => {
     if (row) return res.status(400).json({ error: 'Already checked in' });
     
-    db.run(`INSERT INTO attendance (userId, checkInTime, checkInLat, checkInLong, checkInAddress, checkInPhoto) VALUES (?, ?, ?, ?, ?, ?)`,
-      [userId, now, lat, long, address, photo],
-      (err) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ message: 'Check-in successful', time: now });
+    // 2. Geofencing check
+    db.get('SELECT * FROM settings ORDER BY id DESC LIMIT 1', (err, settings) => {
+      if (settings && settings.officeLat && settings.officeLong && lat && long) {
+        const distance = calculateDistance(lat, long, settings.officeLat, settings.officeLong);
+        if (distance > settings.officeRadiusMeters) {
+          return res.status(403).json({ error: `Outside office radius. Distance: ${Math.round(distance)}m, Max: ${settings.officeRadiusMeters}m` });
+        }
+      }
+
+      // 3. Get User Shift Info
+      getUserWithShift(userId).then(user => {
+        let status = 'On Time'; 
+        if (user && user.shiftStart) {
+          try {
+            const shiftStartParts = user.shiftStart.split(':');
+            const shiftDate = new Date();
+            shiftDate.setHours(parseInt(shiftStartParts[0]), parseInt(shiftStartParts[1]), 0, 0);
+            
+            const graceMins = user.gracePeriodMins || 0;
+            shiftDate.setMinutes(shiftDate.getMinutes() + graceMins);
+            
+            if (new Date() > shiftDate) {
+              status = 'Late';
+            }
+          } catch(e) { status = 'On Time'; }
+        }
+      
+        db.run(`INSERT INTO attendance (userId, checkInTime, checkInLat, checkInLong, checkInAddress, checkInPhoto, status) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [userId, now, lat, long, address, photo, status],
+          (err) => {
+            if (err) return res.status(500).json({ error: err.message });
+            
+            if (status === 'Late') {
+              createNotification(userId, 'Late Check-in Alert', `You checked in late at ${new Date(now).toLocaleTimeString()}.`);
+            }
+            
+            res.json({ message: 'Check-in successful', time: now, status: status });
+          });
+      }).catch(err => {
+        db.run(`INSERT INTO attendance (userId, checkInTime, checkInLat, checkInLong, checkInAddress, checkInPhoto, status) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [userId, now, lat, long, address, photo, 'Present'],
+          (err) => {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ message: 'Check-in successful', time: now });
+          });
       });
+    });
   });
 });
+
 
 app.post('/api/checkout', upload.single('photo'), (req, res) => {
   const { userId, lat, long, address } = req.body;
   const photo = req.file ? `/uploads/${req.file.filename}` : null;
   const now = new Date().toISOString();
 
-  db.run(`UPDATE attendance SET checkOutTime = ?, checkOutLat = ?, checkOutLong = ?, checkOutAddress = ?, checkOutPhoto = ? 
-          WHERE userId = ? AND checkOutTime IS NULL`,
-    [now, lat, long, address, photo, userId],
-    function(err) {
-      if (err) return res.status(500).json({ error: err.message });
-      if (this.changes === 0) return res.status(400).json({ error: 'No active check-in found' });
-      res.json({ message: 'Check-out successful', time: now });
+  // 1. Check if active check-in exists
+  db.get('SELECT * FROM attendance WHERE userId = ? AND checkOutTime IS NULL', [userId], (err, row) => {
+    if (err || !row) return res.status(400).json({ error: 'No active check-in' });
+
+    // 2. Geofencing check
+    db.get('SELECT * FROM settings ORDER BY id DESC LIMIT 1', (err, settings) => {
+      if (settings && settings.officeLat && settings.officeLong && lat && long) {
+        const distance = calculateDistance(lat, long, settings.officeLat, settings.officeLong);
+        if (distance > settings.officeRadiusMeters) {
+          return res.status(403).json({ error: `Outside office radius. Distance: ${Math.round(distance)}m, Max: ${settings.officeRadiusMeters}m` });
+        }
+      }
+
+      // 3. Calculate Overtime
+      getUserWithShift(userId).then(user => {
+        let overtime = 0.0;
+        if (user && user.shiftEnd) {
+          try {
+            const checkInTime = new Date(row.checkInTime);
+            const checkOutTime = new Date(now);
+            
+            const shiftStartParts = user.shiftStart.split(':');
+            const shiftEndParts = user.shiftEnd.split(':');
+            const startDesc = new Date(checkInTime);
+            startDesc.setHours(parseInt(shiftStartParts[0]), parseInt(shiftStartParts[1]), 0, 0);
+            const endDesc = new Date(checkInTime);
+            endDesc.setHours(parseInt(shiftEndParts[0]), parseInt(shiftEndParts[1]), 0, 0);
+            
+            let shiftDurationMs = endDesc - startDesc;
+            if (shiftDurationMs < 0) shiftDurationMs += 24*60*60*1000;
+            
+            const workedDurationMs = checkOutTime - checkInTime;
+            
+            if (workedDurationMs > shiftDurationMs) {
+              overtime = (workedDurationMs - shiftDurationMs) / (1000 * 60 * 60);
+            }
+          } catch(e) {}
+        }
+        
+        db.run(`UPDATE attendance SET checkOutTime = ?, checkOutLat = ?, checkOutLong = ?, checkOutAddress = ?, checkOutPhoto = ?, overtimeHours = ?
+           WHERE userId = ? AND checkOutTime IS NULL`,
+          [now, lat, long, address, photo, overtime, userId],
+          function(err) {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ message: 'Check-out successful', time: now, overtime: overtime.toFixed(2) });
+          });
+      });
     });
+  });
 });
+
 
 app.get('/api/attendance/status/:userId', (req, res) => {
   db.get('SELECT * FROM attendance WHERE userId = ? AND checkOutTime IS NULL', [req.params.userId], (err, row) => {
@@ -295,26 +572,49 @@ app.get('/api/admin/stats', (req, res) => {
       if (err) return res.status(500).json({ error: err.message });
       stats.presentToday = row ? row.count : 0;
       stats.absentToday = Math.max(0, stats.totalEmployees - stats.presentToday);
-      stats.onLeaveToday = 0; // Simple mock
-      res.json(stats);
+      
+      db.get('SELECT COUNT(*) as count FROM attendance WHERE checkInTime LIKE ? AND status = "Late"', [`${today}%`], (err, row) => {
+         stats.lateToday = row ? row.count : 0;
+         
+         // Calculate On Leave Today
+         db.get(`SELECT COUNT(DISTINCT userId) as count FROM leaves 
+                 WHERE status = 'Approved' 
+                 AND date(?) BETWEEN date(startDate) AND date(endDate)`, [today], (err, row) => {
+            stats.onLeaveToday = row ? row.count : 0;
+            res.json(stats);
+         });
+      });
     });
   });
 });
 
+
 app.get('/api/admin/users', (req, res) => {
-  db.all('SELECT id, fullName, email, mobileNumber, role, profilePicture FROM users', (err, rows) => {
+  db.all(`SELECT u.id, u.fullName, u.email, u.mobileNumber, u.role, u.profilePicture, s.name as shiftName 
+          FROM users u 
+          LEFT JOIN shifts s ON u.shiftId = s.id`, (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows);
   });
 });
 
-app.post('/api/admin/users', upload.single('profilePicture'), (req, res) => {
-  const { fullName, email, mobileNumber, password, role } = req.body;
-  const userRole = role || 'User';
-  const profilePicture = req.file ? `/uploads/${req.file.filename}` : null;
+app.delete('/api/admin/users/:id', (req, res) => {
+  db.run('DELETE FROM users WHERE id = ?', [req.params.id], function(err) {
+    if (err) return res.status(500).json({ error: err.message });
+    // Also delete attendance and leaves
+    db.run('DELETE FROM attendance WHERE userId = ?', [req.params.id]);
+    db.run('DELETE FROM leaves WHERE userId = ?', [req.params.id]);
+    res.json({ message: 'Employee deleted successfully' });
+  });
+});
 
-  db.run(`INSERT INTO users (fullName, email, mobileNumber, password, role, profilePicture) VALUES (?, ?, ?, ?, ?, ?)`,
-    [fullName, email, mobileNumber, password, userRole, profilePicture],
+app.post('/api/admin/users', upload.single('profilePicture'), async (req, res) => {
+  const { fullName, mobileNumber, email, password, role, department, salary, shiftId, isActive } = req.body;
+  const profilePicture = req.file ? `/uploads/${req.file.filename}` : null;
+  const hashedPassword = await bcrypt.hash(password, 10);
+  
+  db.run(`INSERT INTO users (fullName, mobileNumber, email, password, role, profilePicture, department, salary, shiftId, isActive) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [fullName, mobileNumber, email, hashedPassword, role || 'User', profilePicture, department || 'General', salary || 0, shiftId, isActive !== undefined ? isActive : 1],
     function(err) {
       if (err) {
         if (err.message.includes('UNIQUE constraint failed')) {
@@ -334,13 +634,75 @@ app.delete('/api/admin/users/:id', (req, res) => {
 });
 
 app.get('/api/admin/attendance', (req, res) => {
-  db.all(`SELECT a.*, u.fullName, u.profilePicture 
-          FROM attendance a 
-          JOIN users u ON a.userId = u.id 
-          ORDER BY a.checkInTime DESC`, (err, rows) => {
+  const { userId, startDate, endDate, department } = req.query;
+  let query = `
+    SELECT a.*, u.fullName, u.profilePicture, u.department, s.name as shiftName 
+    FROM attendance a 
+    JOIN users u ON a.userId = u.id 
+    LEFT JOIN shifts s ON u.shiftId = s.id 
+    WHERE 1=1
+  `;
+  const params = [];
+
+  if (userId) {
+    query += ' AND a.userId = ?';
+    params.push(userId);
+  }
+  if (startDate && endDate) {
+    query += ' AND date(a.checkInTime) BETWEEN date(?) AND date(?)';
+    params.push(startDate, endDate);
+  }
+  if (department) {
+    query += ' AND u.department = ?';
+    params.push(department);
+  }
+  
+  query += ' ORDER BY a.checkInTime DESC';
+  
+  db.all(query, params, (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows);
   });
+});
+
+app.post('/api/admin/attendance', (req, res) => {
+  const { userId, checkInTime, checkOutTime, status, checkInLat, checkInLong, checkInAddress, adminId } = req.body;
+  db.run(`INSERT INTO attendance (userId, checkInTime, checkOutTime, status, checkInLat, checkInLong, checkInAddress, isManual, editedBy)
+          VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)`,
+    [userId, checkInTime, checkOutTime, status || 'Present', checkInLat || 0, checkInLong || 0, checkInAddress || 'Manual Entry', adminId],
+    function(err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ id: this.lastID, message: 'Attendance record created' });
+    });
+});
+
+// Edit an attendance record (Admin)
+app.put('/api/admin/attendance/:id', (req, res) => {
+  const { checkInTime, checkOutTime, status, overtimeHours, adminId } = req.body;
+  db.run(
+    `UPDATE attendance SET checkInTime = ?, checkOutTime = ?, status = ?, overtimeHours = ?, editedBy = ? WHERE id = ?`,
+    [checkInTime, checkOutTime || null, status, overtimeHours || 0, adminId, req.params.id],
+    function(err) {
+      if (err) return res.status(500).json({ error: err.message });
+      if (this.changes === 0) return res.status(404).json({ error: 'Record not found' });
+      res.json({ message: 'Attendance updated' });
+    }
+  );
+});
+
+// Manual attendance entry (Admin)
+app.post('/api/admin/attendance', (req, res) => {
+  const { userId, checkInTime, checkOutTime, status, adminId } = req.body;
+  if (!userId || !checkInTime) return res.status(400).json({ error: 'userId and checkInTime are required' });
+
+  db.run(
+    `INSERT INTO attendance (userId, checkInTime, checkOutTime, status, isManual, editedBy) VALUES (?, ?, ?, ?, 1, ?)`,
+    [userId, checkInTime, checkOutTime || null, status || 'Present', adminId],
+    function(err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ message: 'Manual attendance created', id: this.lastID });
+    }
+  );
 });
 
 app.get('/api/admin/absent', (req, res) => {
@@ -355,12 +717,147 @@ app.get('/api/admin/absent', (req, res) => {
   });
 });
 
+// --- Shifts Management ---
+
+app.get('/api/admin/shifts', (req, res) => {
+  db.all('SELECT * FROM shifts', (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
+app.put('/api/admin/shifts/:id', (req, res) => {
+  const { name, startTime, endTime, gracePeriodMins, overtimeRate, latePenaltyPerMin } = req.body;
+  db.run(
+    `UPDATE shifts SET name = ?, startTime = ?, endTime = ?, gracePeriodMins = ?, overtimeRate = ?, latePenaltyPerMin = ? WHERE id = ?`,
+    [name, startTime, endTime, gracePeriodMins, overtimeRate, latePenaltyPerMin || 0, req.params.id],
+    function(err) {
+      if (err) return res.status(500).json({ error: err.message });
+      if (this.changes === 0) return res.status(404).json({ error: 'Shift not found' });
+      res.json({ message: 'Shift updated' });
+    }
+  );
+});
+
+app.delete('/api/admin/shifts/:id', (req, res) => {
+  db.run('DELETE FROM shifts WHERE id = ?', [req.params.id], function(err) {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ message: 'Shift deleted' });
+  });
+});
+
+app.post('/api/admin/shifts', (req, res) => {
+  const { name, startTime, endTime, gracePeriodMins, overtimeRate } = req.body;
+  db.run(`INSERT INTO shifts (name, startTime, endTime, gracePeriodMins, overtimeRate) VALUES (?, ?, ?, ?, ?)`,
+    [name, startTime, endTime, gracePeriodMins, overtimeRate],
+    function(err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ message: 'Shift created', id: this.lastID });
+    });
+});
+
+// --- Company Settings ---
+
+app.get('/api/settings', (req, res) => {
+  db.get('SELECT * FROM settings ORDER BY id DESC LIMIT 1', (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(row || {});
+  });
+});
+
+app.post('/api/admin/settings', (req, res) => {
+  const { companyName, officeLat, officeLong, officeRadiusMeters, workingDays, weekendDays } = req.body;
+  // Always insert a new row (latest row is used)
+  db.run(
+    `INSERT INTO settings (companyName, officeLat, officeLong, officeRadiusMeters, workingDays, weekendDays) VALUES (?, ?, ?, ?, ?, ?)`,
+    [companyName, officeLat, officeLong, officeRadiusMeters,
+      workingDays ? JSON.stringify(workingDays) : '["Mon","Tue","Wed","Thu","Fri"]',
+      weekendDays ? JSON.stringify(weekendDays) : '["Sat","Sun"]'],
+    function(err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ message: 'Settings updated' });
+    });
+});
+
+// --- Holidays ---
+app.get('/api/admin/holidays', (req, res) => {
+  db.all('SELECT * FROM holidays ORDER BY date ASC', (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
+app.post('/api/admin/holidays', (req, res) => {
+  const { name, date } = req.body;
+  if (!name || !date) return res.status(400).json({ error: 'name and date required' });
+  db.run('INSERT OR REPLACE INTO holidays (name, date) VALUES (?, ?)', [name, date], function(err) {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ message: 'Holiday added', id: this.lastID });
+  });
+});
+
+app.delete('/api/admin/holidays/:id', (req, res) => {
+  db.run('DELETE FROM holidays WHERE id = ?', [req.params.id], function(err) {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ message: 'Holiday deleted' });
+  });
+});
+
+// --- Leave Policies ---
+app.get('/api/admin/leave-policies', (req, res) => {
+  db.all('SELECT * FROM leave_policies', (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    // Return defaults if empty
+    if (!rows || rows.length === 0) {
+      return res.json([
+        { leaveType: 'Sick Leave', daysPerYear: 10, isPaid: 1 },
+        { leaveType: 'Casual Leave', daysPerYear: 10, isPaid: 1 },
+        { leaveType: 'Annual Leave', daysPerYear: 15, isPaid: 1 },
+        { leaveType: 'Unpaid Leave', daysPerYear: 30, isPaid: 0 },
+      ]);
+    }
+    res.json(rows);
+  });
+});
+
+app.post('/api/admin/leave-policies', (req, res) => {
+  const { leaveType, daysPerYear, isPaid } = req.body;
+  db.run(
+    'INSERT OR REPLACE INTO leave_policies (leaveType, daysPerYear, isPaid) VALUES (?, ?, ?)',
+    [leaveType, daysPerYear, isPaid ? 1 : 0],
+    function(err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ message: 'Policy saved' });
+    }
+  );
+});
+
+// --- Leave Balance Adjust (Admin) ---
+app.put('/api/admin/leave-balance', (req, res) => {
+  const { userId, leaveType, totalDays } = req.body;
+  db.run(
+    'INSERT OR REPLACE INTO leave_balances (userId, leaveType, totalDays) VALUES (?, ?, ?)',
+    [userId, leaveType, totalDays],
+    function(err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ message: 'Balance updated' });
+    }
+  );
+});
+
+app.get('/api/admin/leave-balance/:userId', (req, res) => {
+  db.all('SELECT * FROM leave_balances WHERE userId = ?', [req.params.userId], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
 // --- Leaves ---
 
 app.post('/api/leaves/apply', (req, res) => {
-  const { userId, startDate, endDate, reason } = req.body;
-  db.run(`INSERT INTO leaves (userId, startDate, endDate, reason) VALUES (?, ?, ?, ?)`,
-    [userId, startDate, endDate, reason],
+  const { userId, leaveType, startDate, endDate, reason } = req.body;
+  db.run(`INSERT INTO leaves (userId, leaveType, startDate, endDate, reason) VALUES (?, ?, ?, ?, ?)`,
+    [userId, leaveType || 'Casual Leave', startDate, endDate, reason],
     function(err) {
       if (err) return res.status(500).json({ error: err.message });
       res.json({ message: 'Leave application submitted', id: this.lastID });
@@ -375,11 +872,48 @@ app.get('/api/leaves/:userId', (req, res) => {
 });
 
 app.get('/api/leaves/balance/:userId', (req, res) => {
-  // Simple mock balance logic: 10 days per year total
   db.all('SELECT * FROM leaves WHERE userId = ? AND status = "Approved"', [req.params.userId], (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
-    const used = rows.length * 1; // Assuming each leave is 1 day for simplicity in mock
-    res.json({ total: 10, used: used, remaining: 10 - used });
+    // Group by leaveType
+    const byType = {};
+    rows.forEach(r => {
+      const t = r.leaveType || 'Casual Leave';
+      if (!byType[t]) byType[t] = 0;
+      const start = new Date(r.startDate);
+      const end = new Date(r.endDate);
+      const days = Math.max(1, Math.round((end - start) / (1000*60*60*24)) + 1);
+      byType[t] += days;
+    });
+    // Check admin-set balance overrides
+    db.all('SELECT * FROM leave_balances WHERE userId = ?', [req.params.userId], (err2, balances) => {
+      const overrides = {};
+      if (balances) balances.forEach(b => overrides[b.leaveType] = b.totalDays);
+      const leaveTypes = ['Sick Leave', 'Casual Leave', 'Annual Leave', 'Unpaid Leave'];
+      const result = leaveTypes.map(t => ({
+        leaveType: t,
+        total: overrides[t] || 10,
+        used: byType[t] || 0,
+        remaining: (overrides[t] || 10) - (byType[t] || 0),
+      }));
+      const totalUsed = Object.values(byType).reduce((a, b) => a + b, 0);
+      res.json({ total: 30, used: totalUsed, remaining: 30 - totalUsed, byType: result });
+    });
+  });
+});
+
+app.put('/api/leaves/:id/cancel', (req, res) => {
+  const { userId } = req.body;
+  
+  // Verify ownership and status
+  db.get('SELECT * FROM leaves WHERE id = ? AND userId = ?', [req.params.id, userId], (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!row) return res.status(404).json({ error: 'Leave not found' });
+    if (row.status !== 'Pending') return res.status(400).json({ error: 'Cannot cancel processed leave' });
+    
+    db.run('UPDATE leaves SET status = "Cancelled" WHERE id = ?', [req.params.id], (err) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ message: 'Leave cancelled' });
+    });
   });
 });
 
@@ -400,10 +934,146 @@ app.put('/api/admin/leaves/:id', (req, res) => {
     [status, rejectionReason, req.params.id],
     function(err) {
       if (err) return res.status(500).json({ error: err.message });
+      
+      // Fetch userId to notify
+      db.get('SELECT userId FROM leaves WHERE id = ?', [req.params.id], (err, row) => {
+        if (row) {
+          createNotification(row.userId, `Leave ${status}`, `Your leave request has been ${status}. ${rejectionReason ? 'Reason: ' + rejectionReason : ''}`);
+        }
+      });
+
       res.json({ message: 'Leave status updated' });
     });
 });
 
-app.listen(port, () => {
-  console.log(`Server running at http://localhost:${port}`);
+// --- Reports ---
+
+// Overtime Report
+app.get('/api/admin/reports/overtime', (req, res) => {
+  const { startDate, endDate } = req.query;
+  let query = `SELECT a.userId, u.fullName, SUM(a.overtimeHours) as totalOvertimeHours, COUNT(*) as overtimeDays
+               FROM attendance a
+               JOIN users u ON a.userId = u.id
+               WHERE a.overtimeHours > 0`;
+  const params = [];
+  if (startDate && endDate) {
+    query += ` AND a.checkInTime BETWEEN ? AND ?`;
+    params.push(startDate + 'T00:00:00', endDate + 'T23:59:59');
+  }
+  query += ` GROUP BY a.userId ORDER BY totalOvertimeHours DESC`;
+  db.all(query, params, (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
+// Salary Hours Report
+app.get('/api/admin/reports/salary-hours', (req, res) => {
+  const { startDate, endDate } = req.query;
+  let query = `SELECT a.userId, u.fullName, u.salary,
+               SUM(CASE WHEN a.checkOutTime IS NOT NULL
+                 THEN (julianday(a.checkOutTime) - julianday(a.checkInTime)) * 24
+                 ELSE 0 END) as totalHours,
+               SUM(a.overtimeHours) as totalOvertimeHours,
+               COUNT(CASE WHEN a.status = 'Late' THEN 1 END) as lateDays
+               FROM attendance a
+               JOIN users u ON a.userId = u.id`;
+  const params = [];
+  if (startDate && endDate) {
+    query += ` WHERE a.checkInTime BETWEEN ? AND ?`;
+    params.push(startDate + 'T00:00:00', endDate + 'T23:59:59');
+  }
+  query += ` GROUP BY a.userId ORDER BY u.fullName`;
+  db.all(query, params, (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
+// Payroll Report
+app.get('/api/admin/reports/payroll', (req, res) => {
+  const { startDate, endDate } = req.query;
+  let query = `SELECT a.userId, u.fullName, u.salary,
+               s.overtimeRate, s.latePenaltyPerMin, s.gracePeriodMins,
+               SUM(CASE WHEN a.checkOutTime IS NOT NULL
+                 THEN (julianday(a.checkOutTime) - julianday(a.checkInTime)) * 24
+                 ELSE 0 END) as totalHours,
+               SUM(a.overtimeHours) as totalOvertimeHours,
+               COUNT(CASE WHEN a.status = 'Late' THEN 1 END) as lateDays
+               FROM attendance a
+               JOIN users u ON a.userId = u.id
+               LEFT JOIN shifts s ON u.shiftId = s.id`;
+  const params = [];
+  if (startDate && endDate) {
+    query += ` WHERE a.checkInTime BETWEEN ? AND ?`;
+    params.push(startDate + 'T00:00:00', endDate + 'T23:59:59');
+  }
+  query += ` GROUP BY a.userId`;
+  db.all(query, params, (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    // Calculate payroll for each employee
+    const result = rows.map(r => {
+      const dailySalary = (r.salary || 0) / 26; // 26 working days/month
+      const hourlyRate = dailySalary / 8;
+      const overtimePay = (r.totalOvertimeHours || 0) * hourlyRate * (r.overtimeRate || 1.5);
+      const latePenalty = (r.lateDays || 0) * (r.latePenaltyPerMin || 0) * (r.gracePeriodMins || 0);
+      const netSalary = (r.salary || 0) + overtimePay - latePenalty;
+      return { ...r, overtimePay: overtimePay.toFixed(2), latePenalty: latePenalty.toFixed(2), netSalary: netSalary.toFixed(2) };
+    });
+    res.json(result);
+  });
+});
+
+app.get('/api/admin/reports/attendance', (req, res) => {
+  const { startDate, endDate } = req.query;
+  let query = `SELECT a.*, u.fullName, u.id as employeeId, s.name as shiftName
+               FROM attendance a 
+               JOIN users u ON a.userId = u.id
+               LEFT JOIN shifts s ON u.shiftId = s.id`;
+  
+  const params = [];
+  if (startDate && endDate) {
+    query += ` WHERE a.checkInTime BETWEEN ? AND ?`;
+    params.push(startDate + 'T00:00:00', endDate + 'T23:59:59');
+  }
+  
+  query += ` ORDER BY a.checkInTime DESC`;
+
+  db.all(query, params, (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
+// Admin Manual Attendance
+app.post('/api/admin/attendance', (req, res) => {
+  const { userId, date, status, checkInTime, checkOutTime, address } = req.body;
+  const now = date ? new Date(date).toISOString() : new Date().toISOString();
+  
+  db.run(`INSERT INTO attendance (userId, checkInTime, checkOutTime, status, checkInAddress) VALUES (?, ?, ?, ?, ?)`,
+    [userId, checkInTime || now, checkOutTime, status || 'Present', address || 'Manual Entry'],
+    function(err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ message: 'Attendance recorded manually', id: this.lastID });
+    });
+});
+
+// Check-out Reminders (Scan for active check-ins)
+app.post('/api/admin/notifications/reminders', (req, res) => {
+  db.all(`SELECT a.*, u.id as userId, u.fullName 
+          FROM attendance a
+          JOIN users u ON a.userId = u.id
+          WHERE a.checkOutTime IS NULL`, (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    
+    rows.forEach(row => {
+      createNotification(row.userId, 'Check-out Reminder', `Hi ${row.fullName}, don't forget to check out!`);
+    });
+    
+    res.json({ message: `Reminders sent to ${rows.length} employees.` });
+  });
+});
+
+app.listen(port, '0.0.0.0', () => {
+  console.log(`Server running at http://0.0.0.0:${port}`);
 });

@@ -8,6 +8,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 // Import dart:io for platform detection
 import 'dart:io';
+// Import intl for date formatting
+import 'package:intl/intl.dart';
 
 // ApiService class contains all methods for communicating with the backend server
 class ApiService {
@@ -16,12 +18,17 @@ class ApiService {
   // Other platforms (Windows, iOS, Web) use localhost directly
   static String get baseUrl {
     if (Platform.isAndroid) {
-      return 'http://192.168.1.33:3000/api'; // Local IP for physical device
+      return 'http://10.0.2.2:3000/api'; // Android Emulator default Local IP
     }
     return 'http://localhost:3000/api'; // Standard localhost for other platforms
-  } 
-  
-  // ========== USER REGISTRATION METHOD ==========
+  }
+
+  // Get full image URL by replacing /api with empty string to get server root
+  static String getImageUrl(String? path) {
+    if (path == null || path.isEmpty) return '';
+    if (path.startsWith('http')) return path;
+    return baseUrl.replaceAll('/api', '') + path;
+  }
   // Register a new user with profile picture and user details
   // Parameters:
   //   - fields: Map containing all user information (name, email, password, etc.)
@@ -131,9 +138,16 @@ class ApiService {
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        // Update local storage with new user data
+        
+        // Update local storage ONLY if the updated user is the currently logged-in user
         final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('user', json.encode(data['user']));
+        final currentUserStr = prefs.getString('user');
+        if (currentUserStr != null) {
+          final Map<String, dynamic> currentLoggedUser = json.decode(currentUserStr);
+          if (currentLoggedUser['id'] == userId) {
+            await prefs.setString('user', json.encode(data['user']));
+          }
+        }
         return data['user'];
       } else {
         throw Exception('Failed to update user: ${response.body}');
@@ -306,6 +320,24 @@ class ApiService {
     }
   }
 
+  // Change Password
+  static Future<void> changePassword(int userId, String oldPassword, String newPassword) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/change-password'),
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode({
+        'userId': userId,
+        'oldPassword': oldPassword,
+        'newPassword': newPassword,
+      }),
+    );
+
+    if (response.statusCode != 200) {
+      final error = json.decode(response.body)['error'] ?? 'Failed to change password';
+      throw Exception(error);
+    }
+  }
+
   // ============ LEAVE MANAGEMENT METHODS ============
 
   // Apply for leave
@@ -327,6 +359,19 @@ class ApiService {
       return json.decode(response.body);
     } else {
       throw Exception('Failed to load leave history');
+    }
+  }
+
+  // Cancel Leave
+  static Future<void> cancelLeave(int leaveId, int userId) async {
+    final response = await http.put(
+      Uri.parse('$baseUrl/leaves/$leaveId/cancel'),
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode({'userId': userId}),
+    );
+    if (response.statusCode != 200) {
+      final error = json.decode(response.body)['error'] ?? 'Failed to cancel leave';
+      throw Exception(error);
     }
   }
 
@@ -372,13 +417,45 @@ class ApiService {
     }
   }
 
-  // Get All Attendance Records
-  static Future<List<dynamic>> getAllAttendance() async {
-    final response = await http.get(Uri.parse('$baseUrl/admin/attendance'));
+  // Get All Attendance Records (with optional filters)
+  static Future<List<dynamic>> getAllAttendance({int? userId, DateTime? startDate, DateTime? endDate, String? department}) async {
+    final params = <String, String>{};
+    if (userId != null) params['userId'] = userId.toString();
+    if (startDate != null) params['startDate'] = DateFormat('yyyy-MM-dd').format(startDate);
+    if (endDate != null) params['endDate'] = DateFormat('yyyy-MM-dd').format(endDate);
+    if (department != null) params['department'] = department;
+    final uri = Uri.parse('$baseUrl/admin/attendance').replace(queryParameters: params.isNotEmpty ? params : null);
+    final response = await http.get(uri);
     if (response.statusCode == 200) {
       return json.decode(response.body);
     } else {
       throw Exception('Failed to load attendance records');
+    }
+  }
+
+  // Update an attendance record (Admin edit)
+  static Future<void> updateAttendance(int id, Map<String, dynamic> data) async {
+    final response = await http.put(
+      Uri.parse('$baseUrl/admin/attendance/$id'),
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode(data),
+    );
+    if (response.statusCode != 200) {
+      final error = json.decode(response.body)['error'] ?? 'Failed to update attendance';
+      throw Exception(error);
+    }
+  }
+
+  // Create manual attendance entry (Admin)
+  static Future<void> createManualAttendance(Map<String, dynamic> data) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/admin/attendance'),
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode(data),
+    );
+    if (response.statusCode != 200) {
+      final error = json.decode(response.body)['error'] ?? 'Failed to create attendance';
+      throw Exception(error);
     }
   }
 
@@ -431,5 +508,190 @@ class ApiService {
     if (response.statusCode != 200) {
       throw Exception('Failed to delete user');
     }
+  }
+
+  // ============ SHIFT MANAGEMENT METHODS ============
+
+  // Get All Shifts
+  static Future<List<dynamic>> getShifts() async {
+    final response = await http.get(Uri.parse('$baseUrl/admin/shifts'));
+    if (response.statusCode == 200) {
+      return json.decode(response.body);
+    } else {
+      throw Exception('Failed to load shifts');
+    }
+  }
+
+  // Create Shift
+  static Future<void> createShift(Map<String, dynamic> shiftData) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/admin/shifts'),
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode(shiftData),
+    );
+     if (response.statusCode != 200) {
+      throw Exception('Failed to create shift: ${response.body}');
+    }
+  }
+
+  // ============ COMPANY SETTINGS METHODS ============
+
+  // Get Settings
+  static Future<Map<String, dynamic>> getSettings() async {
+    final response = await http.get(Uri.parse('$baseUrl/settings'));
+    if (response.statusCode == 200) {
+      return json.decode(response.body);
+    } else {
+      throw Exception('Failed to load settings');
+    }
+  }
+
+  // Update Settings
+  static Future<void> updateSettings(Map<String, dynamic> settingsData) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/admin/settings'),
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode(settingsData),
+    );
+     if (response.statusCode != 200) {
+      throw Exception('Failed to update settings: ${response.body}');
+    }
+  }
+  // ============ NOTIFICATIONS METHODS ============
+
+  // Get User Notifications
+  static Future<List<dynamic>> getNotifications(int userId) async {
+    final response = await http.get(Uri.parse('$baseUrl/notifications/$userId'));
+    if (response.statusCode == 200) {
+      return json.decode(response.body);
+    } else {
+      throw Exception('Failed to load notifications');
+    }
+  }
+
+  // Mark Notification as Read
+  static Future<void> markNotificationRead(int id) async {
+    final response = await http.put(Uri.parse('$baseUrl/notifications/$id/read'));
+    if (response.statusCode != 200) {
+      throw Exception('Failed to mark notification as read');
+    }
+  }
+
+  // Get Attendance Report
+  static Future<List<dynamic>> getAttendanceReport({DateTime? startDate, DateTime? endDate}) async {
+    String query = '';
+    if (startDate != null && endDate != null) {
+      final startStr = DateFormat('yyyy-MM-dd').format(startDate);
+      final endStr = DateFormat('yyyy-MM-dd').format(endDate);
+      query = '?startDate=$startStr&endDate=$endStr';
+    }
+    
+    final response = await http.get(Uri.parse('$baseUrl/admin/reports/attendance$query'));
+     if (response.statusCode == 200) {
+      return json.decode(response.body);
+    } else {
+      throw Exception('Failed to load report');
+    }
+  }
+  // ============ SHIFT MANAGEMENT ============
+
+  static Future<void> updateShift(int id, Map<String, dynamic> data) async {
+    final response = await http.put(
+      Uri.parse('$baseUrl/admin/shifts/$id'),
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode(data),
+    );
+    if (response.statusCode != 200) throw Exception('Failed to update shift');
+  }
+
+  static Future<void> deleteShift(int id) async {
+    final response = await http.delete(Uri.parse('$baseUrl/admin/shifts/$id'));
+    if (response.statusCode != 200) throw Exception('Failed to delete shift');
+  }
+
+  // ============ HOLIDAYS ============
+
+  static Future<List<dynamic>> getHolidays() async {
+    final response = await http.get(Uri.parse('$baseUrl/admin/holidays'));
+    if (response.statusCode == 200) return json.decode(response.body);
+    throw Exception('Failed to load holidays');
+  }
+
+  static Future<void> addHoliday(String name, String date) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/admin/holidays'),
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode({'name': name, 'date': date}),
+    );
+    if (response.statusCode != 200) throw Exception('Failed to add holiday');
+  }
+
+  static Future<void> deleteHoliday(int id) async {
+    final response = await http.delete(Uri.parse('$baseUrl/admin/holidays/$id'));
+    if (response.statusCode != 200) throw Exception('Failed to delete holiday');
+  }
+
+  // ============ LEAVE POLICIES ============
+
+  static Future<List<dynamic>> getLeavePolicies() async {
+    final response = await http.get(Uri.parse('$baseUrl/admin/leave-policies'));
+    if (response.statusCode == 200) return json.decode(response.body);
+    throw Exception('Failed to load leave policies');
+  }
+
+  static Future<void> saveLeavePolicy(Map<String, dynamic> data) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/admin/leave-policies'),
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode(data),
+    );
+    if (response.statusCode != 200) throw Exception('Failed to save policy');
+  }
+
+  static Future<void> adjustLeaveBalance(int userId, String leaveType, int totalDays) async {
+    final response = await http.put(
+      Uri.parse('$baseUrl/admin/leave-balance'),
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode({'userId': userId, 'leaveType': leaveType, 'totalDays': totalDays}),
+    );
+    if (response.statusCode != 200) throw Exception('Failed to adjust balance');
+  }
+
+  // ============ REPORTS ============
+
+  static Future<List<dynamic>> getOvertimeReport({DateTime? startDate, DateTime? endDate}) async {
+    String query = '';
+    if (startDate != null && endDate != null) {
+      final s = '${startDate.year}-${startDate.month.toString().padLeft(2,'0')}-${startDate.day.toString().padLeft(2,'0')}';
+      final e = '${endDate.year}-${endDate.month.toString().padLeft(2,'0')}-${endDate.day.toString().padLeft(2,'0')}';
+      query = '?startDate=$s&endDate=$e';
+    }
+    final response = await http.get(Uri.parse('$baseUrl/admin/reports/overtime$query'));
+    if (response.statusCode == 200) return json.decode(response.body);
+    throw Exception('Failed to load overtime report');
+  }
+
+  static Future<List<dynamic>> getSalaryHoursReport({DateTime? startDate, DateTime? endDate}) async {
+    String query = '';
+    if (startDate != null && endDate != null) {
+      final s = '${startDate.year}-${startDate.month.toString().padLeft(2,'0')}-${startDate.day.toString().padLeft(2,'0')}';
+      final e = '${endDate.year}-${endDate.month.toString().padLeft(2,'0')}-${endDate.day.toString().padLeft(2,'0')}';
+      query = '?startDate=$s&endDate=$e';
+    }
+    final response = await http.get(Uri.parse('$baseUrl/admin/reports/salary-hours$query'));
+    if (response.statusCode == 200) return json.decode(response.body);
+    throw Exception('Failed to load salary hours report');
+  }
+
+  static Future<List<dynamic>> getPayrollReport({DateTime? startDate, DateTime? endDate}) async {
+    String query = '';
+    if (startDate != null && endDate != null) {
+      final s = '${startDate.year}-${startDate.month.toString().padLeft(2,'0')}-${startDate.day.toString().padLeft(2,'0')}';
+      final e = '${endDate.year}-${endDate.month.toString().padLeft(2,'0')}-${endDate.day.toString().padLeft(2,'0')}';
+      query = '?startDate=$s&endDate=$e';
+    }
+    final response = await http.get(Uri.parse('$baseUrl/admin/reports/payroll$query'));
+    if (response.statusCode == 200) return json.decode(response.body);
+    throw Exception('Failed to load payroll report');
   }
 }

@@ -3,6 +3,8 @@ import '../services/api_service.dart';
 import 'admin/admin_dashboard_screen.dart';
 import 'forgot_password_screen.dart';
 import 'package:intl_phone_field/intl_phone_field.dart';
+import 'package:local_auth/local_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -18,6 +20,52 @@ class _LoginScreenState extends State<LoginScreen> {
   
   String _completePhoneNumber = '';
   bool _isLoading = false;
+  final LocalAuthentication auth = LocalAuthentication();
+  bool _canCheckBiometrics = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkBiometrics();
+  }
+
+  Future<void> _checkBiometrics() async {
+    bool canCheckBiometrics;
+    try {
+      canCheckBiometrics = await auth.canCheckBiometrics || await auth.isDeviceSupported();
+    } catch (e) {
+      canCheckBiometrics = false;
+    }
+    if (mounted) setState(() => _canCheckBiometrics = canCheckBiometrics);
+  }
+
+  Future<void> _authenticate() async {
+    bool authenticated = false;
+    try {
+      authenticated = await auth.authenticate(
+        localizedReason: 'Scan your fingerprint to login',
+        options: const AuthenticationOptions(stickyAuth: true, biometricOnly: true),
+      );
+    } catch (e) {
+      debugPrint('Error auth: $e');
+    }
+
+    if (authenticated && mounted) {
+       final prefs = await SharedPreferences.getInstance();
+       final mobile = prefs.getString('saved_mobile');
+       final password = prefs.getString('saved_password');
+       
+       if (mobile != null && password != null) {
+          setState(() {
+            _completePhoneNumber = mobile;
+            _passwordController.text = password;
+          });
+          _login();
+       } else {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No saved credentials. Login manually first.')));
+       }
+    }
+  }
 
   @override
   void dispose() {
@@ -36,11 +84,16 @@ class _LoginScreenState extends State<LoginScreen> {
         );
         
         if (mounted) {
+           // Save credentials
+           final prefs = await SharedPreferences.getInstance();
+           await prefs.setString('saved_mobile', _completePhoneNumber);
+           await prefs.setString('saved_password', _passwordController.text);
+
           final user = response['user'];
           if (user['role'] == 'Admin') {
              Navigator.pushReplacement(
                context, 
-               MaterialPageRoute(builder: (context) => const AdminDashboardScreen())
+               MaterialPageRoute(builder: (context) => AdminDashboardScreen())
              );
           } else {
              Navigator.pushReplacementNamed(context, '/home');
@@ -155,6 +208,15 @@ class _LoginScreenState extends State<LoginScreen> {
                                 : const Text('LOGIN', style: TextStyle(fontSize: 16)),
                           ),
                         ),
+                        
+                        if (_canCheckBiometrics) ...[
+                          const SizedBox(height: 20),
+                          IconButton(
+                            icon: const Icon(Icons.fingerprint, size: 50, color: Color(0xFF6200EA)),
+                            onPressed: _authenticate,
+                          ),
+                          const Text('Touch to Login', style: TextStyle(color: Colors.grey)),
+                        ],
                       ],
                     ),
                   ),

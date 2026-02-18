@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../services/api_service.dart';
-import '../screens/edit_profile_screen.dart';
+import '../services/api_service.dart';
 
 class AdminDrawer extends StatelessWidget {
   final Map<String, dynamic> user;
@@ -11,44 +10,35 @@ class AdminDrawer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Drawer(
-      child: ListView(
-        padding: EdgeInsets.zero,
+      child: Column(
         children: [
           UserAccountsDrawerHeader(
             accountName: Text(user['fullName'] ?? 'Admin'),
             accountEmail: Text(user['email'] ?? ''),
             currentAccountPicture: CircleAvatar(
               backgroundImage: user['profilePicture'] != null 
-                  ? NetworkImage('http://192.168.1.33:3000${user['profilePicture']}')
+                  ? NetworkImage(ApiService.getImageUrl(user['profilePicture']))
                   : null,
               child: user['profilePicture'] == null ? const Icon(Icons.person) : null,
             ),
             decoration: const BoxDecoration(
-              color: Color(0xFF6200EA),
+              gradient: LinearGradient(
+                colors: [Color(0xFF6200EA), Color(0xFF651FFF)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
             ),
           ),
           ListTile(
-            leading: const Icon(Icons.dashboard),
+            leading: const Icon(Icons.dashboard, color: Color(0xFF6200EA)),
             title: const Text('Dashboard'),
             onTap: () {
-              Navigator.pop(context); // Close drawer
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.edit),
-            title: const Text('Edit Profile'),
-            onTap: () {
               Navigator.pop(context);
-              Navigator.push(context, MaterialPageRoute(builder: (_) => EditProfileScreen(user: user, onUserUpdated: onUserUpdated)));
+              Navigator.pushReplacementNamed(context, '/admin');
             },
           ),
-          const Divider(),
-          const Padding(
-            padding: EdgeInsets.only(left: 16, top: 8, bottom: 8),
-            child: Text('Quick Actions', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
-          ),
           ListTile(
-            leading: const Icon(Icons.history, color: Colors.blue),
+            leading: const Icon(Icons.history, color: Color(0xFF6200EA)),
             title: const Text('View All Attendance'),
             onTap: () {
               Navigator.pop(context);
@@ -56,7 +46,7 @@ class AdminDrawer extends StatelessWidget {
             },
           ),
           ListTile(
-            leading: const Icon(Icons.people_outline, color: Colors.purple),
+            leading: const Icon(Icons.people_alt_outlined, color: Color(0xFF6200EA)),
             title: const Text('Manage Employees'),
             onTap: () {
               Navigator.pop(context);
@@ -64,7 +54,7 @@ class AdminDrawer extends StatelessWidget {
             },
           ),
           ListTile(
-            leading: const Icon(Icons.beach_access_outlined, color: Colors.orange),
+            leading: const Icon(Icons.beach_access_outlined, color: Color(0xFF6200EA)),
             title: const Text('Leave Management'),
             onTap: () {
               Navigator.pop(context);
@@ -73,10 +63,19 @@ class AdminDrawer extends StatelessWidget {
           ),
           const Divider(),
           ListTile(
+            leading: const Icon(Icons.settings_outlined, color: Color(0xFF6200EA)),
+            title: const Text('Settings'),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.pushNamed(context, '/admin-settings');
+            },
+          ),
+          const Spacer(),
+          const Divider(),
+          ListTile(
             leading: const Icon(Icons.logout, color: Colors.red),
             title: const Text('Logout', style: TextStyle(color: Colors.red)),
             onTap: () async {
-              // Show confirmation
               showDialog(
                 context: context,
                 builder: (ctx) => AlertDialog(
@@ -98,6 +97,7 @@ class AdminDrawer extends StatelessWidget {
               );
             },
           ),
+          const SizedBox(height: 20),
         ],
       ),
     );

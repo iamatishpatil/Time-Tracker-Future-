@@ -60,7 +60,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
 
     if (source != null) {
-      final XFile? image = await _picker.pickImage(source: source);
+      final XFile? image = await _picker.pickImage(
+        source: source,
+        preferredCameraDevice: CameraDevice.front,
+      );
       if (image != null) {
         setState(() => _profileImage = image);
       }

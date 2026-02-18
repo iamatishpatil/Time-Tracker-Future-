@@ -15,9 +15,11 @@ class _LeaveScreenState extends State<LeaveScreen> {
   DateTime? _endDate;
   final _reasonController = TextEditingController();
   
-  Map<String, dynamic> _balance = {'total': 10, 'used': 0, 'remaining': 10};
+  Map<String, dynamic> _balance = {'total': 30, 'used': 0, 'remaining': 30};
   List<dynamic> _history = [];
   bool _isLoading = true;
+  String _selectedLeaveType = 'Casual Leave';
+  final List<String> _leaveTypes = ['Sick Leave', 'Casual Leave', 'Annual Leave', 'Unpaid Leave'];
 
   @override
   void initState() {
@@ -58,6 +60,7 @@ class _LeaveScreenState extends State<LeaveScreen> {
         final user = await ApiService.getStoredUser();
         await ApiService.applyLeave({
           'userId': user!['id'],
+          'leaveType': _selectedLeaveType,
           'startDate': DateFormat('yyyy-MM-dd').format(_startDate!),
           'endDate': DateFormat('yyyy-MM-dd').format(_endDate!),
           'reason': _reasonController.text,
@@ -79,11 +82,41 @@ class _LeaveScreenState extends State<LeaveScreen> {
     }
   }
 
+  Future<void> _cancelRequest(int leaveId) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Cancel Leave?'),
+        content: const Text('Are you sure you want to cancel this request?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('No')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Yes')),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      setState(() => _isLoading = true);
+      try {
+        final user = await ApiService.getStoredUser();
+        await ApiService.cancelLeave(leaveId, user!['id']);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Leave cancelled')));
+          _loadData();
+        }
+      } catch (e) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+      } finally {
+        if (mounted) setState(() => _isLoading = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Leave Management')),
-      body: _isLoading 
+    return Container(
+      color: const Color(0xFFF3E5F5),
+      child: _isLoading 
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
               padding: const EdgeInsets.all(16),
@@ -139,6 +172,17 @@ class _LeaveScreenState extends State<LeaveScreen> {
       key: _formKey,
       child: Column(
         children: [
+          DropdownButtonFormField<String>(
+            value: _selectedLeaveType,
+            decoration: InputDecoration(
+              labelText: 'Leave Type',
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              prefixIcon: const Icon(Icons.category_outlined),
+            ),
+            items: _leaveTypes.map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
+            onChanged: (v) => setState(() => _selectedLeaveType = v!),
+          ),
+          const SizedBox(height: 16),
           Row(
             children: [
               Expanded(
@@ -213,16 +257,27 @@ class _LeaveScreenState extends State<LeaveScreen> {
           child: ListTile(
             title: Text('${leave['startDate']} to ${leave['endDate']}'),
             subtitle: Text(leave['reason']),
-            trailing: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              decoration: BoxDecoration(
-                color: _getStatusColor(leave['status']).withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(
-                leave['status'],
-                style: TextStyle(color: _getStatusColor(leave['status']), fontWeight: FontWeight.bold, fontSize: 12),
-              ),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: _getStatusColor(leave['status']).withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    leave['status'],
+                    style: TextStyle(color: _getStatusColor(leave['status']), fontWeight: FontWeight.bold, fontSize: 12),
+                  ),
+                ),
+                if (leave['status'] == 'Pending')
+                  IconButton(
+                    icon: const Icon(Icons.cancel_outlined, color: Colors.grey),
+                    onPressed: () => _cancelRequest(leave['id']),
+                    tooltip: 'Cancel Request',
+                  ),
+              ],
             ),
           ),
         );

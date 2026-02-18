@@ -50,7 +50,7 @@ class _AdminAbsentScreenState extends State<AdminAbsentScreen> {
                       child: ListTile(
                         leading: CircleAvatar(
                           backgroundImage: employee['profilePicture'] != null 
-                              ? NetworkImage('http://192.168.1.8:3000${employee['profilePicture']}')
+                              ? NetworkImage(ApiService.getImageUrl(employee['profilePicture']))
                               : null,
                           child: employee['profilePicture'] == null ? const Icon(Icons.person) : null,
                         ),

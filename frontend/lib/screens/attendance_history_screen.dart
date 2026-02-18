@@ -39,20 +39,9 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF3E5F5),
-      appBar: AppBar(
-        title: const Text('Attendance History'),
-        actions: [
-          if (!_isLoading && _history.isNotEmpty)
-            IconButton(
-              icon: const Icon(Icons.picture_as_pdf),
-              onPressed: () => PdfService.generateAttendanceReport(_userName, _history),
-              tooltip: 'Download PDF Report',
-            ),
-        ],
-      ),
-      body: _isLoading 
+    return Container(
+      color: const Color(0xFFF3E5F5),
+      child: _isLoading 
           ? const Center(child: CircularProgressIndicator())
           : Column(
               children: [
@@ -132,20 +121,52 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
                                           DateFormat('EEEE, MMM d').format(checkIn),
                                           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF6200EA)),
                                         ),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                          decoration: BoxDecoration(
-                                            color: checkOut == null ? Colors.orange.withValues(alpha: 0.1) : Colors.green.withValues(alpha: 0.1),
-                                            borderRadius: BorderRadius.circular(20),
-                                          ),
-                                          child: Text(
-                                            checkOut == null ? 'Active' : 'Completed',
-                                            style: TextStyle(
-                                              color: checkOut == null ? Colors.orange : Colors.green,
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 12,
+                                        Row(
+                                          children: [
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                              decoration: BoxDecoration(
+                                                color: checkOut == null ? Colors.orange.withValues(alpha: 0.1) : Colors.green.withValues(alpha: 0.1),
+                                                borderRadius: BorderRadius.circular(20),
+                                              ),
+                                              child: Text(
+                                                checkOut == null ? 'Active' : 'Completed',
+                                                style: TextStyle(
+                                                  color: checkOut == null ? Colors.orange : Colors.green,
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 12,
+                                                ),
+                                              ),
                                             ),
-                                          ),
+                                            if (record['status'] == 'Late') ...[
+                                              const SizedBox(width: 8),
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.red.withValues(alpha: 0.1),
+                                                  borderRadius: BorderRadius.circular(12),
+                                                ),
+                                                child: const Text(
+                                                  'LATE',
+                                                  style: TextStyle(color: Colors.red, fontSize: 10, fontWeight: FontWeight.bold),
+                                                ),
+                                              ),
+                                            ],
+                                            if (record['overtimeHours'] != null && (record['overtimeHours'] is num) && record['overtimeHours'] > 0) ...[
+                                              const SizedBox(width: 8),
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.blue.withValues(alpha: 0.1),
+                                                  borderRadius: BorderRadius.circular(12),
+                                                ),
+                                                child: Text(
+                                                  '+${(record['overtimeHours'] as num).toStringAsFixed(1)} HRS',
+                                                  style: const TextStyle(color: Colors.blue, fontSize: 10, fontWeight: FontWeight.bold),
+                                                ),
+                                              ),
+                                            ],
+                                          ],
                                         ),
                                       ],
                                     ),
@@ -164,7 +185,7 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
                                                 ClipRRect(
                                                   borderRadius: BorderRadius.circular(8),
                                                   child: Image.network(
-                                                    'http://192.168.1.33:3000${record['checkInPhoto']}',
+                                                    ApiService.getImageUrl(record['checkInPhoto']),
                                                     height: 80,
                                                     width: 80,
                                                     fit: BoxFit.cover,
@@ -187,7 +208,7 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
                                                   ClipRRect(
                                                     borderRadius: BorderRadius.circular(8),
                                                     child: Image.network(
-                                                      'http://192.168.1.33:3000${record['checkOutPhoto']}',
+                                                      ApiService.getImageUrl(record['checkOutPhoto']),
                                                       height: 80,
                                                       width: 80,
                                                       fit: BoxFit.cover,

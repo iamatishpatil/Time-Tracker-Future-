@@ -1,20 +1,16 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:image_picker/image_picker.dart';
 import '../services/api_service.dart';
-import 'checkout_screen.dart';
-import 'attendance_history_screen.dart';
 import '../widgets/common/glass_card.dart';
 import '../widgets/common/gradient_button.dart';
-import '../widgets/custom_drawer.dart';
-import 'leave_screen.dart';
-import 'edit_profile_screen.dart';
+import 'attendance_history_screen.dart';
+import 'checkout_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -24,105 +20,126 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMixin {
-  String _currentTime = '';
-  String _currentDate = '';
-  late Timer _timer;
-  bool _isCheckedIn = false;
+  late String _timeString;
+  late String _dateString;
   Map<String, dynamic>? _user;
-  List<dynamic> _history = [];
-  bool _isLoading = false;
-  
-  // Map and Location
+  bool _isLoading = true;
+  bool _isCheckedIn = false;
+  String _currentAddress = "Fetching location...";
   LatLng _currentPosition = const LatLng(0, 0);
-  String _currentAddress = 'Fetching location...';
   final MapController _mapController = MapController();
+  late AnimationController _animationController;
+  late Animation<double> _pulseAnimation;
 
-  // Dashboard Stats
-  String _todayHours = "00:00:00";
+  // Stats
+  String _todayHours = "0.0";
   String _monthHours = "0.0";
   String _attendanceRate = "0%";
+  Map<String, dynamic> _leaveBalance = {'total': 0, 'used': 0, 'remaining': 0};
   
-  // Animation
-  late AnimationController _pulseController;
-  late Animation<double> _pulseAnimation;
-  
-  // Scaffold Key
-  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  // Geofencing
+  bool _isInsideRadius = false;
+  Map<String, dynamic>? _settings;
 
   @override
   void initState() {
     super.initState();
-    _updateTime();
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      _updateTime();
-      if (_isCheckedIn) _calculateDashboardStats();
-    });
-    _loadUserData();
-    _getCurrentLocation();
+    _timeString = _formatDateTime(DateTime.now());
+    _dateString = _formatDate(DateTime.now());
+    Timer.periodic(const Duration(seconds: 1), (Timer t) => _getTime());
     
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 2),
-    )..repeat(reverse: true);
+    _animationController = AnimationController(vsync: this, duration: const Duration(seconds: 2))..repeat(reverse: true);
+    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.05).animate(CurvedAnimation(parent: _animationController, curve: Curves.easeInOut));
     
-    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.1).animate(
-      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
-    );
+    _initializeData();
   }
 
   @override
   void dispose() {
-    _timer.cancel();
-    _pulseController.dispose();
+    _animationController.dispose();
     super.dispose();
   }
 
-  void _updateTime() {
-    final now = DateTime.now();
-    setState(() {
-      _currentTime = DateFormat('hh:mm:ss a').format(now);
-      _currentDate = DateFormat('EEEE, d MMMM y').format(now);
-    });
+  Future<void> _initializeData() async {
+    await _loadUser();
+    await _getCurrentLocation();
+    await _loadStats();
   }
 
-  Future<void> _loadUserData() async {
-    setState(() => _isLoading = true);
+  Future<void> _loadUser() async {
+    final user = await ApiService.getStoredUser();
+    if (mounted) setState(() => _user = user);
+    if (user != null) {
+      final isCheckedIn = await ApiService.getCheckInStatus(user['id']);
+      if (mounted) setState(() => _isCheckedIn = isCheckedIn);
+    }
+  }
+
+  Future<void> _loadStats() async {
+    if (_user == null) return;
     try {
-      final user = await ApiService.getStoredUser();
-      if (user != null) {
-        setState(() => _user = user);
-        _checkStatus();
-        _loadHistory();
+      final history = await ApiService.getAttendance(_user!['id']);
+      final leave = await ApiService.getLeaveBalance(_user!['id']);
+      
+      double totalHours = 0;
+      double todayHours = 0;
+      int presentDays = 0;
+      final now = DateTime.now();
+      
+      for (var record in history) {
+        final checkIn = DateTime.parse(record['checkInTime']);
+        
+        // Today's hours
+        if (checkIn.day == now.day && checkIn.month == now.month && checkIn.year == now.year) {
+          if (record['checkOutTime'] != null) {
+            final checkOut = DateTime.parse(record['checkOutTime']);
+            todayHours += checkOut.difference(checkIn).inMinutes / 60.0;
+          } else {
+            // Still checked in
+            todayHours += now.difference(checkIn).inMinutes / 60.0;
+          }
+        }
+
+        if (checkIn.month == now.month && checkIn.year == now.year) {
+          presentDays++;
+          if (record['checkOutTime'] != null) {
+            final checkOut = DateTime.parse(record['checkOutTime']);
+            totalHours += checkOut.difference(checkIn).inMinutes / 60.0;
+          }
+        }
       }
-    } catch (e) {
-      // Handle error
-    } finally {
+
+      int totalWorkingDays = 22; // Approximation
+      double rate = (presentDays / totalWorkingDays) * 100;
+
+      if (mounted) {
+        setState(() {
+          _todayHours = todayHours.toStringAsFixed(1);
+          _monthHours = totalHours.toStringAsFixed(1);
+          _attendanceRate = "${rate.toInt()}%";
+          _leaveBalance = leave;
+          _isLoading = false;
+        });
+      }
+    } catch (_) {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  Future<void> _checkStatus() async {
-    if (_user == null) return;
-    try {
-      final status = await ApiService.getCheckInStatus(_user!['id']);
-      if (mounted) setState(() => _isCheckedIn = status);
-    } catch (e) {
-      debugPrint('Error checking status: $e');
+  void _getTime() {
+    final DateTime now = DateTime.now();
+    final String formattedDateTime = _formatDateTime(now);
+    final String formattedDate = _formatDate(now);
+    if (mounted) {
+      setState(() {
+        _timeString = formattedDateTime;
+        _dateString = formattedDate;
+      });
     }
   }
 
-  Future<void> _loadHistory() async {
-    if (_user == null) return;
-    try {
-      final history = await ApiService.getAttendance(_user!['id']);
-      if (mounted) {
-        setState(() => _history = history);
-        _calculateDashboardStats();
-      }
-    } catch (e) {
-      debugPrint('Error loading history: $e');
-    }
-  }
+  String _formatDateTime(DateTime dateTime) => DateFormat('hh:mm:ss a').format(dateTime);
+  String _formatDate(DateTime dateTime) => DateFormat('EEEE, MMMM d, y').format(dateTime);
 
   Future<void> _getCurrentLocation() async {
     bool serviceEnabled;
@@ -139,275 +156,236 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
     if (permission == LocationPermission.deniedForever) return;
 
-    Position position = await Geolocator.getCurrentPosition();
+    final position = await Geolocator.getCurrentPosition();
+    
+    // Check Geofencing
+    bool isInside = false;
+    try {
+      if (_settings == null) _settings = await ApiService.getSettings();
+      if (_settings != null && _settings!['officeLat'] != null) {
+        double distance = Geolocator.distanceBetween(
+          position.latitude, position.longitude,
+          _settings!['officeLat'], _settings!['officeLong']
+        );
+        isInside = distance <= (_settings!['officeRadiusMeters'] ?? 100);
+      }
+    } catch (_) {}
+
     if (mounted) {
       setState(() {
         _currentPosition = LatLng(position.latitude, position.longitude);
-        _mapController.move(_currentPosition, 15);
+        _isInsideRadius = isInside;
+        _mapController.move(_currentPosition, 15.0);
       });
-      _getAddressFromLatLng(position.latitude, position.longitude);
     }
-  }
 
-  Future<void> _getAddressFromLatLng(double lat, double lng) async {
     try {
-      List<Placemark> placemarks = await placemarkFromCoordinates(lat, lng);
-      if (placemarks.isNotEmpty) {
+      List<Placemark> placemarks = await placemarkFromCoordinates(position.latitude, position.longitude);
+      if (placemarks.isNotEmpty && mounted) {
         Placemark place = placemarks[0];
-        if (mounted) {
-          setState(() {
-            _currentAddress = '${place.name}, ${place.subLocality}, ${place.locality}';
-          });
-        }
+        setState(() {
+          _currentAddress = "${place.street}, ${place.subLocality}, ${place.locality}";
+        });
       }
-    } catch (e) {
-      debugPrint(e.toString());
-    }
+    } catch (_) {}
   }
 
-  void _calculateDashboardStats() {
-    if (_history.isEmpty && !_isCheckedIn) return;
-
-    double totalMonthHours = 0;
-    int presentDays = 0;
-    Set<String> uniqueDays = {};
-
-    final now = DateTime.now();
-    final firstDayOfMonth = DateTime(now.year, now.month, 1);
-
-    for (var record in _history) {
-      final checkIn = DateTime.parse(record['checkInTime']).toLocal();
-      if (checkIn.isAfter(firstDayOfMonth)) {
-        uniqueDays.add(DateFormat('yyyy-MM-dd').format(checkIn));
-        
-        if (record['checkOutTime'] != null) {
-          final checkOut = DateTime.parse(record['checkOutTime']).toLocal();
-          totalMonthHours += checkOut.difference(checkIn).inMinutes / 60.0;
-        }
-      }
-    }
-
-    presentDays = uniqueDays.length;
-    int totalWorkingDays = now.day; // Simplification: days passed in month
-    double rate = (presentDays / totalWorkingDays) * 100;
-
-    String todayHrs = "00:00:00";
-    if (_isCheckedIn && _history.isNotEmpty) {
-      // Find active session
-      final activeSession = _history.firstWhere((r) => r['checkOutTime'] == null, orElse: () => null);
-      if (activeSession != null) {
-        final checkIn = DateTime.parse(activeSession['checkInTime']).toLocal();
-        final diff = DateTime.now().difference(checkIn);
-        todayHrs = _formatDuration(diff);
-      }
-    }
-
-    if (mounted) {
-      setState(() {
-        _monthHours = totalMonthHours.toStringAsFixed(1);
-        _attendanceRate = "${rate.toInt()}%";
-        _todayHours = todayHrs;
-      });
-    }
-  }
-
-  String _formatDuration(Duration duration) {
-    String twoDigits(int n) => n.toString().padLeft(2, "0");
-    String twoDigitMinutes = twoDigits(duration.inMinutes.remainder(60));
-    String twoDigitSeconds = twoDigits(duration.inSeconds.remainder(60));
-    return "${twoDigits(duration.inHours)}:$twoDigitMinutes:$twoDigitSeconds";
-  }
-  
   Future<void> _handleCheckIn() async {
-    setState(() => _isLoading = true);
+    final picker = ImagePicker();
+    final image = await picker.pickImage(source: ImageSource.camera, preferredCameraDevice: CameraDevice.front);
     
-    // Use current state location if available
-    double lat = _currentPosition.latitude;
-    double long = _currentPosition.longitude;
-    String address = _currentAddress;
+    if (image == null) return;
 
-    // Capture Photo
-    final ImagePicker picker = ImagePicker();
-    final XFile? photo = await picker.pickImage(source: ImageSource.camera, preferredCameraDevice: CameraDevice.front);
-
-    if (photo == null && mounted) {
-       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Selfie is required for check-in')));
-       setState(() => _isLoading = false);
-       return;
-    }
-
+    setState(() => _isLoading = true);
     try {
-      await ApiService.checkIn(_user!['id'], lat: lat, long: long, address: address, photo: photo);
+      await ApiService.checkIn(
+        _user!['id'], 
+        lat: _currentPosition.latitude, 
+        long: _currentPosition.longitude, 
+        address: _currentAddress, 
+        photo: image
+      );
       if (mounted) {
         setState(() => _isCheckedIn = true);
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Check-in Successful!')));
-        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const CheckoutScreen()));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Checked In Successfully!')));
+        Navigator.pushNamed(context, '/checkout');
       }
+      _loadStats();
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
-      }
+       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()), backgroundColor: Colors.red));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  void _logout() {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Confirm Logout'),
-        content: const Text('Are you sure you want to log out?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          TextButton(
-            onPressed: () async {
-              await ApiService.logout();
-              if (mounted) {
-                Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
-              }
-            },
-            child: const Text('Logout', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      key: _scaffoldKey,
-      drawer: _user != null ? CustomDrawer(user: _user!) : null,
-      body: Stack(
+    return Container(
+      color: const Color(0xFFF3E5F5),
+      child: Stack(
         children: [
-          // Background Gradient
           Container(
+            height: 200,
             decoration: const BoxDecoration(
               gradient: LinearGradient(
-                colors: [Color(0xFF6200EA), Color(0xFF651FFF), Color(0xFF00BFA5)],
+                colors: [Color(0xFF6200EA), Color(0xFF651FFF)],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
+              borderRadius: BorderRadius.vertical(bottom: Radius.circular(32)),
             ),
           ),
-          
           SafeArea(
             child: Column(
               children: [
-                // Header
-                _buildHeader(_scaffoldKey),
+                const SizedBox(height: 20),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 28,
+                        backgroundImage: _user?['profilePicture'] != null 
+                          ? NetworkImage(ApiService.getImageUrl(_user!['profilePicture'])) 
+                          : null,
+                        child: _user?['profilePicture'] == null ? const Icon(Icons.person, size: 30) : null,
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Welcome Back,', style: TextStyle(color: Colors.white70, fontSize: 14)),
+                            Text(
+                              _user?['fullName'] ?? 'User',
+                              style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: _isInsideRadius ? Colors.green.withOpacity(0.2) : Colors.red.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: _isInsideRadius ? Colors.green : Colors.red, width: 1),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              _isInsideRadius ? Icons.check_circle : Icons.warning_amber_rounded,
+                              color: _isInsideRadius ? Colors.green : Colors.red,
+                              size: 14,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              _isInsideRadius ? 'Inside Office' : 'Outside Office',
+                              style: TextStyle(
+                                color: _isInsideRadius ? Colors.green : Colors.red,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
                 
-                // Content
                 Expanded(
                   child: Container(
                     decoration: const BoxDecoration(
                       color: Color(0xFFF3E5F5),
-                      borderRadius: BorderRadius.only(
-                        topLeft: Radius.circular(30),
-                        topRight: Radius.circular(30),
-                      ),
+                      borderRadius: BorderRadius.only(topLeft: Radius.circular(30), topRight: Radius.circular(30)),
                     ),
                     child: SingleChildScrollView(
                       padding: const EdgeInsets.all(20),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          // Clock Card
                           GlassCard(
                             padding: const EdgeInsets.all(24),
                             borderRadius: 24,
                             child: Column(
                               children: [
-                                Text(
-                                  _currentTime,
-                                  style: const TextStyle(
-                                    fontSize: 48,
-                                    fontWeight: FontWeight.bold,
-                                    color: Color(0xFF311B92),
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  _currentDate,
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    color: Colors.grey[700],
-                                    fontWeight: FontWeight.w500,
-                                  ),
+                                Text(_timeString, style: const TextStyle(fontSize: 42, fontWeight: FontWeight.bold, color: Color(0xFF311B92))),
+                                Text(_dateString, style: TextStyle(fontSize: 14, color: Colors.grey[600], fontWeight: FontWeight.w500)),
+                                const SizedBox(height: 20),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                  children: [
+                                    _buildStatItem('Today Hrs', _todayHours, Colors.purple),
+                                    _buildStatItem('Monthly Hrs', _monthHours, Colors.blue),
+                                    _buildStatItem('Attendance', _attendanceRate, Colors.green),
+                                  ],
                                 ),
                               ],
                             ),
                           ),
-                          const SizedBox(height: 20),
-
-                          // Performance Dashboard
-                          GlassCard(
-                            padding: const EdgeInsets.all(20),
-                            borderRadius: 24,
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceAround,
-                              children: [
-                                _buildStatItem("TODAY'S HRS", _todayHours, Icons.timer_outlined),
-                                _buildStatItem("THIS MONTH", _monthHours, Icons.calendar_month_outlined),
-                                _buildStatItem("ATTENDANCE", _attendanceRate, Icons.percent),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 20),
-
-                          // Live Map View
+                          const SizedBox(height: 24),
+                          
                           ClipRRect(
                             borderRadius: BorderRadius.circular(24),
                             child: SizedBox(
-                              height: 200,
+                              height: 180,
                               child: Stack(
                                 children: [
                                   FlutterMap(
                                     mapController: _mapController,
-                                    options: MapOptions(
-                                      initialCenter: _currentPosition,
-                                      initialZoom: 15.0,
-                                    ),
+                                    options: MapOptions(initialCenter: _currentPosition, initialZoom: 15.0),
                                     children: [
                                       TileLayer(
                                         urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                                         userAgentPackageName: 'com.timetracker.frontend',
                                       ),
+                                      if (_settings != null && _settings!['officeLat'] != null) ...[
+                                        CircleLayer(
+                                          circles: [
+                                            CircleMarker(
+                                              point: LatLng(_settings!['officeLat'], _settings!['officeLong']),
+                                              color: Colors.blue.withValues(alpha: 0.3),
+                                              borderStrokeWidth: 2,
+                                              borderColor: Colors.blue,
+                                              radius: (_settings!['officeRadiusMeters'] as num?)?.toDouble() ?? 100.0,
+                                              useRadiusInMeter: true,
+                                            ),
+                                          ],
+                                        ),
+                                        MarkerLayer(
+                                          markers: [
+                                            Marker(
+                                              point: LatLng(_settings!['officeLat'], _settings!['officeLong']),
+                                              width: 30,
+                                              height: 30,
+                                              child: const Icon(Icons.business, color: Colors.blue, size: 30),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
                                       MarkerLayer(
                                         markers: [
                                           Marker(
                                             point: _currentPosition,
                                             width: 40,
                                             height: 40,
-                                            child: const Icon(Icons.location_on, color: Colors.red, size: 40),
+                                            child: const Icon(Icons.person_pin_circle, color: Color(0xFF6200EA), size: 40),
                                           ),
                                         ],
                                       ),
                                     ],
                                   ),
                                   Positioned(
-                                    bottom: 10,
-                                    left: 10,
-                                    right: 10,
+                                    bottom: 10, left: 10, right: 10,
                                     child: Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                      decoration: BoxDecoration(
-                                        color: Colors.white.withValues(alpha: 0.9),
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
+                                      decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.9), borderRadius: BorderRadius.circular(12)),
                                       child: Row(
                                         children: [
                                           const Icon(Icons.location_on, size: 16, color: Colors.blue),
                                           const SizedBox(width: 8),
-                                          Expanded(
-                                            child: Text(
-                                              _currentAddress,
-                                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ),
+                                          Expanded(child: Text(_currentAddress, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis)),
                                         ],
                                       ),
                                     ),
@@ -418,34 +396,20 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                           ),
                           const SizedBox(height: 32),
 
-                          // Check In Button (Animated)
                           if (!_isCheckedIn)
                             ScaleTransition(
                               scale: _pulseAnimation,
                               child: Center(
-                                child: Container(
-                                  width: 200,
-                                  height: 200,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    gradient: const LinearGradient(
-                                      colors: [Color(0xFF00BFA5), Color(0xFF651FFF)],
-                                      begin: Alignment.topLeft,
-                                      end: Alignment.bottomRight,
+                                child: GestureDetector(
+                                  onTap: _isLoading ? null : _handleCheckIn,
+                                  child: Container(
+                                    width: 180, height: 180,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      gradient: const LinearGradient(colors: [Color(0xFF00BFA5), Color(0xFF651FFF)]),
+                                      boxShadow: [BoxShadow(color: const Color(0xFF00BFA5).withValues(alpha: 0.4), blurRadius: 20, spreadRadius: 5)],
                                     ),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: const Color(0xFF00BFA5).withValues(alpha: 0.4),
-                                        blurRadius: 20,
-                                        spreadRadius: 5,
-                                      ),
-                                    ],
-                                  ),
-                                  child: Material(
-                                    color: Colors.transparent,
-                                    child: InkWell(
-                                      onTap: _isLoading ? null : _handleCheckIn,
-                                      borderRadius: BorderRadius.circular(100),
+                                    child: Center(
                                       child: _isLoading 
                                         ? const CircularProgressIndicator(color: Colors.white)
                                         : Column(
@@ -453,15 +417,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                                             children: const [
                                               Icon(Icons.touch_app, size: 48, color: Colors.white),
                                               SizedBox(height: 8),
-                                              Text(
-                                                'TAP TO\nCHECK IN',
-                                                textAlign: TextAlign.center,
-                                                style: TextStyle(
-                                                  color: Colors.white,
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 18,
-                                                ),
-                                              ),
+                                              Text('TAP TO\nCHECK IN', textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
                                             ],
                                           ),
                                     ),
@@ -472,47 +428,24 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                           else
                              Center(
                                child: GradientButton(
-                                  text: 'GO TO DASHBOARD',
+                                  text: 'GO TO CHECKOUT',
                                   onPressed: () => Navigator.pushNamed(context, '/checkout'),
                                   colors: const [Color(0xFF6200EA), Color(0xFF651FFF)],
                                ),
                              ),
 
                           const SizedBox(height: 32),
-                          
-                          // Quick Actions
-                          const Text(
-                             'Quick Actions',
-                             style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF311B92)),
-                          ),
+                          const Text('Quick Actions', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF311B92))),
                           const SizedBox(height: 16),
-                           GridView.count(
-                             crossAxisCount: 3,
-                             crossAxisSpacing: 12,
-                             mainAxisSpacing: 12,
-                             shrinkWrap: true,
-                             physics: const NeverScrollableScrollPhysics(),
-                             children: [
-                               _buildActionCard(
-                                 icon: Icons.history, 
-                                 label: 'History', 
-                                 color: Colors.blue,
-                                 onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AttendanceHistoryScreen())),
-                               ),
-                               _buildActionCard(
-                                 icon: Icons.beach_access, 
-                                 label: 'Leave', 
-                                 color: Colors.orange,
-                                 onTap: () => Navigator.pushNamed(context, '/leave'),
-                               ),
-                               _buildActionCard(
-                                 icon: Icons.person, 
-                                 label: 'Profile', 
-                                 color: Colors.purple,
-                                 onTap: () => Navigator.pushNamed(context, '/profile'),
-                               ),
-                             ],
-                           ),
+                          Row(
+                            children: [
+                              Expanded(child: _buildActionCard(icon: Icons.history, label: 'History', color: Colors.blue, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AttendanceHistoryScreen())))),
+                              const SizedBox(width: 12),
+                              Expanded(child: _buildActionCard(icon: Icons.beach_access, label: 'Leave', color: Colors.orange, onTap: () => Navigator.pushNamed(context, '/leave'))),
+                              const SizedBox(width: 12),
+                              Expanded(child: _buildActionCard(icon: Icons.person, label: 'Profile', color: Colors.purple, onTap: () => Navigator.pushNamed(context, '/profile'))),
+                            ],
+                          ),
                         ],
                       ),
                     ),
@@ -526,98 +459,32 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     );
   }
 
-  Widget _buildHeader(GlobalKey<ScaffoldState> scaffoldKey) {
-    return Padding(
-      padding: const EdgeInsets.all(20.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          IconButton(
-            icon: const Icon(Icons.menu, color: Colors.white, size: 28),
-            onPressed: () => scaffoldKey.currentState?.openDrawer(),
-          ),
-          Row(
-            children: [
-              if (_user?['profilePicture'] != null)
-                CircleAvatar(
-                  radius: 24,
-                  backgroundImage: NetworkImage('http://192.168.1.8:3000${_user!['profilePicture']}'),
-                )
-              else
-                const CircleAvatar(radius: 24, child: Icon(Icons.person)),
-              const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Welcome Back,', style: TextStyle(color: Colors.white70, fontSize: 14)),
-                  Text(
-                    _user?['fullName'] ?? 'User',
-                    style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          IconButton(
-            onPressed: _logout,
-            icon: const Icon(Icons.logout, color: Colors.white),
-          ),
-        ],
-      ),
+  Widget _buildStatItem(String label, String value, Color color) {
+    return Column(
+      children: [
+        Text(value, style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: color)),
+        const SizedBox(height: 4),
+        Text(label, style: TextStyle(fontSize: 12, color: Colors.grey[600], fontWeight: FontWeight.w500)),
+      ],
     );
   }
 
   Widget _buildActionCard({required IconData icon, required String label, required Color color, required VoidCallback onTap}) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4)),
+    return GlassCard(
+      onTap: onTap,
+      padding: const EdgeInsets.all(16),
+      borderRadius: 20,
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: color.withValues(alpha: 0.1), shape: BoxShape.circle),
+            child: Icon(icon, color: color, size: 24),
+          ),
+          const SizedBox(height: 8),
+          Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
         ],
       ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(20),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(icon, color: color, size: 28),
-                ),
-                const SizedBox(height: 12),
-                Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStatItem(String label, String value, IconData icon) {
-    return Column(
-      children: [
-        Icon(icon, size: 20, color: const Color(0xFF6200EA)),
-        const SizedBox(height: 8),
-        Text(
-          value,
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF311B92)),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: const TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold),
-        ),
-      ],
     );
   }
 }

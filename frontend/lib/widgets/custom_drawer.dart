@@ -21,7 +21,7 @@ class CustomDrawer extends StatelessWidget {
               children: [
                 CircleAvatar(
                   backgroundImage: user['profilePicture'] != null 
-                      ? NetworkImage('http://192.168.1.33:3000${user['profilePicture']}')
+                      ? NetworkImage(ApiService.getImageUrl(user['profilePicture']))
                       : null,
                   child: user['profilePicture'] == null ? const Icon(Icons.person) : null,
                 ),
@@ -74,14 +74,20 @@ class CustomDrawer extends StatelessWidget {
             },
           ),
           ListTile(
-            leading: const Icon(Icons.history),
-            title: const Text('Attendance History'),
-            onTap: () => Navigator.pushNamed(context, '/history'),
+            leading: const Icon(Icons.lock_reset, color: Color(0xFF6200EA)),
+            title: const Text('Change Password'),
+            onTap: (){
+              Navigator.pop(context);
+              Navigator.pushNamed(context, '/change-password');
+            },
           ),
           ListTile(
-            leading: const Icon(Icons.beach_access),
-            title: const Text('Apply Leave'),
-            onTap: () => Navigator.pushNamed(context, '/leave'),
+            leading: const Icon(Icons.notifications_outlined, color: Color(0xFF6200EA)),
+            title: const Text('Notifications'),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.pushNamed(context, '/notifications');
+            },
           ),
           const Spacer(),
           const Divider(),
