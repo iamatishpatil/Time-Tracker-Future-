@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import '../core/theme/pulse_colors.dart';
+import '../core/theme/pulse_text_styles.dart';
+import '../core/widgets/pulse_button.dart';
 import '../services/api_service.dart';
 import 'admin/admin_dashboard_screen.dart';
 import 'forgot_password_screen.dart';
@@ -13,20 +16,30 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _mobileController = TextEditingController();
   final _passwordController = TextEditingController();
-  
+
   String _completePhoneNumber = '';
   bool _isLoading = false;
+  bool _obscurePassword = true;
   final LocalAuthentication auth = LocalAuthentication();
   bool _canCheckBiometrics = false;
+
+  late AnimationController _animController;
+  late Animation<double> _fadeAnimation;
+  late Animation<Offset> _slideAnimation;
 
   @override
   void initState() {
     super.initState();
     _checkBiometrics();
+    _animController = AnimationController(vsync: this, duration: const Duration(milliseconds: 800));
+    _fadeAnimation = CurvedAnimation(parent: _animController, curve: Curves.easeOut);
+    _slideAnimation = Tween<Offset>(begin: const Offset(0, 0.1), end: Offset.zero)
+        .animate(CurvedAnimation(parent: _animController, curve: Curves.easeOut));
+    _animController.forward();
   }
 
   Future<void> _checkBiometrics() async {
@@ -51,19 +64,20 @@ class _LoginScreenState extends State<LoginScreen> {
     }
 
     if (authenticated && mounted) {
-       final prefs = await SharedPreferences.getInstance();
-       final mobile = prefs.getString('saved_mobile');
-       final password = prefs.getString('saved_password');
-       
-       if (mobile != null && password != null) {
-          setState(() {
-            _completePhoneNumber = mobile;
-            _passwordController.text = password;
-          });
-          _login();
-       } else {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No saved credentials. Login manually first.')));
-       }
+      final prefs = await SharedPreferences.getInstance();
+      final mobile = prefs.getString('saved_mobile');
+      final password = prefs.getString('saved_password');
+
+      if (mobile != null && password != null) {
+        setState(() {
+          _completePhoneNumber = mobile;
+          _passwordController.text = password;
+        });
+        _login();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No saved credentials. Login manually first.')));
+      }
     }
   }
 
@@ -71,6 +85,7 @@ class _LoginScreenState extends State<LoginScreen> {
   void dispose() {
     _mobileController.dispose();
     _passwordController.dispose();
+    _animController.dispose();
     super.dispose();
   }
 
@@ -82,27 +97,24 @@ class _LoginScreenState extends State<LoginScreen> {
           _completePhoneNumber,
           _passwordController.text,
         );
-        
+
         if (mounted) {
-           // Save credentials
-           final prefs = await SharedPreferences.getInstance();
-           await prefs.setString('saved_mobile', _completePhoneNumber);
-           await prefs.setString('saved_password', _passwordController.text);
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('saved_mobile', _completePhoneNumber);
+          await prefs.setString('saved_password', _passwordController.text);
 
           final user = response['user'];
           if (user['role'] == 'Admin') {
-             Navigator.pushReplacement(
-               context, 
-               MaterialPageRoute(builder: (context) => AdminDashboardScreen())
-             );
+            Navigator.pushReplacement(
+                context, MaterialPageRoute(builder: (context) => AdminDashboardScreen()));
           } else {
-             Navigator.pushReplacementNamed(context, '/home');
+            Navigator.pushReplacementNamed(context, '/home');
           }
         }
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(e.toString()), backgroundColor: Colors.redAccent),
+            SnackBar(content: Text(e.toString())),
           );
         }
       } finally {
@@ -114,126 +126,170 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.access_time_filled_rounded, size: 80, color: Color(0xFF6200EA)),
-              const SizedBox(height: 20),
-              Text(
-                'Time Tracker',
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  color: const Color(0xFF6200EA),
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 40),
-              
-              Card(
-                elevation: 4,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Form(
-                    key: _formKey,
-                    child: Column(
-                      children: [
-                        const Text(
-                          'Welcome Back',
-                          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(height: 8),
-                        const Text('Sign in to continue', style: TextStyle(color: Colors.grey)),
-                        const SizedBox(height: 30),
-                        
-                        IntlPhoneField(
-                          controller: _mobileController,
-                          decoration: const InputDecoration(
-                            labelText: 'Mobile Number',
-                            border: OutlineInputBorder(),
-                            prefixIcon: Icon(Icons.phone),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Color(0xFF0A0A14), Color(0xFF0F0F1A), Color(0xFF151528)],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
+        ),
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: FadeTransition(
+              opacity: _fadeAnimation,
+              child: SlideTransition(
+                position: _slideAnimation,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    // Logo
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: PulseColors.primaryGradient,
+                        boxShadow: [
+                          BoxShadow(
+                            color: PulseColors.primary.withOpacity(0.3),
+                            blurRadius: 30,
+                            spreadRadius: 5,
                           ),
-                          initialCountryCode: 'IN',
-                          onChanged: (phone) {
-                            _completePhoneNumber = phone.completeNumber;
-                          },
-                          validator: (value) {
-                            if (value == null || value.number.isEmpty) return 'Enter mobile number';
-                            if (value.number.length != 10) return 'Must be 10 digits';
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 20),
-                        
-                        TextFormField(
-                          controller: _passwordController,
-                          decoration: const InputDecoration(
-                            labelText: 'Password',
-                            prefixIcon: Icon(Icons.lock),
-                            border: OutlineInputBorder(),
-                          ),
-                          obscureText: true,
-                          validator: (val) {
-                             if (val == null || val.isEmpty) return 'Enter password';
-                             return null;
-                          },
-                        ),
-                        
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: TextButton(
-                            onPressed: () {
-                              Navigator.push(context, MaterialPageRoute(builder: (_) => const ForgotPasswordScreen()));
-                            },
-                            child: const Text('Forgot Password?'),
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                        
-                        SizedBox(
-                          width: double.infinity,
-                          height: 50,
-                          child: ElevatedButton(
-                            onPressed: _isLoading ? null : _login,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF6200EA),
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            ),
-                            child: _isLoading 
-                                ? const CircularProgressIndicator(color: Colors.white) 
-                                : const Text('LOGIN', style: TextStyle(fontSize: 16)),
-                          ),
-                        ),
-                        
-                        if (_canCheckBiometrics) ...[
-                          const SizedBox(height: 20),
-                          IconButton(
-                            icon: const Icon(Icons.fingerprint, size: 50, color: Color(0xFF6200EA)),
-                            onPressed: _authenticate,
-                          ),
-                          const Text('Touch to Login', style: TextStyle(color: Colors.grey)),
                         ],
+                      ),
+                      child: const Icon(Icons.access_time_filled_rounded, size: 44, color: Colors.white),
+                    ),
+                    const SizedBox(height: 24),
+                    Text('Time Tracker', style: PulseTextStyles.h1),
+                    const SizedBox(height: 8),
+                    Text('Track your work, effortlessly', style: PulseTextStyles.body),
+                    const SizedBox(height: 40),
+
+                    // Login Card
+                    Container(
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        color: PulseColors.surface,
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(color: PulseColors.border),
+                      ),
+                      child: Form(
+                        key: _formKey,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Welcome Back', style: PulseTextStyles.h2),
+                            const SizedBox(height: 4),
+                            Text('Sign in to continue', style: PulseTextStyles.caption),
+                            const SizedBox(height: 28),
+
+                            IntlPhoneField(
+                              controller: _mobileController,
+                              decoration: const InputDecoration(
+                                labelText: 'Mobile Number',
+                              ),
+                              initialCountryCode: 'IN',
+                              dropdownTextStyle: PulseTextStyles.body,
+                              style: PulseTextStyles.bodyBold.copyWith(color: Colors.white),
+                              dropdownIcon: const Icon(Icons.arrow_drop_down, color: PulseColors.textHint),
+                              flagsButtonPadding: const EdgeInsets.only(left: 12),
+                              onChanged: (phone) {
+                                _completePhoneNumber = phone.completeNumber;
+                              },
+                              validator: (value) {
+                                if (value == null || value.number.isEmpty) return 'Enter mobile number';
+                                if (value.number.length != 10) return 'Must be 10 digits';
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: 16),
+
+                            TextFormField(
+                              controller: _passwordController,
+                              decoration: InputDecoration(
+                                labelText: 'Password',
+                                prefixIcon: const Icon(Icons.lock_outline_rounded),
+                                suffixIcon: IconButton(
+                                  icon: Icon(
+                                    _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                                    size: 20,
+                                  ),
+                                  onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                                ),
+                              ),
+                              obscureText: _obscurePassword,
+                              style: PulseTextStyles.bodyBold.copyWith(color: Colors.white),
+                              validator: (val) {
+                                if (val == null || val.isEmpty) return 'Enter password';
+                                return null;
+                              },
+                            ),
+
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: TextButton(
+                                onPressed: () {
+                                  Navigator.push(context,
+                                      MaterialPageRoute(builder: (_) => const ForgotPasswordScreen()));
+                                },
+                                child: Text('Forgot Password?',
+                                    style: PulseTextStyles.caption.copyWith(color: PulseColors.primaryLight)),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+
+                            PulseButton(
+                              text: 'Sign In',
+                              onPressed: _isLoading ? null : _login,
+                              isLoading: _isLoading,
+                            ),
+
+                            if (_canCheckBiometrics) ...[
+                              const SizedBox(height: 20),
+                              Center(
+                                child: Column(
+                                  children: [
+                                    GestureDetector(
+                                      onTap: _authenticate,
+                                      child: Container(
+                                        padding: const EdgeInsets.all(16),
+                                        decoration: BoxDecoration(
+                                          color: PulseColors.surfaceVariant,
+                                          shape: BoxShape.circle,
+                                          border: Border.all(color: PulseColors.border),
+                                        ),
+                                        child: const Icon(Icons.fingerprint,
+                                            size: 36, color: PulseColors.primary),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text('Biometric Login', style: PulseTextStyles.caption),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text("Don't have an account? ", style: PulseTextStyles.body),
+                        GestureDetector(
+                          onTap: () => Navigator.pushNamed(context, '/register'),
+                          child: Text('Sign Up',
+                              style: PulseTextStyles.bodyBold.copyWith(color: PulseColors.primary)),
+                        ),
                       ],
                     ),
-                  ),
+                    const SizedBox(height: 32),
+                  ],
                 ),
               ),
-              const SizedBox(height: 20),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                   const Text("Don't have an account? "),
-                   GestureDetector(
-                     onTap: () => Navigator.pushNamed(context, '/register'),
-                     child: const Text('Sign Up', style: TextStyle(color: Color(0xFF6200EA), fontWeight: FontWeight.bold)),
-                   ),
-                ],
-              ),
-            ],
+            ),
           ),
         ),
       ),

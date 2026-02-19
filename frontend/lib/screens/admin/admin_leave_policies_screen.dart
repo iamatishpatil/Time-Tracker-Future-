@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import '../../core/theme/pulse_colors.dart';
+import '../../core/theme/pulse_text_styles.dart';
+import '../../core/widgets/pulse_card.dart';
+import '../../core/widgets/pulse_shimmer.dart';
 import '../../services/api_service.dart';
 
 class AdminLeavePoliciesScreen extends StatefulWidget {
@@ -41,32 +45,17 @@ class _AdminLeavePoliciesScreenState extends State<AdminLeavePoliciesScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setD) => AlertDialog(
           title: Text('Edit: ${policy['leaveType']}'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: daysController,
-                decoration: const InputDecoration(labelText: 'Days Per Year'),
-                keyboardType: TextInputType.number,
-              ),
-              const SizedBox(height: 12),
-              SwitchListTile(
-                title: const Text('Paid Leave'),
-                value: isPaid,
-                onChanged: (v) => setD(() => isPaid = v),
-              ),
-            ],
-          ),
+          content: Column(mainAxisSize: MainAxisSize.min, children: [
+            TextField(controller: daysController, decoration: const InputDecoration(labelText: 'Days Per Year'), keyboardType: TextInputType.number),
+            const SizedBox(height: 12),
+            SwitchListTile(title: const Text('Paid Leave'), value: isPaid, onChanged: (v) => setD(() => isPaid = v), activeColor: PulseColors.success),
+          ]),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
             ElevatedButton(
               onPressed: () async {
                 try {
-                  await ApiService.saveLeavePolicy({
-                    'leaveType': policy['leaveType'],
-                    'daysPerYear': int.tryParse(daysController.text) ?? 10,
-                    'isPaid': isPaid,
-                  });
+                  await ApiService.saveLeavePolicy({'leaveType': policy['leaveType'], 'daysPerYear': int.tryParse(daysController.text) ?? 10, 'isPaid': isPaid});
                   if (mounted) { Navigator.pop(ctx); _loadData(); }
                 } catch (e) {
                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
@@ -82,48 +71,38 @@ class _AdminLeavePoliciesScreenState extends State<AdminLeavePoliciesScreen> {
 
   Future<void> _adjustBalance() async {
     int? selectedUserId;
-    String selectedLeaveType = 'Casual Leave';
+    String? selectedLeaveType;
     final daysController = TextEditingController(text: '10');
-    final leaveTypes = ['Sick Leave', 'Casual Leave', 'Annual Leave', 'Unpaid Leave'];
+    List<String> dynamicLeaveTypes = _policies.map<String>((p) => p['leaveType'] as String).toList();
+    if (dynamicLeaveTypes.isNotEmpty) selectedLeaveType = dynamicLeaveTypes.first;
 
     await showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setD) => AlertDialog(
           title: const Text('Adjust Leave Balance'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              DropdownButtonFormField<int>(
-                hint: const Text('Select Employee'),
-                items: _employees.map<DropdownMenuItem<int>>((e) =>
-                    DropdownMenuItem(value: e['id'] as int, child: Text(e['fullName']))).toList(),
-                onChanged: (v) => setD(() => selectedUserId = v),
-              ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                value: selectedLeaveType,
-                items: leaveTypes.map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
-                onChanged: (v) => setD(() => selectedLeaveType = v!),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: daysController,
-                decoration: const InputDecoration(labelText: 'Total Days Allowed'),
-                keyboardType: TextInputType.number,
-              ),
-            ],
-          ),
+          content: Column(mainAxisSize: MainAxisSize.min, children: [
+            DropdownButtonFormField<int>(
+              hint: const Text('Select Employee'),
+              decoration: const InputDecoration(labelText: 'Employee'),
+              items: _employees.map<DropdownMenuItem<int>>((e) => DropdownMenuItem(value: e['id'] as int, child: Text(e['fullName']))).toList(),
+              onChanged: (v) => setD(() => selectedUserId = v),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              value: selectedLeaveType, decoration: const InputDecoration(labelText: 'Leave Type'),
+              items: dynamicLeaveTypes.map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
+              onChanged: (v) => setD(() => selectedLeaveType = v!),
+            ),
+            const SizedBox(height: 12),
+            TextField(controller: daysController, decoration: const InputDecoration(labelText: 'Total Days Allowed'), keyboardType: TextInputType.number),
+          ]),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
             ElevatedButton(
-              onPressed: selectedUserId == null ? null : () async {
+              onPressed: (selectedUserId == null || selectedLeaveType == null) ? null : () async {
                 try {
-                  await ApiService.adjustLeaveBalance(
-                    selectedUserId!,
-                    selectedLeaveType,
-                    int.tryParse(daysController.text) ?? 10,
-                  );
+                  await ApiService.adjustLeaveBalance(selectedUserId!, selectedLeaveType!, int.tryParse(daysController.text) ?? 10);
                   if (mounted) { Navigator.pop(ctx); ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Balance adjusted'))); }
                 } catch (e) {
                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
@@ -143,34 +122,35 @@ class _AdminLeavePoliciesScreenState extends State<AdminLeavePoliciesScreen> {
       appBar: AppBar(
         title: const Text('Leave Policies'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.tune),
-            tooltip: 'Adjust Employee Balance',
-            onPressed: _adjustBalance,
-          ),
+          IconButton(icon: const Icon(Icons.tune), tooltip: 'Adjust Balance', onPressed: _adjustBalance),
         ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? Padding(padding: const EdgeInsets.all(20), child: PulseShimmer.list(count: 4, itemHeight: 70))
           : ListView.builder(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(14),
               itemCount: _policies.length,
               itemBuilder: (ctx, i) {
                 final p = _policies[i];
                 final isPaid = p['isPaid'] == 1 || p['isPaid'] == true;
-                return Card(
-                  child: ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor: isPaid ? Colors.green.shade100 : Colors.orange.shade100,
-                      child: Icon(isPaid ? Icons.attach_money : Icons.money_off,
-                          color: isPaid ? Colors.green : Colors.orange),
-                    ),
-                    title: Text(p['leaveType'], style: const TextStyle(fontWeight: FontWeight.bold)),
-                    subtitle: Text('${p['daysPerYear']} days/year  •  ${isPaid ? 'Paid' : 'Unpaid'}'),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.edit, color: Colors.blue),
-                      onPressed: () => _editPolicy(p),
-                    ),
+                final color = isPaid ? PulseColors.success : PulseColors.warning;
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: PulseCard(
+                    padding: const EdgeInsets.all(14),
+                    child: Row(children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(12)),
+                        child: Icon(isPaid ? Icons.attach_money : Icons.money_off, color: color, size: 22),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text(p['leaveType'], style: PulseTextStyles.bodyBold),
+                        Text('${p['daysPerYear']} days/year  •  ${isPaid ? 'Paid' : 'Unpaid'}', style: PulseTextStyles.caption),
+                      ])),
+                      IconButton(icon: const Icon(Icons.edit, color: PulseColors.accent, size: 20), onPressed: () => _editPolicy(p)),
+                    ]),
                   ),
                 );
               },

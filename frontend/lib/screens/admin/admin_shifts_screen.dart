@@ -1,4 +1,9 @@
 import 'package:flutter/material.dart';
+import '../../core/theme/pulse_colors.dart';
+import '../../core/theme/pulse_text_styles.dart';
+import '../../core/widgets/pulse_card.dart';
+import '../../core/widgets/pulse_shimmer.dart';
+import '../../core/widgets/pulse_empty_state.dart';
 import '../../services/api_service.dart';
 
 class AdminShiftsScreen extends StatefulWidget {
@@ -37,14 +42,13 @@ class _AdminShiftsScreenState extends State<AdminShiftsScreen> {
     final overtimeController = TextEditingController(text: (existing?['overtimeRate'] ?? 1.0).toString());
     final penaltyController = TextEditingController(text: (existing?['latePenaltyPerMin'] ?? 0).toString());
 
-    // Parse existing times or defaults
     TimeOfDay startTime = const TimeOfDay(hour: 9, minute: 0);
     TimeOfDay endTime = const TimeOfDay(hour: 18, minute: 0);
     if (existing != null) {
-      final startParts = (existing['startTime'] as String).split(':');
-      final endParts = (existing['endTime'] as String).split(':');
-      startTime = TimeOfDay(hour: int.parse(startParts[0]), minute: int.parse(startParts[1]));
-      endTime = TimeOfDay(hour: int.parse(endParts[0]), minute: int.parse(endParts[1]));
+      final sp = (existing['startTime'] as String).split(':');
+      final ep = (existing['endTime'] as String).split(':');
+      startTime = TimeOfDay(hour: int.parse(sp[0]), minute: int.parse(sp[1]));
+      endTime = TimeOfDay(hour: int.parse(ep[0]), minute: int.parse(ep[1]));
     }
 
     await showDialog(
@@ -52,65 +56,42 @@ class _AdminShiftsScreenState extends State<AdminShiftsScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           title: Text(isEdit ? 'Edit Shift' : 'Add New Shift'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: nameController,
-                  decoration: const InputDecoration(labelText: 'Shift Name (e.g., Morning)'),
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextButton.icon(
-                        icon: const Icon(Icons.access_time),
-                        label: Text('Start: ${startTime.format(context)}'),
-                        onPressed: () async {
-                          final t = await showTimePicker(context: context, initialTime: startTime);
-                          if (t != null) setDialogState(() => startTime = t);
-                        },
-                      ),
-                    ),
-                    Expanded(
-                      child: TextButton.icon(
-                        icon: const Icon(Icons.access_time_filled),
-                        label: Text('End: ${endTime.format(context)}'),
-                        onPressed: () async {
-                          final t = await showTimePicker(context: context, initialTime: endTime);
-                          if (t != null) setDialogState(() => endTime = t);
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: graceController,
-                  decoration: const InputDecoration(labelText: 'Grace Period (mins)'),
-                  keyboardType: TextInputType.number,
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: overtimeController,
-                  decoration: const InputDecoration(labelText: 'Overtime Rate (e.g., 1.5x)'),
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: penaltyController,
-                  decoration: const InputDecoration(labelText: 'Late Penalty per Min (₹)'),
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                ),
-              ],
-            ),
-          ),
+          content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+            TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Shift Name')),
+            const SizedBox(height: 16),
+            Row(children: [
+              Expanded(child: TextButton.icon(
+                icon: const Icon(Icons.access_time),
+                label: Text('Start: ${startTime.format(context)}'),
+                onPressed: () async {
+                  final t = await showTimePicker(context: context, initialTime: startTime);
+                  if (t != null) setDialogState(() => startTime = t);
+                },
+              )),
+              Expanded(child: TextButton.icon(
+                icon: const Icon(Icons.access_time_filled),
+                label: Text('End: ${endTime.format(context)}'),
+                onPressed: () async {
+                  final t = await showTimePicker(context: context, initialTime: endTime);
+                  if (t != null) setDialogState(() => endTime = t);
+                },
+              )),
+            ]),
+            const SizedBox(height: 16),
+            TextField(controller: graceController, decoration: const InputDecoration(labelText: 'Grace Period (mins)'), keyboardType: TextInputType.number),
+            const SizedBox(height: 16),
+            TextField(controller: overtimeController, decoration: const InputDecoration(labelText: 'Overtime Rate (e.g., 1.5x)'), keyboardType: const TextInputType.numberWithOptions(decimal: true)),
+            const SizedBox(height: 16),
+            TextField(controller: penaltyController, decoration: const InputDecoration(labelText: 'Late Penalty per Min (₹)'), keyboardType: const TextInputType.numberWithOptions(decimal: true)),
+          ])),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
             ElevatedButton(
               onPressed: () async {
-                if (nameController.text.isEmpty) return;
+                if (nameController.text.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enter shift name')));
+                  return;
+                }
                 final data = {
                   'name': nameController.text,
                   'startTime': '${startTime.hour}:${startTime.minute.toString().padLeft(2, '0')}',
@@ -120,15 +101,8 @@ class _AdminShiftsScreenState extends State<AdminShiftsScreen> {
                   'latePenaltyPerMin': double.tryParse(penaltyController.text) ?? 0,
                 };
                 try {
-                  if (isEdit) {
-                    await ApiService.updateShift(existing!['id'], data);
-                  } else {
-                    await ApiService.createShift(data);
-                  }
-                  if (mounted) {
-                    Navigator.pop(ctx);
-                    _loadShifts();
-                  }
+                  if (isEdit) { await ApiService.updateShift(existing['id'], data); } else { await ApiService.createShift(data); }
+                  if (mounted) { Navigator.pop(ctx); _loadShifts(); }
                 } catch (e) {
                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
                 }
@@ -149,15 +123,12 @@ class _AdminShiftsScreenState extends State<AdminShiftsScreen> {
         content: const Text('This will unassign all employees from this shift.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Delete', style: TextStyle(color: Colors.red))),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text('Delete', style: TextStyle(color: PulseColors.error))),
         ],
       ),
     );
     if (confirm == true) {
-      try {
-        await ApiService.deleteShift(id);
-        _loadShifts();
-      } catch (e) {
+      try { await ApiService.deleteShift(id); _loadShifts(); } catch (e) {
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
@@ -168,38 +139,39 @@ class _AdminShiftsScreenState extends State<AdminShiftsScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Manage Shifts')),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? Padding(padding: const EdgeInsets.all(20), child: PulseShimmer.list(count: 3, itemHeight: 90))
           : _shifts.isEmpty
-              ? const Center(child: Text('No shifts yet. Tap + to add one.'))
+              ? const Center(child: PulseEmptyState(icon: Icons.schedule, title: 'No Shifts', subtitle: 'Tap + to add one'))
               : ListView.builder(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(14),
                   itemCount: _shifts.length,
                   itemBuilder: (context, index) {
                     final shift = _shifts[index];
-                    return Card(
-                      child: ListTile(
-                        leading: const CircleAvatar(child: Icon(Icons.schedule)),
-                        title: Text(shift['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: PulseCard(
+                        padding: const EdgeInsets.all(14),
+                        child: Row(
                           children: [
-                            Text('${shift['startTime']} – ${shift['endTime']}'),
-                            Text('Grace: ${shift['gracePeriodMins']}m  |  OT: ${shift['overtimeRate']}x  |  Penalty: ₹${shift['latePenaltyPerMin'] ?? 0}/min',
-                                style: const TextStyle(fontSize: 11)),
-                          ],
-                        ),
-                        isThreeLine: true,
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.edit, color: Colors.blue),
-                              onPressed: () => _showShiftDialog(existing: shift),
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: PulseColors.primary.withOpacity(0.15),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: const Icon(Icons.schedule, color: PulseColors.primary, size: 22),
                             ),
-                            IconButton(
-                              icon: const Icon(Icons.delete, color: Colors.red),
-                              onPressed: () => _deleteShift(shift['id']),
-                            ),
+                            const SizedBox(width: 12),
+                            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                              Text(shift['name'], style: PulseTextStyles.bodyBold),
+                              const SizedBox(height: 2),
+                              Text('${shift['startTime']} – ${shift['endTime']}', style: PulseTextStyles.caption),
+                              const SizedBox(height: 2),
+                              Text('Grace: ${shift['gracePeriodMins']}m  •  OT: ${shift['overtimeRate']}x  •  ₹${shift['latePenaltyPerMin'] ?? 0}/min',
+                                  style: PulseTextStyles.caption.copyWith(fontSize: 10)),
+                            ])),
+                            IconButton(icon: const Icon(Icons.edit, color: PulseColors.accent, size: 20), onPressed: () => _showShiftDialog(existing: shift)),
+                            IconButton(icon: Icon(Icons.delete, color: PulseColors.error, size: 20), onPressed: () => _deleteShift(shift['id'])),
                           ],
                         ),
                       ),
@@ -208,7 +180,8 @@ class _AdminShiftsScreenState extends State<AdminShiftsScreen> {
                 ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _showShiftDialog(),
-        child: const Icon(Icons.add),
+        backgroundColor: PulseColors.primary,
+        child: const Icon(Icons.add, color: Colors.white),
       ),
     );
   }

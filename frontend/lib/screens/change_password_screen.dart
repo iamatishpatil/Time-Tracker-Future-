@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
-import '../../services/api_service.dart';
+import '../core/theme/pulse_colors.dart';
+import '../core/theme/pulse_text_styles.dart';
+import '../core/widgets/pulse_button.dart';
+import '../services/api_service.dart';
 
 class ChangePasswordScreen extends StatefulWidget {
   const ChangePasswordScreen({super.key});
@@ -14,6 +17,9 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
   final _newPasswordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   bool _isLoading = false;
+  bool _showOld = false;
+  bool _showNew = false;
+  bool _showConfirm = false;
 
   Future<void> _changePassword() async {
     if (_formKey.currentState!.validate()) {
@@ -28,12 +34,12 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
         if (user != null) {
           await ApiService.changePassword(user['id'], _oldPasswordController.text, _newPasswordController.text);
           if (mounted) {
-             ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Password changed successfully!')));
-             Navigator.pop(context);
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✓ Password changed!')));
+            Navigator.pop(context);
           }
         }
       } catch (e) {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()), backgroundColor: Colors.red));
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
       } finally {
         if (mounted) setState(() => _isLoading = false);
       }
@@ -44,41 +50,83 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Change Password')),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
         child: Form(
           key: _formKey,
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: PulseColors.primary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: PulseColors.primary.withOpacity(0.2)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.shield_outlined, color: PulseColors.primary, size: 24),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Choose a strong password with at least 6 characters.',
+                        style: PulseTextStyles.caption.copyWith(color: PulseColors.primaryLight),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
               TextFormField(
                 controller: _oldPasswordController,
-                decoration: const InputDecoration(labelText: 'Old Password', border: OutlineInputBorder()),
-                obscureText: true,
-                validator: (v) => v!.isEmpty ? 'Enter old password' : null,
+                obscureText: !_showOld,
+                style: PulseTextStyles.body.copyWith(color: Colors.white),
+                decoration: InputDecoration(
+                  labelText: 'Current Password',
+                  prefixIcon: const Icon(Icons.lock_outline),
+                  suffixIcon: IconButton(
+                    icon: Icon(_showOld ? Icons.visibility_off : Icons.visibility, size: 20),
+                    onPressed: () => setState(() => _showOld = !_showOld),
+                  ),
+                ),
+                validator: (v) => v!.isEmpty ? 'Enter current password' : null,
               ),
               const SizedBox(height: 16),
               TextFormField(
                 controller: _newPasswordController,
-                decoration: const InputDecoration(labelText: 'New Password', border: OutlineInputBorder()),
-                obscureText: true,
-                validator: (v) => v!.length < 6 ? 'Password must be at least 6 chars' : null,
+                obscureText: !_showNew,
+                style: PulseTextStyles.body.copyWith(color: Colors.white),
+                decoration: InputDecoration(
+                  labelText: 'New Password',
+                  prefixIcon: const Icon(Icons.lock_rounded),
+                  suffixIcon: IconButton(
+                    icon: Icon(_showNew ? Icons.visibility_off : Icons.visibility, size: 20),
+                    onPressed: () => setState(() => _showNew = !_showNew),
+                  ),
+                ),
+                validator: (v) => v!.length < 6 ? 'Min 6 characters' : null,
               ),
               const SizedBox(height: 16),
               TextFormField(
                 controller: _confirmPasswordController,
-                decoration: const InputDecoration(labelText: 'Confirm New Password', border: OutlineInputBorder()),
-                obscureText: true,
+                obscureText: !_showConfirm,
+                style: PulseTextStyles.body.copyWith(color: Colors.white),
+                decoration: InputDecoration(
+                  labelText: 'Confirm New Password',
+                  prefixIcon: const Icon(Icons.lock_rounded),
+                  suffixIcon: IconButton(
+                    icon: Icon(_showConfirm ? Icons.visibility_off : Icons.visibility, size: 20),
+                    onPressed: () => setState(() => _showConfirm = !_showConfirm),
+                  ),
+                ),
                 validator: (v) => v!.isEmpty ? 'Confirm password' : null,
               ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton(
-                  onPressed: _isLoading ? null : _changePassword,
-                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6200EA), foregroundColor: Colors.white),
-                  child: _isLoading ? const CircularProgressIndicator(color: Colors.white) : const Text('CHANGE PASSWORD'),
-                ),
+              const SizedBox(height: 32),
+              PulseButton(
+                text: 'Change Password',
+                isLoading: _isLoading,
+                onPressed: _changePassword,
               ),
             ],
           ),

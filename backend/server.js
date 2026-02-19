@@ -11,9 +11,26 @@ const app = express();
 const port = 3000;
 
 // Middleware
+// Middleware
 app.use(cors());
 app.use(bodyParser.json());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// Security Middleware
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+}));
+
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, 
+  max: 100, 
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use(limiter);
 
 // Ensure uploads directory exists
 if (!fs.existsSync('./uploads')) {
@@ -25,10 +42,21 @@ const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, './uploads/'),
   filename: (req, file, cb) => cb(null, Date.now() + '-' + file.originalname),
 });
-const upload = multer({ storage: storage });
+
+const upload = multer({ 
+  storage: storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  fileFilter: (req, file, cb) => {
+    const filetypes = /jpeg|jpg|png|webp/;
+    const mimetype = filetypes.test(file.mimetype);
+    const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
+    if (mimetype && extname) return cb(null, true);
+    cb(new Error("Error: File upload only supports images!"));
+  }
+});
 
 // Database Setup
-const db = new sqlite3.Database('./time_tracker.db');
+const db = new sqlite3.Database(path.join(__dirname, 'time_tracker.db'));
 
 db.serialize(() => {
   // Users Table
@@ -49,9 +77,9 @@ db.serialize(() => {
     longitude REAL,
     profilePicture TEXT,
     salary REAL DEFAULT 0,
-    department TEXT,
     shiftId INTEGER,
     isActive INTEGER DEFAULT 1,
+    weekOffs TEXT DEFAULT 'Sunday',
     createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
 
@@ -69,8 +97,14 @@ db.serialize(() => {
     checkOutLong REAL,
     checkOutAddress TEXT,
     checkOutPhoto TEXT,
+    status TEXT DEFAULT 'Present',
+    overtimeHours REAL DEFAULT 0,
+    isManual INTEGER DEFAULT 0,
+    editedBy INTEGER,
     FOREIGN KEY(userId) REFERENCES users(id)
   )`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_attendance_user ON attendance(userId)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_attendance_time ON attendance(checkInTime)`);
   
   // OTP Table
   db.run(`CREATE TABLE IF NOT EXISTS otps (
@@ -94,6 +128,7 @@ db.serialize(() => {
     createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(userId) REFERENCES users(id)
   )`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_leaves_user ON leaves(userId)`);
 
   // Notifications Table
   db.run(`CREATE TABLE IF NOT EXISTS notifications (
@@ -105,6 +140,7 @@ db.serialize(() => {
     createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(userId) REFERENCES users(id)
   )`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(userId)`);
 
   // Leave Policies Table
   db.run(`CREATE TABLE IF NOT EXISTS leave_policies (
@@ -128,7 +164,9 @@ db.serialize(() => {
   db.run(`CREATE TABLE IF NOT EXISTS holidays (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
-    date TEXT NOT NULL UNIQUE
+    date TEXT NOT NULL UNIQUE,
+    type TEXT DEFAULT 'Public',
+    duration TEXT DEFAULT 'Full Day'
   )`);
 });
 
@@ -198,6 +236,10 @@ db.serialize(() => {
   });
   db.run(`ALTER TABLE users ADD COLUMN isActive INTEGER DEFAULT 1`, (err) => {
     if (!err) console.log('Added isActive column to users');
+  });
+  // Backfill: existing rows have NULL isActive after ALTER TABLE, set them to 1 (active)
+  db.run(`UPDATE users SET isActive = 1 WHERE isActive IS NULL`, (err) => {
+    if (!err) console.log('Backfilled NULL isActive values to 1');
   });
   db.run(`ALTER TABLE shifts ADD COLUMN latePenaltyPerMin REAL DEFAULT 0`, (err) => {});
   db.run(`ALTER TABLE leaves ADD COLUMN leaveType TEXT DEFAULT 'Casual Leave'`, (err) => {});
@@ -312,23 +354,32 @@ app.post('/api/change-password', (req, res) => {
 
 // --- Registration & Login ---
 
-app.post('/api/register', upload.single('profilePicture'), (req, res) => {
+app.post('/api/register', upload.single('profilePicture'), async (req, res) => {
   const { fullName, email, mobileNumber, gender, password, role, company, department, experience, technologies, address, latitude, longitude, shiftId, isActive } = req.body;
   const profilePicture = req.file ? `/uploads/${req.file.filename}` : null;
 
-  db.run(`INSERT INTO users (fullName, email, mobileNumber, gender, password, role, company, department, experience, technologies, address, latitude, longitude, profilePicture, shiftId, isActive) 
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [fullName, email, mobileNumber, gender, password, role || 'User', company, department, experience, technologies, address, latitude, longitude, profilePicture, shiftId, isActive !== undefined ? isActive : 1],
-    function(err) {
-      if (err) return res.status(500).json({ error: err.message });
-      res.json({ message: 'User registered', id: this.lastID });
-    });
+  try {
+    const hashedPassword = await bcrypt.hash(password, 10);
+    db.run(`INSERT INTO users (fullName, email, mobileNumber, gender, password, role, company, department, experience, technologies, address, latitude, longitude, profilePicture, shiftId, isActive, weekOffs) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [fullName, email, mobileNumber, gender, hashedPassword, role || 'User', company, department, experience, technologies, address, latitude, longitude, profilePicture, shiftId, isActive !== undefined ? isActive : 1, 'Sunday'],
+      function(err) {
+        if (err) {
+          if (err.message.includes('UNIQUE constraint failed')) {
+            return res.status(400).json({ error: 'Mobile number or email already exists' });
+          }
+          return res.status(500).json({ error: err.message });
+        }
+        res.json({ message: 'User registered', id: this.lastID });
+      });
+  } catch (err) {
+    res.status(500).json({ error: 'Error hashing password' });
+  }
 });
 
 
 app.post('/api/login', async (req, res) => {
   const { mobileNumber, password } = req.body;
-  console.log(`[LOGIN ATTEMPT] Mobile: ${mobileNumber}`);
   
   try {
     // Use promisified db.get
@@ -395,6 +446,7 @@ app.put('/api/user/:id', upload.single('profilePicture'), (req, res) => {
   if (shiftId !== undefined) { updateFields.push('shiftId = ?'); values.push(shiftId); }
   if (isActive !== undefined) { updateFields.push('isActive = ?'); values.push(isActive); }
   if (req.body.salary !== undefined) { updateFields.push('salary = ?'); values.push(req.body.salary); }
+  if (req.body.weekOffs !== undefined) { updateFields.push('weekOffs = ?'); values.push(req.body.weekOffs); }
 
   const executeUpdate = async () => {
     if (req.body.password) {
@@ -560,37 +612,78 @@ app.get('/api/attendance/:userId', (req, res) => {
 
 // --- Admin Endpoints ---
 
+// Quick toggle for employee active status (uses JSON, not multipart)
+app.patch('/api/admin/users/:id/active', (req, res) => {
+  const { isActive } = req.body;
+  if (isActive === undefined) return res.status(400).json({ error: 'isActive is required' });
+  db.run('UPDATE users SET isActive = ? WHERE id = ?', [isActive, req.params.id], function(err) {
+    if (err) return res.status(500).json({ error: err.message });
+    if (this.changes === 0) return res.status(404).json({ error: 'User not found' });
+    res.json({ message: isActive === 1 || isActive === '1' ? 'Account activated' : 'Account deactivated' });
+  });
+});
+
 app.get('/api/admin/stats', (req, res) => {
   const stats = {};
-  const today = new Date().toISOString().split('T')[0];
+  const now = new Date();
+  const today = now.toISOString().split('T')[0];
+  const dayName = now.toLocaleDateString('en-US', { weekday: 'long' });
   
   db.get('SELECT COUNT(*) as count FROM users WHERE role = "User"', (err, row) => {
     if (err) return res.status(500).json({ error: err.message });
     stats.totalEmployees = row ? row.count : 0;
     
-    db.get('SELECT COUNT(DISTINCT userId) as count FROM attendance WHERE checkInTime LIKE ?', [`${today}%`], (err, row) => {
+    db.all('SELECT userId FROM attendance WHERE checkInTime LIKE ?', [`${today}%`], (err, attendanceRows) => {
       if (err) return res.status(500).json({ error: err.message });
-      stats.presentToday = row ? row.count : 0;
-      stats.absentToday = Math.max(0, stats.totalEmployees - stats.presentToday);
       
-      db.get('SELECT COUNT(*) as count FROM attendance WHERE checkInTime LIKE ? AND status = "Late"', [`${today}%`], (err, row) => {
-         stats.lateToday = row ? row.count : 0;
-         
-         // Calculate On Leave Today
-         db.get(`SELECT COUNT(DISTINCT userId) as count FROM leaves 
-                 WHERE status = 'Approved' 
-                 AND date(?) BETWEEN date(startDate) AND date(endDate)`, [today], (err, row) => {
+      const presentUserIds = new Set(attendanceRows.map(a => a.userId));
+      stats.presentToday = presentUserIds.size;
+
+      // Check for Holiday
+      db.get('SELECT name FROM holidays WHERE date = ? AND (duration = "Full Day" OR duration IS NULL)', [today], (err, holiday) => {
+        if (err) return res.status(500).json({ error: err.message });
+        
+        if (holiday) {
+          stats.absentToday = 0;
+          proceedToFinalStats();
+        } else {
+          db.all('SELECT id, weekOffs FROM users WHERE role = "User"', (err, users) => {
+            if (err) return res.status(500).json({ error: err.message });
+            
+            let absentCount = 0;
+            users.forEach(u => {
+              if (!presentUserIds.has(u.id)) {
+                const offs = (u.weekOffs || 'Sunday').split(',').map(s => s.trim());
+                if (!offs.includes(dayName)) {
+                  absentCount++;
+                }
+              }
+            });
+            stats.absentToday = absentCount;
+            proceedToFinalStats();
+          });
+        }
+      });
+
+      function proceedToFinalStats() {
+        db.get('SELECT COUNT(*) as count FROM attendance WHERE checkInTime LIKE ? AND status = "Late"', [`${today}%`], (err, row) => {
+          stats.lateToday = row ? row.count : 0;
+          
+          db.get(`SELECT COUNT(DISTINCT userId) as count FROM leaves 
+                  WHERE status = 'Approved' 
+                  AND date(?) BETWEEN date(startDate) AND date(endDate)`, [today], (err, row) => {
             stats.onLeaveToday = row ? row.count : 0;
             res.json(stats);
-         });
-      });
+          });
+        });
+      }
     });
   });
 });
 
 
 app.get('/api/admin/users', (req, res) => {
-  db.all(`SELECT u.id, u.fullName, u.email, u.mobileNumber, u.role, u.profilePicture, s.name as shiftName 
+  db.all(`SELECT u.id, u.fullName, u.email, u.mobileNumber, u.role, u.profilePicture, u.weekOffs, s.name as shiftName 
           FROM users u 
           LEFT JOIN shifts s ON u.shiftId = s.id`, (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
@@ -599,22 +692,25 @@ app.get('/api/admin/users', (req, res) => {
 });
 
 app.delete('/api/admin/users/:id', (req, res) => {
-  db.run('DELETE FROM users WHERE id = ?', [req.params.id], function(err) {
-    if (err) return res.status(500).json({ error: err.message });
-    // Also delete attendance and leaves
+  db.serialize(() => {
     db.run('DELETE FROM attendance WHERE userId = ?', [req.params.id]);
     db.run('DELETE FROM leaves WHERE userId = ?', [req.params.id]);
-    res.json({ message: 'Employee deleted successfully' });
+    db.run('DELETE FROM leave_balances WHERE userId = ?', [req.params.id]);
+    db.run('DELETE FROM notifications WHERE userId = ?', [req.params.id]);
+    db.run('DELETE FROM users WHERE id = ?', [req.params.id], function(err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ message: 'Employee and all associated data deleted successfully' });
+    });
   });
 });
 
 app.post('/api/admin/users', upload.single('profilePicture'), async (req, res) => {
-  const { fullName, mobileNumber, email, password, role, department, salary, shiftId, isActive } = req.body;
+  const { fullName, mobileNumber, email, password, role, department, salary, shiftId, isActive, weekOffs } = req.body;
   const profilePicture = req.file ? `/uploads/${req.file.filename}` : null;
   const hashedPassword = await bcrypt.hash(password, 10);
   
-  db.run(`INSERT INTO users (fullName, mobileNumber, email, password, role, profilePicture, department, salary, shiftId, isActive) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [fullName, mobileNumber, email, hashedPassword, role || 'User', profilePicture, department || 'General', salary || 0, shiftId, isActive !== undefined ? isActive : 1],
+  db.run(`INSERT INTO users (fullName, mobileNumber, email, password, role, profilePicture, department, salary, shiftId, isActive, weekOffs) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [fullName, mobileNumber, email, hashedPassword, role || 'User', profilePicture, department || 'General', salary || 0, shiftId, isActive !== undefined ? isActive : 1, weekOffs || 'Sunday'],
     function(err) {
       if (err) {
         if (err.message.includes('UNIQUE constraint failed')) {
@@ -626,12 +722,7 @@ app.post('/api/admin/users', upload.single('profilePicture'), async (req, res) =
     });
 });
 
-app.delete('/api/admin/users/:id', (req, res) => {
-  db.run('DELETE FROM users WHERE id = ?', [req.params.id], function(err) {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json({ message: 'User deleted successfully' });
-  });
-});
+// Consolidated User and Attendance endpoints
 
 app.get('/api/admin/attendance', (req, res) => {
   const { userId, startDate, endDate, department } = req.query;
@@ -666,13 +757,15 @@ app.get('/api/admin/attendance', (req, res) => {
 });
 
 app.post('/api/admin/attendance', (req, res) => {
-  const { userId, checkInTime, checkOutTime, status, checkInLat, checkInLong, checkInAddress, adminId } = req.body;
-  db.run(`INSERT INTO attendance (userId, checkInTime, checkOutTime, status, checkInLat, checkInLong, checkInAddress, isManual, editedBy)
-          VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)`,
-    [userId, checkInTime, checkOutTime, status || 'Present', checkInLat || 0, checkInLong || 0, checkInAddress || 'Manual Entry', adminId],
+  const { userId, checkInTime, checkOutTime, status, checkInLat, checkInLong, checkInAddress, adminId, overtimeHours } = req.body;
+  if (!userId || !checkInTime) return res.status(400).json({ error: 'userId and checkInTime are required' });
+
+  db.run(`INSERT INTO attendance (userId, checkInTime, checkOutTime, status, checkInLat, checkInLong, checkInAddress, overtimeHours, isManual, editedBy)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`,
+    [userId, checkInTime, checkOutTime || null, status || 'Present', checkInLat || 0, checkInLong || 0, checkInAddress || 'Manual Entry', overtimeHours || 0, adminId],
     function(err) {
       if (err) return res.status(500).json({ error: err.message });
-      res.json({ id: this.lastID, message: 'Attendance record created' });
+      res.json({ id: this.lastID, message: 'Attendance record created successfully' });
     });
 });
 
@@ -691,29 +784,37 @@ app.put('/api/admin/attendance/:id', (req, res) => {
 });
 
 // Manual attendance entry (Admin)
-app.post('/api/admin/attendance', (req, res) => {
-  const { userId, checkInTime, checkOutTime, status, adminId } = req.body;
-  if (!userId || !checkInTime) return res.status(400).json({ error: 'userId and checkInTime are required' });
-
-  db.run(
-    `INSERT INTO attendance (userId, checkInTime, checkOutTime, status, isManual, editedBy) VALUES (?, ?, ?, ?, 1, ?)`,
-    [userId, checkInTime, checkOutTime || null, status || 'Present', adminId],
-    function(err) {
-      if (err) return res.status(500).json({ error: err.message });
-      res.json({ message: 'Manual attendance created', id: this.lastID });
-    }
-  );
-});
+// Note: Merged into above endpoint
 
 app.get('/api/admin/absent', (req, res) => {
-  const today = new Date().toISOString().split('T')[0];
-  db.all(`SELECT id, fullName, mobileNumber, profilePicture 
-          FROM users 
-          WHERE role = "User" AND id NOT IN (
-            SELECT userId FROM attendance WHERE checkInTime LIKE ?
-          )`, [`${today}%`], (err, rows) => {
+  const now = new Date();
+  const today = now.toISOString().split('T')[0];
+  const dayName = now.toLocaleDateString('en-US', { weekday: 'long' });
+
+  // First check if today is a public holiday
+  db.get('SELECT name FROM holidays WHERE date = ? AND (duration = "Full Day" OR duration IS NULL)', [today], (err, holiday) => {
     if (err) return res.status(500).json({ error: err.message });
-    res.json(rows);
+    if (holiday) {
+      // It's a holiday, so nobody is "absent" in the traditional sense
+      return res.json([]);
+    }
+
+    // Not a holiday, check absences excluding week-offs
+    db.all(`SELECT id, fullName, mobileNumber, profilePicture, weekOffs 
+            FROM users 
+            WHERE role = "User" AND id NOT IN (
+              SELECT userId FROM attendance WHERE checkInTime LIKE ?
+            )`, [`${today}%`], (err, rows) => {
+      if (err) return res.status(500).json({ error: err.message });
+      
+      // Filter out those whose week-off is today
+      const absent = rows.filter(r => {
+        const offs = (r.weekOffs || 'Sunday').split(',').map(s => s.trim());
+        return !offs.includes(dayName);
+      });
+      
+      res.json(absent);
+    });
   });
 });
 
@@ -747,9 +848,9 @@ app.delete('/api/admin/shifts/:id', (req, res) => {
 });
 
 app.post('/api/admin/shifts', (req, res) => {
-  const { name, startTime, endTime, gracePeriodMins, overtimeRate } = req.body;
-  db.run(`INSERT INTO shifts (name, startTime, endTime, gracePeriodMins, overtimeRate) VALUES (?, ?, ?, ?, ?)`,
-    [name, startTime, endTime, gracePeriodMins, overtimeRate],
+  const { name, startTime, endTime, gracePeriodMins, overtimeRate, latePenaltyPerMin } = req.body;
+  db.run(`INSERT INTO shifts (name, startTime, endTime, gracePeriodMins, overtimeRate, latePenaltyPerMin) VALUES (?, ?, ?, ?, ?, ?)`,
+    [name, startTime, endTime, gracePeriodMins, overtimeRate, latePenaltyPerMin || 0],
     function(err) {
       if (err) return res.status(500).json({ error: err.message });
       res.json({ message: 'Shift created', id: this.lastID });
@@ -788,12 +889,13 @@ app.get('/api/admin/holidays', (req, res) => {
 });
 
 app.post('/api/admin/holidays', (req, res) => {
-  const { name, date } = req.body;
-  if (!name || !date) return res.status(400).json({ error: 'name and date required' });
-  db.run('INSERT OR REPLACE INTO holidays (name, date) VALUES (?, ?)', [name, date], function(err) {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json({ message: 'Holiday added', id: this.lastID });
-  });
+  const { name, date, type, duration } = req.body;
+  db.run('INSERT INTO holidays (name, date, type, duration) VALUES (?, ?, ?, ?)', 
+    [name, date, type || 'Public', duration || 'Full Day'], 
+    function(err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ message: 'Holiday added', id: this.lastID });
+    });
 });
 
 app.delete('/api/admin/holidays/:id', (req, res) => {
@@ -864,6 +966,16 @@ app.post('/api/leaves/apply', (req, res) => {
     });
 });
 
+app.get('/api/leaves/types', (req, res) => {
+  db.all('SELECT * FROM leave_policies', (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!rows || rows.length === 0) {
+      return res.json(['Sick Leave', 'Casual Leave', 'Annual Leave', 'Unpaid Leave']);
+    }
+    res.json(rows.map(r => r.leaveType));
+  });
+});
+
 app.get('/api/leaves/:userId', (req, res) => {
   db.all('SELECT * FROM leaves WHERE userId = ? ORDER BY createdAt DESC', [req.params.userId], (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
@@ -872,31 +984,77 @@ app.get('/api/leaves/:userId', (req, res) => {
 });
 
 app.get('/api/leaves/balance/:userId', (req, res) => {
-  db.all('SELECT * FROM leaves WHERE userId = ? AND status = "Approved"', [req.params.userId], (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
-    // Group by leaveType
-    const byType = {};
-    rows.forEach(r => {
-      const t = r.leaveType || 'Casual Leave';
-      if (!byType[t]) byType[t] = 0;
-      const start = new Date(r.startDate);
-      const end = new Date(r.endDate);
-      const days = Math.max(1, Math.round((end - start) / (1000*60*60*24)) + 1);
-      byType[t] += days;
-    });
-    // Check admin-set balance overrides
-    db.all('SELECT * FROM leave_balances WHERE userId = ?', [req.params.userId], (err2, balances) => {
-      const overrides = {};
-      if (balances) balances.forEach(b => overrides[b.leaveType] = b.totalDays);
-      const leaveTypes = ['Sick Leave', 'Casual Leave', 'Annual Leave', 'Unpaid Leave'];
-      const result = leaveTypes.map(t => ({
-        leaveType: t,
-        total: overrides[t] || 10,
-        used: byType[t] || 0,
-        remaining: (overrides[t] || 10) - (byType[t] || 0),
-      }));
-      const totalUsed = Object.values(byType).reduce((a, b) => a + b, 0);
-      res.json({ total: 30, used: totalUsed, remaining: 30 - totalUsed, byType: result });
+  // Fetch holidays and user week-offs once
+  db.get('SELECT weekOffs FROM users WHERE id = ?', [req.params.userId], (errUser, user) => {
+    if (errUser) return res.status(500).json({ error: errUser.message });
+    const weekOffs = (user?.weekOffs || 'Sunday').split(',').map(s => s.trim());
+
+    db.all('SELECT date, duration FROM holidays', (errHolidays, holidays) => {
+      if (errHolidays) return res.status(500).json({ error: errHolidays.message });
+      const holidayMap = {};
+      holidays.forEach(h => holidayMap[h.date] = h.duration || 'Full Day');
+
+      db.all('SELECT * FROM leaves WHERE userId = ? AND status = "Approved"', [req.params.userId], (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        
+        const byType = {};
+        rows.forEach(r => {
+          const t = r.leaveType || 'Casual Leave';
+          if (!byType[t]) byType[t] = 0;
+          
+          let count = 0;
+          let current = new Date(r.startDate);
+          const end = new Date(r.endDate);
+          
+          while (current <= end) {
+            const dateStr = current.toISOString().split('T')[0];
+            const dayName = current.toLocaleDateString('en-US', { weekday: 'long' });
+            
+            if (!weekOffs.includes(dayName)) {
+              if (holidayMap[dateStr] === 'Half Day') {
+                count += 0.5;
+              } else if (!holidayMap[dateStr]) {
+                count += 1.0;
+              }
+              // Full Day holidays are ignored (count += 0)
+            }
+            current.setDate(current.getDate() + 1);
+          }
+          byType[t] += count;
+        });
+
+        // Get dynamic leave types
+        db.all('SELECT * FROM leave_policies', (errPolicies, policies) => {
+          let leaveTypes = ['Sick Leave', 'Casual Leave', 'Annual Leave', 'Unpaid Leave'];
+          if (policies && policies.length > 0) {
+            leaveTypes = policies.map(p => p.leaveType);
+          }
+
+          db.all('SELECT * FROM leave_balances WHERE userId = ?', [req.params.userId], (err2, balances) => {
+            const overrides = {};
+            if (balances) balances.forEach(b => overrides[b.leaveType] = b.totalDays);
+            
+            const result = leaveTypes.map(t => {
+              const policy = policies?.find(p => p.leaveType === t);
+              const totalAllowed = overrides[t] || (policy ? policy.daysPerYear : 10);
+              return {
+                leaveType: t,
+                total: totalAllowed,
+                used: byType[t] || 0,
+                remaining: totalAllowed - (byType[t] || 0),
+              };
+            });
+            const totalUsed = Object.values(byType).reduce((a, b) => a + b, 0);
+            const totalOverall = result.reduce((a, b) => a + b.total, 0);
+            res.json({ 
+              total: totalOverall, 
+              used: totalUsed, 
+              remaining: totalOverall - totalUsed, 
+              byType: result 
+            });
+          });
+        });
+      });
     });
   });
 });
@@ -993,7 +1151,7 @@ app.get('/api/admin/reports/salary-hours', (req, res) => {
 // Payroll Report
 app.get('/api/admin/reports/payroll', (req, res) => {
   const { startDate, endDate } = req.query;
-  let query = `SELECT a.userId, u.fullName, u.salary,
+  let query = `SELECT a.userId, u.fullName, u.salary, u.weekOffs,
                s.overtimeRate, s.latePenaltyPerMin, s.gracePeriodMins,
                SUM(CASE WHEN a.checkOutTime IS NOT NULL
                  THEN (julianday(a.checkOutTime) - julianday(a.checkInTime)) * 24
@@ -1008,19 +1166,52 @@ app.get('/api/admin/reports/payroll', (req, res) => {
     query += ` WHERE a.checkInTime BETWEEN ? AND ?`;
     params.push(startDate + 'T00:00:00', endDate + 'T23:59:59');
   }
-  query += ` GROUP BY a.userId`;
-  db.all(query, params, (err, rows) => {
+  db.all(query, params, async (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
-    // Calculate payroll for each employee
-    const result = rows.map(r => {
-      const dailySalary = (r.salary || 0) / 26; // 26 working days/month
-      const hourlyRate = dailySalary / 8;
-      const overtimePay = (r.totalOvertimeHours || 0) * hourlyRate * (r.overtimeRate || 1.5);
-      const latePenalty = (r.lateDays || 0) * (r.latePenaltyPerMin || 0) * (r.gracePeriodMins || 0);
-      const netSalary = (r.salary || 0) + overtimePay - latePenalty;
-      return { ...r, overtimePay: overtimePay.toFixed(2), latePenalty: latePenalty.toFixed(2), netSalary: netSalary.toFixed(2) };
+    
+    // Fetch all holidays once for calculation
+    db.all('SELECT date, duration, type FROM holidays', async (hErr, holidays) => {
+      const holidayMap = {};
+      holidays.forEach(h => holidayMap[h.date] = (h.type === 'Optional') ? 'Optional' : (h.duration || 'Full Day'));
+      
+      const start = startDate ? new Date(startDate) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+      const end = endDate ? new Date(endDate) : new Date();
+
+      const result = rows.map(r => {
+        let actualWorkingDays = 0;
+        const weekOffs = (r.weekOffs || 'Sunday').split(',').map(s => s.trim());
+        
+        // Loop through period to find working days
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+          const dateStr = d.toISOString().split('T')[0];
+          const dayName = d.toLocaleDateString('en-US', { weekday: 'long' });
+          if (!weekOffs.includes(dayName)) {
+            if (holidayMap[dateStr] === 'Half Day') {
+              actualWorkingDays += 0.5;
+            } else if (!holidayMap[dateStr] || holidayMap[dateStr] === 'Optional') {
+              actualWorkingDays += 1.0;
+            }
+            // Public 'Full Day' holidays add 0 to actualWorkingDays
+          }
+        }
+
+        const workingDays = actualWorkingDays || 22; // Fallback
+        const dailySalary = (r.salary || 0) / workingDays;
+        const hourlyRate = dailySalary / 8;
+        const overtimePay = (r.totalOvertimeHours || 0) * hourlyRate * (r.overtimeRate || 1.5);
+        const latePenalty = (r.lateDays || 0) * (r.latePenaltyPerMin || 0) * (r.gracePeriodMins || 0);
+        const netSalary = (r.salary || 0) + overtimePay - latePenalty;
+        
+        return { 
+          ...r, 
+          workingDays,
+          overtimePay: overtimePay.toFixed(2), 
+          latePenalty: latePenalty.toFixed(2), 
+          netSalary: netSalary.toFixed(2) 
+        };
+      });
+      res.json(result);
     });
-    res.json(result);
   });
 });
 
@@ -1046,17 +1237,7 @@ app.get('/api/admin/reports/attendance', (req, res) => {
 });
 
 // Admin Manual Attendance
-app.post('/api/admin/attendance', (req, res) => {
-  const { userId, date, status, checkInTime, checkOutTime, address } = req.body;
-  const now = date ? new Date(date).toISOString() : new Date().toISOString();
-  
-  db.run(`INSERT INTO attendance (userId, checkInTime, checkOutTime, status, checkInAddress) VALUES (?, ?, ?, ?, ?)`,
-    [userId, checkInTime || now, checkOutTime, status || 'Present', address || 'Manual Entry'],
-    function(err) {
-      if (err) return res.status(500).json({ error: err.message });
-      res.json({ message: 'Attendance recorded manually', id: this.lastID });
-    });
-});
+// Note: Merged into /api/admin/attendance at the top
 
 // Check-out Reminders (Scan for active check-ins)
 app.post('/api/admin/notifications/reminders', (req, res) => {

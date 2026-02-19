@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
-import '../../services/api_service.dart';
+import '../core/theme/pulse_colors.dart';
+import '../core/theme/pulse_text_styles.dart';
+import '../core/widgets/pulse_card.dart';
+import '../core/widgets/pulse_button.dart';
+import '../core/widgets/pulse_shimmer.dart';
+import '../services/api_service.dart';
 import 'package:intl/intl.dart';
 
 class LeaveScreen extends StatefulWidget {
@@ -14,9 +19,10 @@ class _LeaveScreenState extends State<LeaveScreen> {
   DateTime? _startDate;
   DateTime? _endDate;
   final _reasonController = TextEditingController();
-  
+
   Map<String, dynamic> _balance = {'total': 30, 'used': 0, 'remaining': 30};
   List<dynamic> _history = [];
+  List<dynamic> _holidays = [];
   bool _isLoading = true;
   String _selectedLeaveType = 'Casual Leave';
   final List<String> _leaveTypes = ['Sick Leave', 'Casual Leave', 'Annual Leave', 'Unpaid Leave'];
@@ -34,11 +40,21 @@ class _LeaveScreenState extends State<LeaveScreen> {
       if (user != null) {
         final balance = await ApiService.getLeaveBalance(user['id']);
         final history = await ApiService.getLeaveHistory(user['id']);
+        final types = await ApiService.getLeaveTypes();
+
         if (mounted) {
           setState(() {
             _balance = balance;
             _history = history;
+            _leaveTypes.clear();
+            _leaveTypes.addAll(types);
+            if (!_leaveTypes.contains(_selectedLeaveType)) {
+              _selectedLeaveType = _leaveTypes.isNotEmpty ? _leaveTypes[0] : 'Casual Leave';
+            }
           });
+
+          final holidays = await ApiService.getHolidays();
+          if (mounted) setState(() => _holidays = holidays);
         }
       }
     } catch (e) {
@@ -66,7 +82,7 @@ class _LeaveScreenState extends State<LeaveScreen> {
           'reason': _reasonController.text,
         });
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Leave request submitted!')));
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✓ Leave request submitted!')));
           _reasonController.clear();
           setState(() {
             _startDate = null;
@@ -114,54 +130,57 @@ class _LeaveScreenState extends State<LeaveScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: const Color(0xFFF3E5F5),
-      child: _isLoading 
-          ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildBalanceCards(),
-                  const SizedBox(height: 24),
-                  const Text('Apply for Leave', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 16),
-                  _buildRequestForm(),
-                  const SizedBox(height: 32),
-                  const Text('My Leave History', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 16),
-                  _buildHistoryList(),
-                ],
-              ),
+    if (_isLoading) {
+      return Padding(
+        padding: const EdgeInsets.all(20),
+        child: PulseShimmer.list(count: 3, itemHeight: 80),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _loadData,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Balance Cards
+            Row(
+              children: [
+                _balanceCard('Total', _balance['total'].toString(), PulseColors.accent),
+                const SizedBox(width: 8),
+                _balanceCard('Used', _balance['used'].toString(), PulseColors.error),
+                const SizedBox(width: 8),
+                _balanceCard('Left', _balance['remaining'].toString(), PulseColors.success),
+              ],
             ),
+            const SizedBox(height: 24),
+
+            Text('Apply for Leave', style: PulseTextStyles.h3),
+            const SizedBox(height: 16),
+            _buildRequestForm(),
+
+            const SizedBox(height: 28),
+            Text('Leave History', style: PulseTextStyles.h3),
+            const SizedBox(height: 12),
+            _buildHistoryList(),
+          ],
+        ),
+      ),
     );
   }
 
-  Widget _buildBalanceCards() {
-    return Row(
-      children: [
-        _buildStatItem('Total', _balance['total'].toString(), Colors.blue),
-        _buildStatItem('Used', _balance['used'].toString(), Colors.red),
-        _buildStatItem('Remaining', _balance['remaining'].toString(), Colors.green),
-      ],
-    );
-  }
-
-  Widget _buildStatItem(String label, String value, Color color) {
+  Widget _balanceCard(String label, String value, Color color) {
     return Expanded(
-      child: Card(
-        color: color.withValues(alpha: 0.1),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          child: Column(
-            children: [
-              Text(value, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: color)),
-              const SizedBox(height: 4),
-              Text(label, style: TextStyle(color: color, fontWeight: FontWeight.w500)),
-            ],
-          ),
+      child: PulseCard(
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+        child: Column(
+          children: [
+            Text(value, style: PulseTextStyles.h2.copyWith(color: color)),
+            const SizedBox(height: 4),
+            Text(label, style: PulseTextStyles.caption),
+          ],
         ),
       ),
     );
@@ -174,11 +193,11 @@ class _LeaveScreenState extends State<LeaveScreen> {
         children: [
           DropdownButtonFormField<String>(
             value: _selectedLeaveType,
-            decoration: InputDecoration(
+            decoration: const InputDecoration(
               labelText: 'Leave Type',
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-              prefixIcon: const Icon(Icons.category_outlined),
+              prefixIcon: Icon(Icons.category_outlined),
             ),
+            dropdownColor: PulseColors.surfaceVariant,
             items: _leaveTypes.map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
             onChanged: (v) => setState(() => _selectedLeaveType = v!),
           ),
@@ -186,65 +205,116 @@ class _LeaveScreenState extends State<LeaveScreen> {
           Row(
             children: [
               Expanded(
-                child: ListTile(
-                  title: const Text('Start Date'),
-                  subtitle: Text(_startDate == null ? 'Select' : DateFormat('MMM d, y').format(_startDate!)),
-                  onTap: () async {
-                    final date = await showDatePicker(
-                      context: context,
-                      initialDate: DateTime.now(),
-                      firstDate: DateTime.now(),
-                      lastDate: DateTime.now().add(const Duration(days: 365)),
-                    );
-                    if (date != null) setState(() => _startDate = date);
-                  },
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: BorderSide(color: Colors.grey[300]!)),
-                ),
+                child: _dateSelector('Start Date', _startDate, (date) => setState(() => _startDate = date)),
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: ListTile(
-                  title: const Text('End Date'),
-                  subtitle: Text(_endDate == null ? 'Select' : DateFormat('MMM d, y').format(_endDate!)),
-                  onTap: () async {
-                    final date = await showDatePicker(
-                      context: context,
-                      initialDate: _startDate ?? DateTime.now(),
-                      firstDate: _startDate ?? DateTime.now(),
-                      lastDate: DateTime.now().add(const Duration(days: 365)),
-                    );
-                    if (date != null) setState(() => _endDate = date);
-                  },
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: BorderSide(color: Colors.grey[300]!)),
-                ),
+                child: _dateSelector('End Date', _endDate, (date) => setState(() => _endDate = date),
+                    firstDate: _startDate),
               ),
             ],
           ),
           const SizedBox(height: 16),
+
+          // Holiday estimation
+          if (_startDate != null && _endDate != null) ...[
+            PulseCard(
+              color: PulseColors.accent.withOpacity(0.1),
+              borderColor: PulseColors.accent.withOpacity(0.2),
+              padding: const EdgeInsets.all(12),
+              child: Builder(builder: (context) {
+                double days = 0;
+                int holidayCount = 0;
+                DateTime current = _startDate!;
+                final end = _endDate!.add(const Duration(days: 1));
+
+                while (current.isBefore(end)) {
+                  final dateStr = DateFormat('yyyy-MM-dd').format(current);
+                  final holiday = _holidays.firstWhere((h) => h['date'] == dateStr, orElse: () => null);
+                  if (DateFormat('EEEE').format(current) != 'Sunday') {
+                    if (holiday != null && (holiday['type'] == 'Public' && holiday['duration'] == 'Full Day')) {
+                      holidayCount++;
+                    } else if (holiday != null && holiday['duration'] == 'Half Day') {
+                      days += 0.5;
+                    } else {
+                      days += 1.0;
+                    }
+                  }
+                  current = current.add(const Duration(days: 1));
+                }
+
+                return Row(
+                  children: [
+                    const Icon(Icons.info_outline, size: 18, color: PulseColors.accent),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        '${days.toStringAsFixed(1)} days deducted ($holidayCount public holidays excluded)',
+                        style: PulseTextStyles.captionBold.copyWith(color: PulseColors.accent),
+                      ),
+                    ),
+                  ],
+                );
+              }),
+            ),
+            const SizedBox(height: 16),
+          ],
+
           TextFormField(
             controller: _reasonController,
-            decoration: const InputDecoration(labelText: 'Reason for leave', border: OutlineInputBorder()),
+            decoration: const InputDecoration(labelText: 'Reason for leave'),
             maxLines: 2,
+            style: PulseTextStyles.body.copyWith(color: Colors.white),
             validator: (v) => v!.isEmpty ? 'Please enter a reason' : null,
           ),
           const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            height: 50,
-            child: ElevatedButton(
-              onPressed: _submitRequest,
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6200EA), foregroundColor: Colors.white),
-              child: const Text('SUBMIT REQUEST'),
-            ),
+          PulseButton(
+            text: 'Submit Request',
+            onPressed: _submitRequest,
           ),
         ],
       ),
     );
   }
 
+  Widget _dateSelector(String label, DateTime? date, Function(DateTime) onSelected, {DateTime? firstDate}) {
+    return GestureDetector(
+      onTap: () async {
+        final selected = await showDatePicker(
+          context: context,
+          initialDate: firstDate ?? DateTime.now(),
+          firstDate: firstDate ?? DateTime.now(),
+          lastDate: DateTime.now().add(const Duration(days: 365)),
+        );
+        if (selected != null) onSelected(selected);
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+        decoration: BoxDecoration(
+          color: PulseColors.surfaceVariant,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: PulseColors.border),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label, style: PulseTextStyles.caption),
+            const SizedBox(height: 4),
+            Text(
+              date == null ? 'Select' : DateFormat('MMM d, y').format(date),
+              style: PulseTextStyles.bodyBold.copyWith(fontSize: 14),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildHistoryList() {
     if (_history.isEmpty) {
-      return const Center(child: Text('No leave records found.'));
+      return Center(
+        child: Text('No leave records found.', style: PulseTextStyles.body),
+      );
     }
     return ListView.builder(
       shrinkWrap: true,
@@ -252,30 +322,42 @@ class _LeaveScreenState extends State<LeaveScreen> {
       itemCount: _history.length,
       itemBuilder: (context, index) {
         final leave = _history[index];
-        return Card(
-          margin: const EdgeInsets.only(bottom: 12),
-          child: ListTile(
-            title: Text('${leave['startDate']} to ${leave['endDate']}'),
-            subtitle: Text(leave['reason']),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
+        final statusColor = _getStatusColor(leave['status']);
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: PulseCard(
+            padding: const EdgeInsets.all(14),
+            child: Row(
               children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${leave['startDate']} → ${leave['endDate']}',
+                        style: PulseTextStyles.bodyBold.copyWith(fontSize: 13),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(leave['reason'], style: PulseTextStyles.caption, maxLines: 1, overflow: TextOverflow.ellipsis),
+                    ],
+                  ),
+                ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: _getStatusColor(leave['status']).withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(20),
+                    color: statusColor.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(10),
                   ),
                   child: Text(
                     leave['status'],
-                    style: TextStyle(color: _getStatusColor(leave['status']), fontWeight: FontWeight.bold, fontSize: 12),
+                    style: PulseTextStyles.captionBold.copyWith(color: statusColor, fontSize: 11),
                   ),
                 ),
                 if (leave['status'] == 'Pending')
                   IconButton(
-                    icon: const Icon(Icons.cancel_outlined, color: Colors.grey),
+                    icon: const Icon(Icons.cancel_outlined, color: PulseColors.textHint, size: 20),
                     onPressed: () => _cancelRequest(leave['id']),
-                    tooltip: 'Cancel Request',
+                    tooltip: 'Cancel',
                   ),
               ],
             ),
@@ -287,9 +369,9 @@ class _LeaveScreenState extends State<LeaveScreen> {
 
   Color _getStatusColor(String status) {
     switch (status) {
-      case 'Approved': return Colors.green;
-      case 'Rejected': return Colors.red;
-      default: return Colors.orange;
+      case 'Approved': return PulseColors.success;
+      case 'Rejected': return PulseColors.error;
+      default: return PulseColors.warning;
     }
   }
 }

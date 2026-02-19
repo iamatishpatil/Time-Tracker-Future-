@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import '../../core/theme/pulse_colors.dart';
+import '../../core/theme/pulse_text_styles.dart';
+import '../../core/widgets/pulse_card.dart';
+import '../../core/widgets/pulse_shimmer.dart';
+import '../../core/widgets/pulse_empty_state.dart';
 import '../../services/api_service.dart';
 
 class AdminAbsentScreen extends StatefulWidget {
@@ -35,35 +39,36 @@ class _AdminAbsentScreenState extends State<AdminAbsentScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Absent Today')),
-      body: _isLoading 
-          ? const Center(child: CircularProgressIndicator())
+      body: _isLoading
+          ? Padding(padding: const EdgeInsets.all(20), child: PulseShimmer.list(count: 4, itemHeight: 70))
           : _absentEmployees.isEmpty
-              ? const Center(child: Text('No absences reported today.'))
+              ? const Center(child: PulseEmptyState(icon: Icons.check_circle_outline, title: 'All Present!', subtitle: 'No absences reported today'))
               : ListView.builder(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(14),
                   itemCount: _absentEmployees.length,
                   itemBuilder: (context, index) {
                     final employee = _absentEmployees[index];
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      child: ListTile(
-                        leading: CircleAvatar(
-                          backgroundImage: employee['profilePicture'] != null 
-                              ? NetworkImage(ApiService.getImageUrl(employee['profilePicture']))
-                              : null,
-                          child: employee['profilePicture'] == null ? const Icon(Icons.person) : null,
-                        ),
-                        title: Text(employee['fullName'] ?? 'Unknown', style: const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: Text(employee['mobileNumber'] ?? ''),
-                        trailing: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.red.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(20),
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: PulseCard(
+                        padding: const EdgeInsets.all(14),
+                        child: Row(children: [
+                          CircleAvatar(
+                            radius: 22, backgroundColor: PulseColors.surfaceVariant,
+                            backgroundImage: employee['profilePicture'] != null ? NetworkImage(ApiService.getImageUrl(employee['profilePicture'])) : null,
+                            child: employee['profilePicture'] == null ? const Icon(Icons.person, size: 22, color: PulseColors.textHint) : null,
                           ),
-                          child: const Text('Absent', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 12)),
-                        ),
+                          const SizedBox(width: 12),
+                          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Text(employee['fullName'] ?? 'Unknown', style: PulseTextStyles.bodyBold),
+                            Text(employee['mobileNumber'] ?? '', style: PulseTextStyles.caption.copyWith(fontSize: 11)),
+                          ])),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                            decoration: BoxDecoration(color: PulseColors.error.withOpacity(0.15), borderRadius: BorderRadius.circular(20)),
+                            child: Text('Absent', style: PulseTextStyles.captionBold.copyWith(color: PulseColors.error, fontSize: 11)),
+                          ),
+                        ]),
                       ),
                     );
                   },

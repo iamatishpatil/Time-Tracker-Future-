@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import '../../core/theme/pulse_colors.dart';
+import '../../core/theme/pulse_text_styles.dart';
+import '../../core/widgets/pulse_card.dart';
 
 class AdminMapScreen extends StatelessWidget {
   final double latitude;
@@ -19,9 +22,7 @@ class AdminMapScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(title),
-      ),
+      appBar: AppBar(title: Text(title)),
       body: Stack(
         children: [
           FlutterMap(
@@ -32,60 +33,37 @@ class AdminMapScreen extends StatelessWidget {
             children: [
               TileLayer(
                 urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                userAgentPackageName: 'com.example.app',
+                userAgentPackageName: 'com.timetracker.frontend',
               ),
               MarkerLayer(
                 markers: [
                   Marker(
                     point: LatLng(latitude, longitude),
-                    width: 80,
-                    height: 80,
-                    child: const Icon(
-                      Icons.location_on,
-                      color: Colors.red,
-                      size: 40,
-                    ),
+                    width: 80, height: 80,
+                    child: const Icon(Icons.location_on, color: Colors.red, size: 40),
                   ),
                 ],
               ),
             ],
           ),
           Positioned(
-            bottom: 20,
-            left: 20,
-            right: 20,
-            child: Card(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Location Details',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        const Icon(Icons.location_on, size: 20, color: Colors.blue),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            address,
-                            style: const TextStyle(fontSize: 14),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Coordinates: $latitude, $longitude',
-                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                    ),
-                  ],
-                ),
+            bottom: 20, left: 16, right: 16,
+            child: PulseCard(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Location Details', style: PulseTextStyles.bodyBold),
+                  const SizedBox(height: 8),
+                  Row(children: [
+                    const Icon(Icons.location_on, size: 18, color: PulseColors.accent),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text(address, style: PulseTextStyles.body)),
+                  ]),
+                  const SizedBox(height: 4),
+                  Text('$latitude, $longitude', style: PulseTextStyles.caption.copyWith(fontSize: 11)),
+                ],
               ),
             ),
           ),

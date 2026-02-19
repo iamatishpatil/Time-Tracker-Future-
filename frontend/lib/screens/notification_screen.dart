@@ -1,4 +1,9 @@
 import 'package:flutter/material.dart';
+import '../core/theme/pulse_colors.dart';
+import '../core/theme/pulse_text_styles.dart';
+import '../core/widgets/pulse_card.dart';
+import '../core/widgets/pulse_shimmer.dart';
+import '../core/widgets/pulse_empty_state.dart';
 import '../services/api_service.dart';
 import 'package:intl/intl.dart';
 
@@ -24,7 +29,25 @@ class _NotificationScreenState extends State<NotificationScreen> {
     try {
       final user = await ApiService.getStoredUser();
       if (user != null) {
-        final notifications = await ApiService.getNotifications(user['id']);
+        var notifications = await ApiService.getNotifications(user['id']);
+        final holidays = await ApiService.getHolidays();
+
+        final now = DateTime.now();
+        for (var h in holidays) {
+          final hDate = DateTime.parse(h['date']);
+          final diff = hDate.difference(now).inDays;
+          if (diff >= 0 && diff <= 3) {
+            notifications.insert(0, {
+              'id': -hDate.millisecondsSinceEpoch,
+              'title': 'Upcoming Holiday: ${h['name']}',
+              'message': 'Reminder: ${h['name']} is on ${DateFormat('EEEE, MMM d').format(hDate)}. It is a ${h['duration']} holiday.',
+              'isRead': 0,
+              'createdAt': DateTime.now().toIso8601String(),
+              'type': 'system_holiday',
+            });
+          }
+        }
+
         if (mounted) setState(() => _notifications = notifications);
       }
     } catch (e) {
@@ -47,60 +70,106 @@ class _NotificationScreenState extends State<NotificationScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Notifications')),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _notifications.isEmpty
-              ? const Center(child: Text('No notifications'))
-              : ListView.builder(
-                  itemCount: _notifications.length,
-                  itemBuilder: (context, index) {
-                    final notification = _notifications[index];
-                    final isRead = notification['isRead'] == 1;
-                    return Dismissible(
-                      key: Key(notification['id'].toString()),
-                      background: Container(
-                        color: Colors.blue,
-                        alignment: Alignment.centerRight,
-                        padding: const EdgeInsets.only(right: 20),
-                         child: const Icon(Icons.mark_email_read, color: Colors.white),
+      body: RefreshIndicator(
+        onRefresh: _loadNotifications,
+        child: _isLoading
+            ? Padding(
+                padding: const EdgeInsets.all(20),
+                child: PulseShimmer.list(count: 5, itemHeight: 80),
+              )
+            : _notifications.isEmpty
+                ? ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    children: const [
+                      SizedBox(height: 80),
+                      PulseEmptyState(
+                        icon: Icons.notifications_off_outlined,
+                        title: 'No Notifications',
+                        subtitle: 'You\'re all caught up!',
                       ),
-                      direction: DismissDirection.endToStart,
-                      onDismissed: (direction) {
-                        _markAsRead(notification['id']);
-                      },
-                      child: Card(
-                        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        color: isRead ? Colors.white : Colors.blue.withValues(alpha: 0.05),
-                        child: ListTile(
-                          leading: Icon(
-                            isRead ? Icons.notifications_none : Icons.notifications_active,
-                            color: isRead ? Colors.grey : Colors.blue,
+                    ],
+                  )
+                : ListView.builder(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    itemCount: _notifications.length,
+                    itemBuilder: (context, index) {
+                      final notif = _notifications[index];
+                      final isRead = notif['isRead'] == 1;
+                      return Dismissible(
+                        key: Key(notif['id'].toString()),
+                        background: Container(
+                          margin: const EdgeInsets.symmetric(vertical: 4),
+                          decoration: BoxDecoration(
+                            color: PulseColors.primary.withOpacity(0.3),
+                            borderRadius: BorderRadius.circular(16),
                           ),
-                          title: Text(
-                            notification['title'],
-                            style: TextStyle(
-                              fontWeight: isRead ? FontWeight.normal : FontWeight.bold,
+                          alignment: Alignment.centerRight,
+                          padding: const EdgeInsets.only(right: 20),
+                          child: const Icon(Icons.mark_email_read, color: Colors.white),
+                        ),
+                        direction: DismissDirection.endToStart,
+                        onDismissed: (direction) => _markAsRead(notif['id']),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          child: PulseCard(
+                            color: isRead ? null : PulseColors.primary.withOpacity(0.08),
+                            borderColor: isRead ? null : PulseColors.primary.withOpacity(0.2),
+                            onTap: () {
+                              if (!isRead) _markAsRead(notif['id']);
+                            },
+                            padding: const EdgeInsets.all(14),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: isRead
+                                        ? PulseColors.surfaceVariant
+                                        : PulseColors.primary.withOpacity(0.15),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Icon(
+                                    isRead ? Icons.notifications_none : Icons.notifications_active,
+                                    color: isRead ? PulseColors.textHint : PulseColors.primary,
+                                    size: 20,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        notif['title'],
+                                        style: (isRead ? PulseTextStyles.body : PulseTextStyles.bodyBold)
+                                            .copyWith(fontSize: 13),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        notif['message'],
+                                        style: PulseTextStyles.caption,
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        DateFormat('MMM d, h:mm a').format(
+                                            DateTime.parse(notif['createdAt']).toLocal()),
+                                        style: PulseTextStyles.caption.copyWith(fontSize: 10),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                          subtitle: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(notification['message']),
-                              const SizedBox(height: 4),
-                              Text(
-                                DateFormat('MMM d, h:mm a').format(DateTime.parse(notification['createdAt']).toLocal()),
-                                style: TextStyle(fontSize: 10, color: Colors.grey[600]),
-                              ),
-                            ],
-                          ),
-                          onTap: () {
-                            if (!isRead) _markAsRead(notification['id']);
-                          },
                         ),
-                      ),
-                    );
-                  },
-                ),
+                      );
+                    },
+                  ),
+      ),
     );
   }
 }

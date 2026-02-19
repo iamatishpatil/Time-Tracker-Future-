@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
+import '../../core/theme/pulse_colors.dart';
+import '../../core/theme/pulse_text_styles.dart';
+import '../../core/widgets/pulse_card.dart';
+import '../../core/widgets/pulse_shimmer.dart';
 import '../../services/api_service.dart';
 import 'admin_holidays_screen.dart';
 
@@ -19,7 +23,6 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
   bool _isLoading = true;
   final MapController _mapController = MapController();
 
-  // Working days / weekend
   final List<String> _allDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   Set<String> _workingDays = {'Mon', 'Tue', 'Wed', 'Thu', 'Fri'};
   Set<String> _weekendDays = {'Sat', 'Sun'};
@@ -82,9 +85,7 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
     try {
       Position position = await Geolocator.getCurrentPosition();
       if (mounted) {
-        setState(() {
-          _officeLocation = LatLng(position.latitude, position.longitude);
-        });
+        setState(() => _officeLocation = LatLng(position.latitude, position.longitude));
         _mapController.move(_officeLocation, 15);
       }
     } catch (e) {}
@@ -123,142 +124,151 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
         ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? Padding(padding: const EdgeInsets.all(20), child: PulseShimmer.list(count: 3, itemHeight: 60))
           : SingleChildScrollView(
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  TextField(
-                    controller: _nameController,
-                    decoration: const InputDecoration(labelText: 'Company Name', border: OutlineInputBorder()),
+                  // Company Name
+                  PulseCard(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Row(children: [
+                        const Icon(Icons.business, color: PulseColors.primary, size: 20),
+                        const SizedBox(width: 8),
+                        Text('Company Name', style: PulseTextStyles.bodyBold),
+                      ]),
+                      const SizedBox(height: 10),
+                      TextField(controller: _nameController, decoration: const InputDecoration(hintText: 'Enter company name')),
+                    ]),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 14),
 
                   // Working Days
-                  const Text('Working Days', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    children: _allDays.map((day) {
-                      final isWorking = _workingDays.contains(day);
-                      return FilterChip(
-                        label: Text(day),
-                        selected: isWorking,
-                        selectedColor: Colors.deepPurple.shade100,
-                        checkmarkColor: Colors.deepPurple,
-                        onSelected: (selected) {
-                          setState(() {
-                            if (selected) {
-                              _workingDays.add(day);
-                              _weekendDays.remove(day);
-                            } else {
-                              _workingDays.remove(day);
-                            }
-                          });
-                        },
-                      );
-                    }).toList(),
+                  PulseCard(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Row(children: [
+                        const Icon(Icons.work_outline, color: PulseColors.success, size: 20),
+                        const SizedBox(width: 8),
+                        Text('Working Days', style: PulseTextStyles.bodyBold),
+                      ]),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 8,
+                        children: _allDays.map((day) {
+                          final isWorking = _workingDays.contains(day);
+                          return FilterChip(
+                            label: Text(day, style: TextStyle(color: isWorking ? Colors.white : PulseColors.textSecondary, fontSize: 12, fontWeight: FontWeight.w600)),
+                            selected: isWorking,
+                            selectedColor: PulseColors.success,
+                            backgroundColor: PulseColors.surfaceVariant,
+                            checkmarkColor: Colors.white,
+                            onSelected: (selected) {
+                              setState(() {
+                                if (selected) { _workingDays.add(day); _weekendDays.remove(day); } else { _workingDays.remove(day); }
+                              });
+                            },
+                          );
+                        }).toList(),
+                      ),
+                    ]),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 14),
 
                   // Weekend Days
-                  const Text('Weekend Days', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    children: _allDays.map((day) {
-                      final isWeekend = _weekendDays.contains(day);
-                      return FilterChip(
-                        label: Text(day),
-                        selected: isWeekend,
-                        selectedColor: Colors.orange.shade100,
-                        checkmarkColor: Colors.orange,
-                        onSelected: (selected) {
-                          setState(() {
-                            if (selected) {
-                              _weekendDays.add(day);
-                              _workingDays.remove(day);
-                            } else {
-                              _weekendDays.remove(day);
-                            }
-                          });
-                        },
-                      );
-                    }).toList(),
+                  PulseCard(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Row(children: [
+                        const Icon(Icons.weekend, color: PulseColors.warning, size: 20),
+                        const SizedBox(width: 8),
+                        Text('Weekend Days', style: PulseTextStyles.bodyBold),
+                      ]),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 8,
+                        children: _allDays.map((day) {
+                          final isWeekend = _weekendDays.contains(day);
+                          return FilterChip(
+                            label: Text(day, style: TextStyle(color: isWeekend ? Colors.white : PulseColors.textSecondary, fontSize: 12, fontWeight: FontWeight.w600)),
+                            selected: isWeekend,
+                            selectedColor: PulseColors.warning,
+                            backgroundColor: PulseColors.surfaceVariant,
+                            checkmarkColor: Colors.white,
+                            onSelected: (selected) {
+                              setState(() {
+                                if (selected) { _weekendDays.add(day); _workingDays.remove(day); } else { _weekendDays.remove(day); }
+                              });
+                            },
+                          );
+                        }).toList(),
+                      ),
+                    ]),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Office Location
+                  PulseCard(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Row(children: [
+                        const Icon(Icons.location_on, color: PulseColors.error, size: 20),
+                        const SizedBox(width: 8),
+                        Text('Office Location & Radius', style: PulseTextStyles.bodyBold),
+                      ]),
+                      const SizedBox(height: 12),
+                      Container(
+                        height: 250,
+                        decoration: BoxDecoration(
+                          border: Border.all(color: PulseColors.border),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: FlutterMap(
+                            mapController: _mapController,
+                            options: MapOptions(
+                              initialCenter: _officeLocation,
+                              initialZoom: 15.0,
+                              onTap: (tapPosition, point) => setState(() => _officeLocation = point),
+                            ),
+                            children: [
+                              TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', userAgentPackageName: 'com.timetracker.frontend'),
+                              CircleLayer(circles: [
+                                CircleMarker(point: _officeLocation, color: PulseColors.primary.withOpacity(0.25), borderStrokeWidth: 2, borderColor: PulseColors.primary, radius: _radius, useRadiusInMeter: true),
+                              ]),
+                              MarkerLayer(markers: [
+                                Marker(point: _officeLocation, width: 40, height: 40, child: const Icon(Icons.location_on, color: Colors.red, size: 40)),
+                              ]),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Text('Geofence Radius: ${_radius.toInt()} meters', style: PulseTextStyles.caption),
+                      Slider(
+                        value: _radius, min: 50, max: 1000, divisions: 19,
+                        label: '${_radius.toInt()}m',
+                        activeColor: PulseColors.primary,
+                        onChanged: (val) => setState(() => _radius = val),
+                      ),
+                    ]),
                   ),
                   const SizedBox(height: 24),
 
-                  // Office Location
-                  const Text('Office Location & Radius', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                  const SizedBox(height: 8),
-                  Container(
-                    height: 280,
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.grey),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: FlutterMap(
-                        mapController: _mapController,
-                        options: MapOptions(
-                          initialCenter: _officeLocation,
-                          initialZoom: 15.0,
-                          onTap: (tapPosition, point) {
-                            setState(() => _officeLocation = point);
-                          },
-                        ),
-                        children: [
-                          TileLayer(
-                            urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                            userAgentPackageName: 'com.timetracker.frontend',
-                          ),
-                          CircleLayer(
-                            circles: [
-                              CircleMarker(
-                                point: _officeLocation,
-                                color: Colors.blue.withOpacity(0.3),
-                                borderStrokeWidth: 2,
-                                borderColor: Colors.blue,
-                                radius: _radius,
-                                useRadiusInMeter: true,
-                              ),
-                            ],
-                          ),
-                          MarkerLayer(
-                            markers: [
-                              Marker(
-                                point: _officeLocation,
-                                width: 40,
-                                height: 40,
-                                child: const Icon(Icons.location_on, color: Colors.red, size: 40),
-                              ),
-                            ],
-                          ),
-                        ],
+                  SizedBox(
+                    height: 50,
+                    child: ElevatedButton(
+                      onPressed: _saveSettings,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: PulseColors.primary,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
+                      child: const Text('SAVE SETTINGS', style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1)),
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text('Geofence Radius: ${_radius.toInt()} meters'),
-                  Slider(
-                    value: _radius,
-                    min: 50,
-                    max: 1000,
-                    divisions: 19,
-                    label: '${_radius.toInt()}m',
-                    onChanged: (val) => setState(() => _radius = val),
-                  ),
-                  const SizedBox(height: 24),
-                  ElevatedButton(
-                    onPressed: _saveSettings,
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      backgroundColor: Colors.deepPurple,
-                      foregroundColor: Colors.white,
-                    ),
-                    child: const Text('SAVE SETTINGS'),
                   ),
                 ],
               ),

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../core/theme/pulse_colors.dart';
+import '../core/theme/pulse_text_styles.dart';
 import '../services/api_service.dart';
 
 class AdminDrawer extends StatelessWidget {
@@ -10,71 +12,110 @@ class AdminDrawer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Drawer(
+      backgroundColor: PulseColors.surface,
       child: Column(
         children: [
-          UserAccountsDrawerHeader(
-            accountName: Text(user['fullName'] ?? 'Admin'),
-            accountEmail: Text(user['email'] ?? ''),
-            currentAccountPicture: CircleAvatar(
-              backgroundImage: user['profilePicture'] != null 
-                  ? NetworkImage(ApiService.getImageUrl(user['profilePicture']))
-                  : null,
-              child: user['profilePicture'] == null ? const Icon(Icons.person) : null,
+          // Admin Profile Header
+          Container(
+            width: double.infinity,
+            padding: EdgeInsets.only(
+              top: MediaQuery.of(context).padding.top + 24,
+              left: 24,
+              right: 24,
+              bottom: 24,
             ),
             decoration: const BoxDecoration(
               gradient: LinearGradient(
-                colors: [Color(0xFF6200EA), Color(0xFF651FFF)],
+                colors: [Color(0xFF1A1A2E), Color(0xFF252540)],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
             ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                CircleAvatar(
+                  radius: 32,
+                  backgroundColor: PulseColors.surfaceVariant,
+                  backgroundImage: user['profilePicture'] != null
+                      ? NetworkImage(ApiService.getImageUrl(user['profilePicture']))
+                      : null,
+                  child: user['profilePicture'] == null
+                      ? const Icon(Icons.admin_panel_settings, size: 28, color: PulseColors.primary)
+                      : null,
+                ),
+                const SizedBox(height: 16),
+                Text(user['fullName'] ?? 'Admin', style: PulseTextStyles.h3),
+                const SizedBox(height: 4),
+                Text(user['email'] ?? '', style: PulseTextStyles.caption),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: PulseColors.accent.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    'ADMIN',
+                    style: PulseTextStyles.captionBold.copyWith(color: PulseColors.accent),
+                  ),
+                ),
+              ],
+            ),
           ),
-          ListTile(
-            leading: const Icon(Icons.dashboard, color: Color(0xFF6200EA)),
-            title: const Text('Dashboard'),
+
+          const SizedBox(height: 8),
+
+          _DrawerTile(
+            icon: Icons.dashboard_rounded,
+            title: 'Dashboard',
             onTap: () {
               Navigator.pop(context);
               Navigator.pushReplacementNamed(context, '/admin');
             },
           ),
-          ListTile(
-            leading: const Icon(Icons.history, color: Color(0xFF6200EA)),
-            title: const Text('View All Attendance'),
+          _DrawerTile(
+            icon: Icons.history_rounded,
+            title: 'All Attendance',
             onTap: () {
               Navigator.pop(context);
               Navigator.pushNamed(context, '/admin-attendance');
             },
           ),
-          ListTile(
-            leading: const Icon(Icons.people_alt_outlined, color: Color(0xFF6200EA)),
-            title: const Text('Manage Employees'),
+          _DrawerTile(
+            icon: Icons.people_alt_rounded,
+            title: 'Employees',
             onTap: () {
               Navigator.pop(context);
               Navigator.pushNamed(context, '/admin-employees');
             },
           ),
-          ListTile(
-            leading: const Icon(Icons.beach_access_outlined, color: Color(0xFF6200EA)),
-            title: const Text('Leave Management'),
+          _DrawerTile(
+            icon: Icons.beach_access_rounded,
+            title: 'Leave Management',
             onTap: () {
               Navigator.pop(context);
               Navigator.pushNamed(context, '/admin-leaves');
             },
           ),
-          const Divider(),
-          ListTile(
-            leading: const Icon(Icons.settings_outlined, color: Color(0xFF6200EA)),
-            title: const Text('Settings'),
+
+          const Divider(color: PulseColors.divider, indent: 24, endIndent: 24),
+
+          _DrawerTile(
+            icon: Icons.settings_rounded,
+            title: 'Settings',
             onTap: () {
               Navigator.pop(context);
               Navigator.pushNamed(context, '/admin-settings');
             },
           ),
+
           const Spacer(),
-          const Divider(),
-          ListTile(
-            leading: const Icon(Icons.logout, color: Colors.red),
-            title: const Text('Logout', style: TextStyle(color: Colors.red)),
+          const Divider(color: PulseColors.divider),
+          _DrawerTile(
+            icon: Icons.logout_rounded,
+            title: 'Logout',
+            isDestructive: true,
             onTap: () async {
               showDialog(
                 context: context,
@@ -90,16 +131,47 @@ class AdminDrawer extends StatelessWidget {
                           Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
                         }
                       },
-                      child: const Text('Logout', style: TextStyle(color: Colors.red)),
+                      child: Text('Logout', style: TextStyle(color: PulseColors.error)),
                     ),
                   ],
                 ),
               );
             },
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
         ],
       ),
+    );
+  }
+}
+
+class _DrawerTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final VoidCallback onTap;
+  final bool isDestructive;
+
+  const _DrawerTile({
+    required this.icon,
+    required this.title,
+    required this.onTap,
+    this.isDestructive = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isDestructive ? PulseColors.error : PulseColors.textSecondary;
+    return ListTile(
+      leading: Icon(icon, color: color, size: 22),
+      title: Text(
+        title,
+        style: PulseTextStyles.body.copyWith(
+          color: isDestructive ? PulseColors.error : PulseColors.textPrimary,
+        ),
+      ),
+      onTap: onTap,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 2),
     );
   }
 }

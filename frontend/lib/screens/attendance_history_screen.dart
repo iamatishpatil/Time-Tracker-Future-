@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../../services/api_service.dart';
-import '../../services/pdf_service.dart';
+import '../core/theme/pulse_colors.dart';
+import '../core/theme/pulse_text_styles.dart';
+import '../core/widgets/pulse_card.dart';
+import '../core/widgets/pulse_shimmer.dart';
+import '../core/widgets/pulse_empty_state.dart';
+import '../services/api_service.dart';
+import '../services/pdf_service.dart';
 
 class AttendanceHistoryScreen extends StatefulWidget {
   const AttendanceHistoryScreen({super.key});
@@ -14,6 +19,7 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
   List<dynamic> _history = [];
   bool _isLoading = true;
   String _userName = 'User';
+  List<dynamic> _holidays = [];
 
   @override
   void initState() {
@@ -28,7 +34,13 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
       if (user != null) {
         _userName = user['fullName'] ?? 'User';
         final history = await ApiService.getAttendance(user['id']);
-        if (mounted) setState(() => _history = history);
+        final holidays = await ApiService.getHolidays();
+        if (mounted) {
+          setState(() {
+            _history = history;
+            _holidays = holidays;
+          });
+        }
       }
     } catch (e) {
       debugPrint('Error loading history: $e');
@@ -39,194 +51,171 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: const Color(0xFFF3E5F5),
-      child: _isLoading 
-          ? const Center(child: CircularProgressIndicator())
+    return RefreshIndicator(
+      onRefresh: _loadHistory,
+      child: _isLoading
+          ? Padding(
+              padding: const EdgeInsets.all(20),
+              child: PulseShimmer.list(count: 4, itemHeight: 120),
+            )
           : Column(
               children: [
-                // User Details Card
-                Container(
-                  margin: const EdgeInsets.all(16),
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF6200EA), Color(0xFF651FFF)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF6200EA).withValues(alpha: 0.3),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.person, color: Colors.white, size: 32),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              _userName,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '${_history.length} ${_history.length == 1 ? 'Record' : 'Records'}',
-                              style: const TextStyle(
-                                color: Colors.white70,
-                                fontSize: 14,
-                              ),
-                            ),
-                          ],
+                // Header Card
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                  child: PulseCard(
+                    glowEffect: true,
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: PulseColors.primary.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(Icons.history_rounded, color: PulseColors.primary, size: 24),
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(_userName, style: PulseTextStyles.bodyBold),
+                              Text(
+                                '${_history.length} ${_history.length == 1 ? 'Record' : 'Records'}',
+                                style: PulseTextStyles.caption,
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.picture_as_pdf_rounded, color: PulseColors.primaryLight, size: 22),
+                          onPressed: () => PdfService.generateAttendanceReport(_userName, _history, holidays: _holidays),
+                          tooltip: 'Export PDF',
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-                // Attendance List
+
+                // History List
                 Expanded(
-                  child: _history.isEmpty 
-                      ? const Center(child: Text('No attendance records found'))
+                  child: _history.isEmpty
+                      ? ListView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          children: const [
+                            SizedBox(height: 60),
+                            PulseEmptyState(
+                              icon: Icons.history_toggle_off_rounded,
+                              title: 'No Records',
+                              subtitle: 'Pull down to refresh',
+                            ),
+                          ],
+                        )
                       : ListView.builder(
+                          physics: const AlwaysScrollableScrollPhysics(),
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                           itemCount: _history.length,
                           itemBuilder: (context, index) {
                             final record = _history[index];
                             final checkIn = DateTime.parse(record['checkInTime']).toLocal();
-                            final checkOut = record['checkOutTime'] != null ? DateTime.parse(record['checkOutTime']).toLocal() : null;
-                            
-                            return Card(
-                              margin: const EdgeInsets.only(bottom: 16),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                              child: Padding(
+                            final checkOut = record['checkOutTime'] != null
+                                ? DateTime.parse(record['checkOutTime']).toLocal()
+                                : null;
+
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: PulseCard(
                                 padding: const EdgeInsets.all(16),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Text(
-                                          DateFormat('EEEE, MMM d').format(checkIn),
-                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF6200EA)),
-                                        ),
-                                        Row(
-                                          children: [
-                                            Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                              decoration: BoxDecoration(
-                                                color: checkOut == null ? Colors.orange.withValues(alpha: 0.1) : Colors.green.withValues(alpha: 0.1),
-                                                borderRadius: BorderRadius.circular(20),
-                                              ),
-                                              child: Text(
-                                                checkOut == null ? 'Active' : 'Completed',
-                                                style: TextStyle(
-                                                  color: checkOut == null ? Colors.orange : Colors.green,
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 12,
-                                                ),
-                                              ),
-                                            ),
-                                            if (record['status'] == 'Late') ...[
-                                              const SizedBox(width: 8),
-                                              Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                                decoration: BoxDecoration(
-                                                  color: Colors.red.withValues(alpha: 0.1),
-                                                  borderRadius: BorderRadius.circular(12),
-                                                ),
-                                                child: const Text(
-                                                  'LATE',
-                                                  style: TextStyle(color: Colors.red, fontSize: 10, fontWeight: FontWeight.bold),
-                                                ),
-                                              ),
-                                            ],
-                                            if (record['overtimeHours'] != null && (record['overtimeHours'] is num) && record['overtimeHours'] > 0) ...[
-                                              const SizedBox(width: 8),
-                                              Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                                decoration: BoxDecoration(
-                                                  color: Colors.blue.withValues(alpha: 0.1),
-                                                  borderRadius: BorderRadius.circular(12),
-                                                ),
-                                                child: Text(
-                                                  '+${(record['overtimeHours'] as num).toStringAsFixed(1)} HRS',
-                                                  style: const TextStyle(color: Colors.blue, fontSize: 10, fontWeight: FontWeight.bold),
-                                                ),
-                                              ),
-                                            ],
-                                          ],
-                                        ),
-                                      ],
-                                    ),
-                                    const Divider(height: 24),
+                                    // Date row with badges
                                     Row(
                                       children: [
                                         Expanded(
-                                          child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: [
-                                              const Text('Check In', style: TextStyle(color: Colors.grey, fontSize: 12)),
-                                              const SizedBox(height: 4),
-                                              Text(DateFormat('hh:mm a').format(checkIn), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                                              const SizedBox(height: 8),
-                                              if (record['checkInPhoto'] != null)
-                                                ClipRRect(
-                                                  borderRadius: BorderRadius.circular(8),
-                                                  child: Image.network(
-                                                    ApiService.getImageUrl(record['checkInPhoto']),
-                                                    height: 80,
-                                                    width: 80,
-                                                    fit: BoxFit.cover,
-                                                    errorBuilder: (ctx, err, stack) => const Icon(Icons.broken_image, size: 40, color: Colors.grey),
-                                                  ),
-                                                ),
-                                            ],
+                                          child: Text(
+                                            DateFormat('EEEE, MMM d').format(checkIn),
+                                            style: PulseTextStyles.bodyBold.copyWith(color: PulseColors.primaryLight),
                                           ),
+                                        ),
+                                        // Holiday Badge
+                                        Builder(builder: (ctx) {
+                                          final dateStr = DateFormat('yyyy-MM-dd').format(checkIn);
+                                          final holiday = _holidays.firstWhere(
+                                              (h) => h['date'] == dateStr, orElse: () => null);
+                                          if (holiday != null) {
+                                            return Container(
+                                              margin: const EdgeInsets.only(right: 6),
+                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                              decoration: BoxDecoration(
+                                                color: PulseColors.accent.withOpacity(0.15),
+                                                borderRadius: BorderRadius.circular(8),
+                                              ),
+                                              child: Text(
+                                                holiday['name'].toString().toUpperCase() +
+                                                    (holiday['duration'] == 'Half Day' ? ' (½)' : ''),
+                                                style: PulseTextStyles.captionBold.copyWith(
+                                                  color: PulseColors.accent,
+                                                  fontSize: 9,
+                                                ),
+                                              ),
+                                            );
+                                          }
+                                          return const SizedBox.shrink();
+                                        }),
+                                        // Status Badge
+                                        _statusBadge(
+                                          checkOut == null ? 'Active' : 'Done',
+                                          checkOut == null ? PulseColors.warning : PulseColors.success,
+                                        ),
+                                        if (record['status'] == 'Late')
+                                          Padding(
+                                            padding: const EdgeInsets.only(left: 6),
+                                            child: _statusBadge('LATE', PulseColors.error),
+                                          ),
+                                        if (record['overtimeHours'] != null &&
+                                            (record['overtimeHours'] is num) &&
+                                            record['overtimeHours'] > 0)
+                                          Padding(
+                                            padding: const EdgeInsets.only(left: 6),
+                                            child: _statusBadge(
+                                              '+${(record['overtimeHours'] as num).toStringAsFixed(1)}h',
+                                              PulseColors.accent,
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                    const Divider(color: PulseColors.divider, height: 20),
+                                    // Times row
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: _timeColumn('Check In', DateFormat('hh:mm a').format(checkIn),
+                                              record['checkInPhoto']),
                                         ),
                                         if (checkOut != null)
                                           Expanded(
-                                            child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              children: [
-                                                const Text('Check Out', style: TextStyle(color: Colors.grey, fontSize: 12)),
-                                                const SizedBox(height: 4),
-                                                Text(DateFormat('hh:mm a').format(checkOut), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                                                const SizedBox(height: 8),
-                                                if (record['checkOutPhoto'] != null)
-                                                  ClipRRect(
-                                                    borderRadius: BorderRadius.circular(8),
-                                                    child: Image.network(
-                                                      ApiService.getImageUrl(record['checkOutPhoto']),
-                                                      height: 80,
-                                                      width: 80,
-                                                      fit: BoxFit.cover,
-                                                      errorBuilder: (ctx, err, stack) => const Icon(Icons.broken_image, size: 40, color: Colors.grey),
-                                                    ),
-                                                  ),
-                                              ],
-                                            ),
+                                            child: _timeColumn('Check Out', DateFormat('hh:mm a').format(checkOut),
+                                                record['checkOutPhoto']),
                                           ),
                                       ],
                                     ),
                                     if (record['checkInAddress'] != null) ...[
-                                      const SizedBox(height: 12),
+                                      const SizedBox(height: 10),
                                       Row(
                                         children: [
-                                          const Icon(Icons.location_on, size: 16, color: Colors.grey),
+                                          const Icon(Icons.location_on, size: 13, color: PulseColors.textHint),
                                           const SizedBox(width: 4),
-                                          Expanded(child: Text(record['checkInAddress'], style: const TextStyle(color: Colors.grey, fontSize: 12))),
+                                          Expanded(
+                                            child: Text(
+                                              record['checkInAddress'],
+                                              style: PulseTextStyles.caption.copyWith(fontSize: 11),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
                                         ],
                                       ),
                                     ],
@@ -239,6 +228,45 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
                 ),
               ],
             ),
+    );
+  }
+
+  Widget _statusBadge(String text, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        text,
+        style: PulseTextStyles.captionBold.copyWith(color: color, fontSize: 10),
+      ),
+    );
+  }
+
+  Widget _timeColumn(String label, String time, String? photoUrl) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: PulseTextStyles.caption),
+        const SizedBox(height: 4),
+        Text(time, style: PulseTextStyles.bodyBold.copyWith(fontSize: 16)),
+        if (photoUrl != null) ...[
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: Image.network(
+              ApiService.getImageUrl(photoUrl),
+              height: 70,
+              width: 70,
+              fit: BoxFit.cover,
+              errorBuilder: (ctx, err, stack) =>
+                  const Icon(Icons.broken_image, size: 30, color: PulseColors.textHint),
+            ),
+          ),
+        ],
+      ],
     );
   }
 }

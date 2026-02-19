@@ -59,7 +59,7 @@ const verify = async () => {
 
     // 3. Check Reports
     console.log('\nChecking Reports...');
-    const report = await makeRequest('/api/admin/reports/attendance?startDate=2023-01-01&endDate=2025-12-31');
+    const report = await makeRequest('/api/admin/reports/attendance?startDate=2023-01-01&endDate=2026-12-31');
     if (Array.isArray(report)) {
       console.log(`✅ Report endpoint returned ${report.length} records`);
     } else {
@@ -72,8 +72,8 @@ const verify = async () => {
     console.log('\nTesting Leave Cancellation...');
     const leave = await makeRequest('/api/leaves/apply', 'POST', {
       userId: 1,
-      startDate: '2025-05-01',
-      endDate: '2025-05-02',
+      startDate: '2026-05-01',
+      endDate: '2026-05-02',
       reason: 'Test Leave for Cancellation'
     });
     console.log('Applied Leave:', leave);

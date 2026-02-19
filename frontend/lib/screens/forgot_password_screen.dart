@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import '../core/theme/pulse_colors.dart';
+import '../core/theme/pulse_text_styles.dart';
+import '../core/widgets/pulse_button.dart';
 import 'package:intl_phone_field/intl_phone_field.dart';
 import '../services/api_service.dart';
 
@@ -13,7 +16,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   final _mobileController = TextEditingController();
   final _otpController = TextEditingController();
   final _passwordController = TextEditingController();
-  
+
   String _completePhoneNumber = '';
   bool _otpSent = false;
   bool _isLoading = false;
@@ -37,7 +40,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       await ApiService.sendOtp(mobileNumber: _completePhoneNumber);
       setState(() => _otpSent = true);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('OTP sent successfully! (Check server logs)')));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('OTP sent successfully!')));
       }
     } catch (e) {
       if (mounted) {
@@ -50,15 +53,15 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
   Future<void> _resetPassword() async {
     if (_otpController.text.isEmpty || _passwordController.text.isEmpty) {
-       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter OTP and new password')));
-       return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter OTP and new password')));
+      return;
     }
 
     setState(() => _isLoading = true);
     try {
       await ApiService.resetPassword(_completePhoneNumber, _otpController.text, _passwordController.text);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Password reset successfully! Login with new password.')));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Password reset successfully!')));
         Navigator.pop(context);
       }
     } catch (e) {
@@ -73,104 +76,103 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(title: const Text('Reset Password'), backgroundColor: Colors.white, elevation: 0, foregroundColor: Colors.black),
+      appBar: AppBar(title: const Text('Reset Password')),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(
           children: [
-            const Icon(Icons.lock_reset, size: 80, color: Color(0xFF6200EA)),
-            const SizedBox(height: 24),
-            const Text(
-              'Forgot Password?',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: PulseColors.surfaceVariant,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.lock_reset_rounded, size: 48, color: PulseColors.primary),
             ),
+            const SizedBox(height: 24),
+            Text('Forgot Password?', style: PulseTextStyles.h2),
             const SizedBox(height: 8),
             Text(
-              _otpSent 
-                  ? 'Enter the OTP sent to your mobile' 
+              _otpSent
+                  ? 'Enter the OTP sent to your mobile'
                   : 'Enter your mobile number to receive an OTP',
               textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.grey),
+              style: PulseTextStyles.body,
             ),
             const SizedBox(height: 32),
 
-            if (!_otpSent)
-              Column(
-                children: [
-                   IntlPhoneField(
-                    controller: _mobileController,
-                    decoration: const InputDecoration(
-                      labelText: 'Mobile Number',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.phone),
-                    ),
-                    initialCountryCode: 'IN',
-                    onChanged: (phone) {
-                      _completePhoneNumber = phone.completeNumber;
-                    },
-                  ),
-                  const SizedBox(height: 24),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: ElevatedButton(
-                      onPressed: _isLoading ? null : _sendOtp,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF6200EA),
-                        foregroundColor: Colors.white,
-                      ),
-                      child: _isLoading 
-                          ? const CircularProgressIndicator(color: Colors.white) 
-                          : const Text('SEND OTP', style: TextStyle(fontSize: 16)),
-                    ),
-                  ),
-                ],
-              )
-            else
-              Column(
-                children: [
-                  TextFormField(
-                    controller: _otpController,
-                    decoration: const InputDecoration(
-                      labelText: 'Enter OTP',
-                      prefixIcon: Icon(Icons.security),
-                      border: OutlineInputBorder(),
-                    ),
-                    keyboardType: TextInputType.number,
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _passwordController,
-                    decoration: const InputDecoration(
-                      labelText: 'New Password',
-                      prefixIcon: Icon(Icons.lock),
-                      border: OutlineInputBorder(),
-                    ),
-                    obscureText: true,
-                  ),
-                  const SizedBox(height: 24),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: ElevatedButton(
-                      onPressed: _isLoading ? null : _resetPassword,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF6200EA),
-                        foregroundColor: Colors.white,
-                      ),
-                      child: _isLoading 
-                          ? const CircularProgressIndicator(color: Colors.white) 
-                          : const Text('RESET PASSWORD', style: TextStyle(fontSize: 16)),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  TextButton(
-                    onPressed: () => setState(() => _otpSent = false),
-                    child: const Text('Change Mobile Number'),
-                  ),
-                ],
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: PulseColors.surface,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: PulseColors.border),
               ),
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 300),
+                child: !_otpSent
+                    ? Column(
+                        key: const ValueKey('phone'),
+                        children: [
+                          IntlPhoneField(
+                            controller: _mobileController,
+                            decoration: const InputDecoration(labelText: 'Mobile Number'),
+                            initialCountryCode: 'IN',
+                            style: PulseTextStyles.bodyBold.copyWith(color: Colors.white),
+                            dropdownTextStyle: PulseTextStyles.body,
+                            dropdownIcon: const Icon(Icons.arrow_drop_down, color: PulseColors.textHint),
+                            flagsButtonPadding: const EdgeInsets.only(left: 12),
+                            onChanged: (phone) {
+                              _completePhoneNumber = phone.completeNumber;
+                            },
+                          ),
+                          const SizedBox(height: 24),
+                          PulseButton(
+                            text: 'Send OTP',
+                            onPressed: _isLoading ? null : _sendOtp,
+                            isLoading: _isLoading,
+                          ),
+                        ],
+                      )
+                    : Column(
+                        key: const ValueKey('otp'),
+                        children: [
+                          TextFormField(
+                            controller: _otpController,
+                            decoration: const InputDecoration(
+                              labelText: 'Enter OTP',
+                              prefixIcon: Icon(Icons.security_rounded),
+                            ),
+                            keyboardType: TextInputType.number,
+                            style: PulseTextStyles.bodyBold.copyWith(color: Colors.white),
+                          ),
+                          const SizedBox(height: 16),
+                          TextFormField(
+                            controller: _passwordController,
+                            decoration: const InputDecoration(
+                              labelText: 'New Password',
+                              prefixIcon: Icon(Icons.lock_outline_rounded),
+                            ),
+                            obscureText: true,
+                            style: PulseTextStyles.bodyBold.copyWith(color: Colors.white),
+                          ),
+                          const SizedBox(height: 24),
+                          PulseButton(
+                            text: 'Reset Password',
+                            onPressed: _isLoading ? null : _resetPassword,
+                            isLoading: _isLoading,
+                          ),
+                          const SizedBox(height: 12),
+                          TextButton(
+                            onPressed: () => setState(() => _otpSent = false),
+                            child: Text('Change Mobile Number',
+                                style: PulseTextStyles.caption.copyWith(color: PulseColors.primaryLight)),
+                          ),
+                        ],
+                      ),
+              ),
+            ),
           ],
         ),
       ),

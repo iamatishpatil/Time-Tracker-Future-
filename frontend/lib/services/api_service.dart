@@ -58,10 +58,18 @@ class ApiService {
       if (response.statusCode == 200) {
         return json.decode(response.body); // Return parsed JSON response
       } else {
-        throw Exception('Failed to register: ${response.body}');
+        // Try to parse error message from JSON
+        String errorMessage = 'Failed to register';
+        try {
+          final errorData = json.decode(response.body);
+          if (errorData['error'] != null) errorMessage = errorData['error'];
+        } catch (_) {
+          errorMessage = response.body;
+        }
+        throw Exception(errorMessage);
       }
     } catch (e) {
-      throw Exception('Network error: $e');
+      throw Exception(e.toString().replaceAll('Exception: ', ''));
     }
   }
 
@@ -90,10 +98,17 @@ class ApiService {
         await prefs.setString('user', json.encode(data['user'])); // Save user object as JSON string
         return data;
       } else {
-        throw Exception('Failed to login: ${response.body}');
+        String errorMessage = 'Failed to login';
+        try {
+          final errorData = json.decode(response.body);
+          if (errorData['error'] != null) errorMessage = errorData['error'];
+        } catch (_) {
+          errorMessage = response.body;
+        }
+        throw Exception(errorMessage);
       }
     } catch (e) {
-      throw Exception('Network error: $e');
+      throw Exception(e.toString().replaceAll('Exception: ', ''));
     }
   }
 
@@ -184,10 +199,17 @@ class ApiService {
       var response = await http.Response.fromStream(streamedResponse);
 
       if (response.statusCode != 200) {
-        throw Exception('Failed to check in: ${response.body}');
+        String errorMessage = 'Failed to check in';
+        try {
+          final errorData = json.decode(response.body);
+          if (errorData['error'] != null) errorMessage = errorData['error'];
+        } catch (_) {
+          errorMessage = response.body;
+        }
+        throw Exception(errorMessage);
       }
     } catch (e) {
-       throw Exception('Network error: $e');
+       throw Exception(e.toString().replaceAll('Exception: ', ''));
     }
   }
 
@@ -218,10 +240,17 @@ class ApiService {
       var response = await http.Response.fromStream(streamedResponse);
 
       if (response.statusCode != 200) {
-        throw Exception('Failed to check out: ${response.body}');
+        String errorMessage = 'Failed to check out';
+        try {
+          final errorData = json.decode(response.body);
+          if (errorData['error'] != null) errorMessage = errorData['error'];
+        } catch (_) {
+          errorMessage = response.body;
+        }
+        throw Exception(errorMessage);
       }
     } catch (e) {
-       throw Exception('Network error: $e');
+       throw Exception(e.toString().replaceAll('Exception: ', ''));
     }
   }
 
@@ -272,8 +301,8 @@ class ApiService {
       Uri.parse('$baseUrl/otp/send'),
       headers: {'Content-Type': 'application/json'},
       body: json.encode({
-        if (mobileNumber != null) 'mobileNumber': mobileNumber,
-        if (email != null) 'email': email,
+        'mobileNumber': ?mobileNumber,
+        'email': ?email,
       }),
     );
 
@@ -290,8 +319,8 @@ class ApiService {
       Uri.parse('$baseUrl/otp/verify'),
       headers: {'Content-Type': 'application/json'},
       body: json.encode({
-        if (mobileNumber != null) 'mobileNumber': mobileNumber,
-        if (email != null) 'email': email,
+        'mobileNumber': ?mobileNumber,
+        'email': ?email,
         'otp': otp,
       }),
     );
@@ -382,6 +411,17 @@ class ApiService {
       return json.decode(response.body);
     } else {
       throw Exception('Failed to load leave balance');
+    }
+  }
+
+  // Get dynamic leave types
+  static Future<List<String>> getLeaveTypes() async {
+    final response = await http.get(Uri.parse('$baseUrl/leaves/types'));
+    if (response.statusCode == 200) {
+      final List<dynamic> data = json.decode(response.body);
+      return data.map((t) => t.toString()).toList();
+    } else {
+      throw Exception('Failed to load leave types');
     }
   }
 
@@ -510,6 +550,19 @@ class ApiService {
     }
   }
 
+  // Toggle Employee Active/Inactive Status
+  static Future<void> toggleEmployeeActive(int id, bool isActive) async {
+    final response = await http.patch(
+      Uri.parse('$baseUrl/admin/users/$id/active'),
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode({'isActive': isActive ? 1 : 0}),
+    );
+    if (response.statusCode != 200) {
+      final error = json.decode(response.body)['error'] ?? 'Failed to update status';
+      throw Exception(error);
+    }
+  }
+
   // ============ SHIFT MANAGEMENT METHODS ============
 
   // Get All Shifts
@@ -617,11 +670,16 @@ class ApiService {
     throw Exception('Failed to load holidays');
   }
 
-  static Future<void> addHoliday(String name, String date) async {
+  static Future<void> addHoliday(String name, String date, {String type = 'Public', String duration = 'Full Day'}) async {
     final response = await http.post(
       Uri.parse('$baseUrl/admin/holidays'),
       headers: {'Content-Type': 'application/json'},
-      body: json.encode({'name': name, 'date': date}),
+      body: json.encode({
+        'name': name,
+        'date': date,
+        'type': type,
+        'duration': duration,
+      }),
     );
     if (response.statusCode != 200) throw Exception('Failed to add holiday');
   }

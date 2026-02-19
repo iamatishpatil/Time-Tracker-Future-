@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
-import '../../services/api_service.dart';
+import '../core/theme/pulse_colors.dart';
+import '../core/theme/pulse_text_styles.dart';
+import '../core/widgets/pulse_button.dart';
+import '../services/api_service.dart';
 
 class EditProfileScreen extends StatefulWidget {
   final Map<String, dynamic> user;
@@ -30,20 +33,15 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   @override
   void initState() {
     super.initState();
-    _nameController = TextEditingController(text: widget.user?['fullName'] ?? '');
-    _emailController = TextEditingController(text: widget.user?['email'] ?? '');
-    _companyController = TextEditingController(text: widget.user?['company'] ?? '');
-    _departmentController = TextEditingController(text: widget.user?['department'] ?? '');
-    _experienceController = TextEditingController(text: widget.user?['experience'] ?? '');
-    _technologiesController = TextEditingController(text: widget.user?['technologies'] ?? '');
-    _addressController = TextEditingController(text: widget.user?['address'] ?? '');
-    _selectedGender = widget.user?['gender'];
-    
-    if (widget.user == null) {
-      _loadUser();
-    } else {
-      _currentUser = widget.user;
-    }
+    _nameController = TextEditingController(text: widget.user['fullName'] ?? '');
+    _emailController = TextEditingController(text: widget.user['email'] ?? '');
+    _companyController = TextEditingController(text: widget.user['company'] ?? '');
+    _departmentController = TextEditingController(text: widget.user['department'] ?? '');
+    _experienceController = TextEditingController(text: widget.user['experience'] ?? '');
+    _technologiesController = TextEditingController(text: widget.user['technologies'] ?? '');
+    _addressController = TextEditingController(text: widget.user['address'] ?? '');
+    _selectedGender = widget.user['gender'];
+    _currentUser = widget.user;
   }
 
   Future<void> _loadUser() async {
@@ -77,34 +75,42 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   Future<void> _pickImage() async {
     final ImagePicker picker = ImagePicker();
-    
     final ImageSource? source = await showModalBottomSheet<ImageSource>(
       context: context,
-      builder: (ctx) => Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ListTile(
-            leading: const Icon(Icons.photo_library),
-            title: const Text('Gallery'),
-            onTap: () => Navigator.pop(ctx, ImageSource.gallery),
-          ),
-          ListTile(
-            leading: const Icon(Icons.camera_alt),
-            title: const Text('Camera'),
-            onTap: () => Navigator.pop(ctx, ImageSource.camera),
-          ),
-        ],
+      backgroundColor: PulseColors.surfaceVariant,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40, height: 4, margin: const EdgeInsets.only(bottom: 12),
+              decoration: BoxDecoration(
+                color: PulseColors.border,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library, color: PulseColors.primary),
+              title: Text('Gallery', style: PulseTextStyles.body.copyWith(color: Colors.white)),
+              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+            ),
+            ListTile(
+              leading: const Icon(Icons.camera_alt, color: PulseColors.primary),
+              title: Text('Camera', style: PulseTextStyles.body.copyWith(color: Colors.white)),
+              onTap: () => Navigator.pop(ctx, ImageSource.camera),
+            ),
+          ],
+        ),
       ),
     );
 
     if (source != null) {
-      final XFile? image = await picker.pickImage(
-        source: source,
-        preferredCameraDevice: CameraDevice.front,
-      );
-      if (image != null) {
-        setState(() => _imageFile = image);
-      }
+      final XFile? image = await picker.pickImage(source: source, preferredCameraDevice: CameraDevice.front);
+      if (image != null) setState(() => _imageFile = image);
     }
   }
 
@@ -123,12 +129,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           'address': _addressController.text,
         };
         final updatedUser = await ApiService.updateUser(_currentUser!['id'], fields, image: _imageFile);
-        if (widget.onUserUpdated != null) {
-          widget.onUserUpdated!(updatedUser);
-        }
+        widget.onUserUpdated(updatedUser);
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profile updated successfully')));
-          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✓ Profile updated!')));
+          if (Navigator.of(context).canPop()) Navigator.pop(context);
         }
       } catch (e) {
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
@@ -140,93 +144,135 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: const Color(0xFFF3E5F5),
-      child: _currentUser == null 
+    return RefreshIndicator(
+      onRefresh: _loadUser,
+      child: _currentUser == null
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.all(24),
               child: Form(
                 key: _formKey,
                 child: Column(
                   children: [
+                    // Profile Picture
                     GestureDetector(
                       onTap: _pickImage,
-                      child: CircleAvatar(
-                        radius: 60,
-                        backgroundImage: _imageFile != null 
-                            ? FileImage(File(_imageFile!.path)) 
-                            : (_currentUser!['profilePicture'] != null 
-                                ? NetworkImage(ApiService.getImageUrl(_currentUser!['profilePicture']))
-                                : null) as ImageProvider?,
-                        child: (_imageFile == null && _currentUser!['profilePicture'] == null) 
-                            ? const Icon(Icons.camera_alt, size: 40) 
-                            : null,
+                      child: Stack(
+                        children: [
+                          Container(
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(color: PulseColors.primary, width: 3),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: PulseColors.primary.withOpacity(0.3),
+                                  blurRadius: 16,
+                                  spreadRadius: 2,
+                                ),
+                              ],
+                            ),
+                            child: CircleAvatar(
+                              radius: 52,
+                              backgroundColor: PulseColors.surfaceVariant,
+                              backgroundImage: _imageFile != null
+                                  ? FileImage(File(_imageFile!.path))
+                                  : (_currentUser!['profilePicture'] != null
+                                      ? NetworkImage(ApiService.getImageUrl(_currentUser!['profilePicture']))
+                                      : null) as ImageProvider?,
+                              child: (_imageFile == null && _currentUser!['profilePicture'] == null)
+                                  ? const Icon(Icons.camera_alt, size: 30, color: PulseColors.textHint)
+                                  : null,
+                            ),
+                          ),
+                          Positioned(
+                            bottom: 0,
+                            right: 0,
+                            child: Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: const BoxDecoration(
+                                color: PulseColors.primary,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.edit, size: 14, color: Colors.white),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 24),
-                    TextFormField(
-                      controller: _nameController,
-                      decoration: const InputDecoration(labelText: 'Full Name *', border: OutlineInputBorder()),
-                      validator: (v) => v!.isEmpty ? 'Enter name' : null,
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _emailController,
-                      decoration: const InputDecoration(labelText: 'Email *', border: OutlineInputBorder()),
-                      validator: (v) => v!.isEmpty ? 'Enter email' : null,
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _companyController,
-                      decoration: const InputDecoration(labelText: 'Company Name', border: OutlineInputBorder()),
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _departmentController,
-                      decoration: const InputDecoration(labelText: 'Department', border: OutlineInputBorder()),
-                    ),
-                    const SizedBox(height: 16),
-                    DropdownButtonFormField<String>(
-                      value: _selectedGender,
-                      decoration: const InputDecoration(labelText: 'Gender', border: OutlineInputBorder()),
-                      items: const [
-                        DropdownMenuItem(value: 'Male', child: Text('Male')),
-                        DropdownMenuItem(value: 'Female', child: Text('Female')),
-                        DropdownMenuItem(value: 'Other', child: Text('Other')),
-                      ],
-                      onChanged: (value) => setState(() => _selectedGender = value),
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _experienceController,
-                      decoration: const InputDecoration(labelText: 'Experience (e.g., 5 years)', border: OutlineInputBorder()),
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _technologiesController,
-                      decoration: const InputDecoration(labelText: 'Technologies/Skills', border: OutlineInputBorder()),
-                      maxLines: 2,
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _addressController,
-                      decoration: const InputDecoration(labelText: 'Address', border: OutlineInputBorder()),
-                      maxLines: 3,
-                    ),
-                    const SizedBox(height: 32),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 50,
-                      child: ElevatedButton(
-                        onPressed: _isLoading ? null : _saveProfile,
-                        child: _isLoading ? const CircularProgressIndicator() : const Text('SAVE CHANGES'),
+                    const SizedBox(height: 28),
+
+                    _field(_nameController, 'Full Name *', Icons.person_outline,
+                        validator: (v) => v!.isEmpty ? 'Enter name' : null),
+                    _field(_emailController, 'Email *', Icons.email_outlined,
+                        validator: (v) => v!.isEmpty ? 'Enter email' : null),
+                    _field(_companyController, 'Company', Icons.business_outlined),
+                    _field(_departmentController, 'Department', Icons.groups_outlined),
+
+                    // Gender Dropdown
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: DropdownButtonFormField<String>(
+                        value: _selectedGender,
+                        dropdownColor: PulseColors.surfaceVariant,
+                        decoration: const InputDecoration(
+                          labelText: 'Gender',
+                          prefixIcon: Icon(Icons.person_outline),
+                        ),
+                        items: const [
+                          DropdownMenuItem(value: 'Male', child: Text('Male')),
+                          DropdownMenuItem(value: 'Female', child: Text('Female')),
+                          DropdownMenuItem(value: 'Other', child: Text('Other')),
+                        ],
+                        onChanged: (value) => setState(() => _selectedGender = value),
                       ),
+                    ),
+
+                    _field(_experienceController, 'Experience', Icons.work_outline),
+                    _field(_technologiesController, 'Technologies / Skills', Icons.code, maxLines: 2),
+                    _field(_addressController, 'Address', Icons.location_on_outlined, maxLines: 2),
+
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: TextFormField(
+                        initialValue: _currentUser?['weekOffs'] ?? 'Sunday',
+                        readOnly: true,
+                        enabled: false,
+                        style: PulseTextStyles.body.copyWith(color: PulseColors.textHint),
+                        decoration: const InputDecoration(
+                          labelText: 'Week Offs (read-only)',
+                          prefixIcon: Icon(Icons.calendar_today_outlined),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
+                    PulseButton(
+                      text: 'Save Changes',
+                      isLoading: _isLoading,
+                      onPressed: _saveProfile,
                     ),
                   ],
                 ),
               ),
             ),
+    );
+  }
+
+  Widget _field(TextEditingController controller, String label, IconData icon,
+      {String? Function(String?)? validator, int maxLines = 1}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: TextFormField(
+        controller: controller,
+        style: PulseTextStyles.body.copyWith(color: Colors.white),
+        maxLines: maxLines,
+        decoration: InputDecoration(
+          labelText: label,
+          prefixIcon: Icon(icon),
+        ),
+        validator: validator,
+      ),
     );
   }
 }

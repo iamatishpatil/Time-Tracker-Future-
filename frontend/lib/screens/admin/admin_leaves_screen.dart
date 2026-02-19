@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
+import '../../core/theme/pulse_colors.dart';
+import '../../core/theme/pulse_text_styles.dart';
+import '../../core/widgets/pulse_card.dart';
+import '../../core/widgets/pulse_shimmer.dart';
+import '../../core/widgets/pulse_empty_state.dart';
 import '../../services/api_service.dart';
-import '../../widgets/common/glass_card.dart';
 
 class AdminLeavesScreen extends StatefulWidget {
   const AdminLeavesScreen({super.key});
@@ -44,98 +48,89 @@ class _AdminLeavesScreenState extends State<AdminLeavesScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Leave Management')),
-      body: _isLoading 
-          ? const Center(child: CircularProgressIndicator())
-          : _leaves.isEmpty
-              ? const Center(child: Text('No leave requests found.'))
-              : ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: _leaves.length,
-                  itemBuilder: (context, index) {
-                    final leave = _leaves[index];
-                    return _buildLeaveCard(leave);
-                  },
-                ),
+      body: RefreshIndicator(
+        onRefresh: _loadLeaves,
+        child: _isLoading
+            ? Padding(padding: const EdgeInsets.all(20), child: PulseShimmer.list(count: 4, itemHeight: 130))
+            : _leaves.isEmpty
+                ? ListView(physics: const AlwaysScrollableScrollPhysics(), children: const [
+                    SizedBox(height: 80),
+                    PulseEmptyState(icon: Icons.beach_access_outlined, title: 'No Requests', subtitle: 'Pull to refresh'),
+                  ])
+                : ListView.builder(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.all(14),
+                    itemCount: _leaves.length,
+                    itemBuilder: (context, index) => _buildCard(_leaves[index]),
+                  ),
+      ),
     );
   }
 
-  Widget _buildLeaveCard(Map<String, dynamic> leave) {
+  Widget _buildCard(Map<String, dynamic> leave) {
     final status = leave['status'] ?? 'Pending';
-    final color = status == 'Approved' ? Colors.green : (status == 'Rejected' ? Colors.red : Colors.orange);
-    
-    return GlassCard(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      borderRadius: 20,
-      child: Column(
+    final color = status == 'Approved' ? PulseColors.success : (status == 'Rejected' ? PulseColors.error : PulseColors.warning);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: PulseCard(
+        padding: const EdgeInsets.all(14),
+        child: Column(
           children: [
-            Row(
-              children: [
-                CircleAvatar(
-                  backgroundImage: leave['profilePicture'] != null 
-                    ? NetworkImage(ApiService.getImageUrl(leave['profilePicture']))
-                    : null,
-                  child: leave['profilePicture'] == null ? const Icon(Icons.person) : null,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(leave['fullName'] ?? 'User', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                      Text(leave['leaveType'] ?? 'Leave', style: TextStyle(color: Colors.grey[600], fontSize: 13)),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
-                  child: Text(status, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 10)),
-                ),
-              ],
-            ),
-            const Divider(height: 24),
-            Row(
-              children: [
-                const Icon(Icons.calendar_today, size: 14, color: Colors.grey),
-                const SizedBox(width: 8),
-                Text('${leave['startDate']} to ${leave['endDate']}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Icon(Icons.notes, size: 14, color: Colors.grey),
-                const SizedBox(width: 8),
-                Expanded(child: Text(leave['reason'] ?? 'No reason provided', style: TextStyle(color: Colors.grey[700], fontSize: 12))),
-              ],
-            ),
-            if (status == 'Pending') ...[
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () => _updateStatus(leave['id'], 'Rejected'),
-                    child: const Text('REJECT', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-                  ),
-                  const SizedBox(width: 8),
-                  ElevatedButton(
-                    onPressed: () => _updateStatus(leave['id'], 'Approved'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 0),
-                      minimumSize: const Size(80, 36),
-                    ),
-                    child: const Text('APPROVE'),
-                  ),
-                ],
+            Row(children: [
+              CircleAvatar(
+                radius: 20, backgroundColor: PulseColors.surfaceVariant,
+                backgroundImage: leave['profilePicture'] != null ? NetworkImage(ApiService.getImageUrl(leave['profilePicture'])) : null,
+                child: leave['profilePicture'] == null ? const Icon(Icons.person, size: 20, color: PulseColors.textHint) : null,
               ),
+              const SizedBox(width: 12),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(leave['fullName'] ?? 'User', style: PulseTextStyles.bodyBold),
+                Text(leave['leaveType'] ?? 'Leave', style: PulseTextStyles.caption),
+              ])),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(10)),
+                child: Text(status, style: PulseTextStyles.captionBold.copyWith(color: color, fontSize: 10)),
+              ),
+            ]),
+            const SizedBox(height: 10),
+            Divider(height: 1, color: PulseColors.border),
+            const SizedBox(height: 10),
+            Row(children: [
+              const Icon(Icons.calendar_today, size: 13, color: PulseColors.textHint),
+              const SizedBox(width: 6),
+              Text('${leave['startDate']} → ${leave['endDate']}', style: PulseTextStyles.caption.copyWith(fontWeight: FontWeight.w500)),
+            ]),
+            const SizedBox(height: 6),
+            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Icon(Icons.notes, size: 13, color: PulseColors.textHint),
+              const SizedBox(width: 6),
+              Expanded(child: Text(leave['reason'] ?? 'No reason', style: PulseTextStyles.caption.copyWith(fontSize: 11))),
+            ]),
+            if (status == 'Pending') ...[
+              const SizedBox(height: 12),
+              Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                TextButton(
+                  onPressed: () => _updateStatus(leave['id'], 'Rejected'),
+                  child: Text('REJECT', style: PulseTextStyles.captionBold.copyWith(color: PulseColors.error)),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  onPressed: () => _updateStatus(leave['id'], 'Approved'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: PulseColors.success,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    minimumSize: const Size(80, 34),
+                  ),
+                  child: const Text('APPROVE'),
+                ),
+              ]),
             ],
           ],
-        ), // Column
+        ),
+      ),
     );
   }
 }

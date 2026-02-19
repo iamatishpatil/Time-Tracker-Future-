@@ -1,4 +1,9 @@
 import 'package:flutter/material.dart';
+import '../../core/theme/pulse_colors.dart';
+import '../../core/theme/pulse_text_styles.dart';
+import '../../core/widgets/pulse_card.dart';
+import '../../core/widgets/pulse_shimmer.dart';
+import '../../core/widgets/pulse_empty_state.dart';
 import '../../services/api_service.dart';
 
 class AdminHolidaysScreen extends StatefulWidget {
@@ -33,43 +38,46 @@ class _AdminHolidaysScreenState extends State<AdminHolidaysScreen> {
   Future<void> _addHoliday() async {
     final nameController = TextEditingController();
     DateTime selectedDate = DateTime.now();
+    String selectedType = 'Public';
+    String selectedDuration = 'Full Day';
 
     await showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setD) => AlertDialog(
           title: const Text('Add Holiday'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(labelText: 'Holiday Name', border: OutlineInputBorder()),
-              ),
-              const SizedBox(height: 16),
-              OutlinedButton.icon(
-                icon: const Icon(Icons.calendar_today),
-                label: Text('${selectedDate.day}/${selectedDate.month}/${selectedDate.year}'),
-                onPressed: () async {
-                  final d = await showDatePicker(
-                    context: ctx,
-                    initialDate: selectedDate,
-                    firstDate: DateTime(2024),
-                    lastDate: DateTime(2030),
-                  );
-                  if (d != null) setD(() => selectedDate = d);
-                },
-              ),
-            ],
-          ),
+          content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+            TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Holiday Name')),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<String>(
+              value: selectedType, decoration: const InputDecoration(labelText: 'Type'),
+              items: ['Public', 'Optional', 'Indian'].map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
+              onChanged: (v) => setD(() => selectedType = v!),
+            ),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<String>(
+              value: selectedDuration, decoration: const InputDecoration(labelText: 'Duration'),
+              items: ['Full Day', 'Half Day'].map((d) => DropdownMenuItem(value: d, child: Text(d))).toList(),
+              onChanged: (v) => setD(() => selectedDuration = v!),
+            ),
+            const SizedBox(height: 16),
+            OutlinedButton.icon(
+              icon: const Icon(Icons.calendar_today),
+              label: Text('${selectedDate.day}/${selectedDate.month}/${selectedDate.year}'),
+              onPressed: () async {
+                final d = await showDatePicker(context: ctx, initialDate: selectedDate, firstDate: DateTime(2024), lastDate: DateTime(2030));
+                if (d != null) setD(() => selectedDate = d);
+              },
+            ),
+          ])),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
             ElevatedButton(
               onPressed: () async {
                 if (nameController.text.isEmpty) return;
-                final dateStr = '${selectedDate.year}-${selectedDate.month.toString().padLeft(2,'0')}-${selectedDate.day.toString().padLeft(2,'0')}';
+                final dateStr = '${selectedDate.year}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')}';
                 try {
-                  await ApiService.addHoliday(nameController.text, dateStr);
+                  await ApiService.addHoliday(nameController.text, dateStr, type: selectedType, duration: selectedDuration);
                   if (mounted) { Navigator.pop(ctx); _loadHolidays(); }
                 } catch (e) {
                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
@@ -88,18 +96,15 @@ class _AdminHolidaysScreenState extends State<AdminHolidaysScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Delete Holiday?'),
-        content: Text('Remove "$name" from holidays?'),
+        content: Text('Remove "$name"?'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Delete', style: TextStyle(color: Colors.red))),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text('Delete', style: TextStyle(color: PulseColors.error))),
         ],
       ),
     );
     if (confirm == true) {
-      try {
-        await ApiService.deleteHoliday(id);
-        _loadHolidays();
-      } catch (e) {
+      try { await ApiService.deleteHoliday(id); _loadHolidays(); } catch (e) {
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
@@ -110,42 +115,52 @@ class _AdminHolidaysScreenState extends State<AdminHolidaysScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Company Holidays')),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? Padding(padding: const EdgeInsets.all(20), child: PulseShimmer.list(count: 5, itemHeight: 70))
           : _holidays.isEmpty
-              ? const Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.beach_access, size: 64, color: Colors.grey),
-                      SizedBox(height: 16),
-                      Text('No holidays added yet', style: TextStyle(color: Colors.grey)),
-                    ],
-                  ),
-                )
+              ? const Center(child: PulseEmptyState(icon: Icons.beach_access, title: 'No Holidays', subtitle: 'Tap + to add one'))
               : ListView.builder(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(14),
                   itemCount: _holidays.length,
                   itemBuilder: (ctx, i) {
                     final h = _holidays[i];
-                    return Card(
-                      child: ListTile(
-                        leading: const CircleAvatar(
-                          backgroundColor: Color(0xFFE8F5E9),
-                          child: Icon(Icons.celebration, color: Colors.green),
-                        ),
-                        title: Text(h['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: Text(h['date']),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.delete, color: Colors.red),
-                          onPressed: () => _deleteHoliday(h['id'], h['name']),
-                        ),
+                    final isPublic = h['type'] == 'Public';
+                    final color = isPublic ? PulseColors.success : PulseColors.warning;
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: PulseCard(
+                        padding: const EdgeInsets.all(14),
+                        child: Row(children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(12)),
+                            child: Icon(Icons.celebration, color: color, size: 22),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Row(children: [
+                              Flexible(child: Text(h['name'], style: PulseTextStyles.bodyBold, overflow: TextOverflow.ellipsis)),
+                              if (h['duration'] == 'Half Day') ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(color: PulseColors.accent.withOpacity(0.2), borderRadius: BorderRadius.circular(6)),
+                                  child: Text('½ Day', style: PulseTextStyles.captionBold.copyWith(color: PulseColors.accent, fontSize: 9)),
+                                ),
+                              ],
+                            ]),
+                            const SizedBox(height: 2),
+                            Text('${h['date']} • ${h['type']} • ${h['duration']}', style: PulseTextStyles.caption.copyWith(fontSize: 11)),
+                          ])),
+                          IconButton(icon: Icon(Icons.delete, color: PulseColors.error, size: 20), onPressed: () => _deleteHoliday(h['id'], h['name'])),
+                        ]),
                       ),
                     );
                   },
                 ),
       floatingActionButton: FloatingActionButton(
         onPressed: _addHoliday,
-        child: const Icon(Icons.add),
+        backgroundColor: PulseColors.primary,
+        child: const Icon(Icons.add, color: Colors.white),
       ),
     );
   }

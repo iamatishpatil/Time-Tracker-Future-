@@ -1,7 +1,7 @@
 const http = require('http');
 
 const postData = JSON.stringify({
-  mobileNumber: '9876543210',
+  mobileNumber: '+919876543210',
   password: 'Admin@123'
 });
 
