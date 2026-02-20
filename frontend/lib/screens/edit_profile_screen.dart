@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:geocoding/geocoding.dart';
 import 'dart:io';
 import '../core/theme/pulse_colors.dart';
 import '../core/theme/pulse_text_styles.dart';
@@ -114,6 +116,39 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     }
   }
 
+  Future<void> _fetchCurrentAddress() async {
+    setState(() => _isLoading = true);
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) throw Exception('Location services are disabled.');
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) throw Exception('Location permissions are denied');
+      }
+      if (permission == LocationPermission.deniedForever) throw Exception('Location permissions are permanently denied');
+
+      Position position = await Geolocator.getCurrentPosition();
+      List<Placemark> placemarks = await placemarkFromCoordinates(position.latitude, position.longitude);
+      if (placemarks.isNotEmpty) {
+        Placemark p = placemarks[0];
+        
+        // Filter out null or empty parts to build clean address
+        final parts = [p.street, p.subLocality, p.locality, p.administrativeArea, p.postalCode, p.country]
+            .where((part) => part != null && part.isNotEmpty)
+            .toList();
+            
+        _addressController.text = parts.join(', ');
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Address updated from live location')));
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
   Future<void> _saveProfile() async {
     if (_formKey.currentState!.validate() && _currentUser != null) {
       setState(() => _isLoading = true);
@@ -144,20 +179,24 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return RefreshIndicator(
-      onRefresh: _loadUser,
-      child: _currentUser == null
-          ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.all(24),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  children: [
-                    // Profile Picture
-                    GestureDetector(
-                      onTap: _pickImage,
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Edit Profile'),
+      ),
+      body: RefreshIndicator(
+        onRefresh: _loadUser,
+        child: _currentUser == null
+            ? const Center(child: CircularProgressIndicator())
+            : SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(24),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    children: [
+                      // Profile Picture
+                      GestureDetector(
+                        onTap: _pickImage,
                       child: Stack(
                         children: [
                           Container(
@@ -230,7 +269,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
                     _field(_experienceController, 'Experience', Icons.work_outline),
                     _field(_technologiesController, 'Technologies / Skills', Icons.code, maxLines: 2),
-                    _field(_addressController, 'Address', Icons.location_on_outlined, maxLines: 2),
+                    _field(
+                      _addressController, 
+                      'Address', 
+                      Icons.location_on_outlined, 
+                      maxLines: 2,
+                      suffixIcon: IconButton(
+                        icon: const Icon(Icons.my_location, color: PulseColors.primary),
+                        onPressed: _fetchCurrentAddress,
+                      ),
+                    ),
 
                     Padding(
                       padding: const EdgeInsets.only(bottom: 16),
@@ -256,11 +304,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 ),
               ),
             ),
+      ),
     );
   }
 
   Widget _field(TextEditingController controller, String label, IconData icon,
-      {String? Function(String?)? validator, int maxLines = 1}) {
+      {String? Function(String?)? validator, int maxLines = 1, Widget? suffixIcon}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: TextFormField(
@@ -270,6 +319,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         decoration: InputDecoration(
           labelText: label,
           prefixIcon: Icon(icon),
+          suffixIcon: suffixIcon,
         ),
         validator: validator,
       ),

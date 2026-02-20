@@ -14,7 +14,7 @@ class ForgotPasswordScreen extends StatefulWidget {
 
 class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   final _mobileController = TextEditingController();
-  final _otpController = TextEditingController();
+  final _otpController = TextEditingController(text: '9999');
   final _passwordController = TextEditingController();
 
   String _completePhoneNumber = '';

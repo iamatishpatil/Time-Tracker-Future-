@@ -274,42 +274,40 @@ class _CheckoutScreenState extends State<CheckoutScreen> with SingleTickerProvid
             const SizedBox(height: 32),
 
             // Checkout Button
-            Center(
-              child: ScaleTransition(
-                scale: _pulseAnimation,
-                child: GestureDetector(
-                  onTap: _isLoading ? null : _handleCheckOut,
-                  child: Container(
-                    width: 180,
-                    height: 180,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFFFF5252), Color(0xFFD32F2F)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
+            ScaleTransition(
+              scale: _pulseAnimation,
+              child: GestureDetector(
+                onTap: _isLoading ? null : _handleCheckOut,
+                child: Container(
+                  width: double.infinity,
+                  height: 90,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(20),
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFFFF5252), Color(0xFFD32F2F)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: PulseColors.error.withOpacity(0.4),
+                        blurRadius: 24,
+                        spreadRadius: 4,
                       ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: PulseColors.error.withOpacity(0.4),
-                          blurRadius: 24,
-                          spreadRadius: 4,
-                        ),
-                      ],
-                    ),
-                    child: Center(
-                      child: _isLoading
-                          ? const CircularProgressIndicator(color: Colors.white)
-                          : Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const Icon(Icons.stop_circle_outlined, size: 48, color: Colors.white),
-                                const SizedBox(height: 8),
-                                Text('CHECK OUT',
-                                    style: PulseTextStyles.button.copyWith(fontSize: 16)),
-                              ],
-                            ),
-                    ),
+                    ],
+                  ),
+                  child: Center(
+                    child: _isLoading
+                        ? const CircularProgressIndicator(color: Colors.white)
+                        : Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.stop_circle_outlined, size: 36, color: Colors.white),
+                              const SizedBox(width: 12),
+                              Text('CHECK OUT',
+                                  style: PulseTextStyles.button.copyWith(fontSize: 18)),
+                            ],
+                          ),
                   ),
                 ),
               ),

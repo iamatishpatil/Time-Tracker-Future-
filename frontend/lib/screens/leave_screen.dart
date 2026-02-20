@@ -25,7 +25,12 @@ class _LeaveScreenState extends State<LeaveScreen> {
   List<dynamic> _holidays = [];
   bool _isLoading = true;
   String _selectedLeaveType = 'Casual Leave';
-  final List<String> _leaveTypes = ['Sick Leave', 'Casual Leave', 'Annual Leave', 'Unpaid Leave'];
+  final List<String> _leaveTypes = [
+    'Sick Leave', 'Casual Leave', 'Earned Leave (Privilege)', 
+    'Maternity Leave', 'Paternity Leave', 'Bereavement Leave', 
+    'Compensatory Off (Comp-off)', 'Marriage Leave', 
+    'Leave Without Pay (LWP)', 'Sabbatical Leave'
+  ];
 
   @override
   void initState() {

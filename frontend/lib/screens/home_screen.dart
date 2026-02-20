@@ -641,37 +641,43 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
           // Check In / Checkout Button
           if (!_isCheckedIn)
-            Center(
-              child: ScaleTransition(
-                scale: _pulseAnimation,
-                child: GestureDetector(
-                  onTap: _isLoading ? null : _handleCheckIn,
-                  child: Container(
-                    width: 160,
-                    height: 160,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: PulseColors.primaryGradient,
-                      boxShadow: [
+            ScaleTransition(
+              scale: _pulseAnimation,
+              child: GestureDetector(
+                onTap: (_isLoading || !_isInsideRadius) ? null : _handleCheckIn,
+                child: Container(
+                  width: double.infinity,
+                  height: 90,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(20),
+                    gradient: _isInsideRadius ? PulseColors.primaryGradient : null,
+                    color: !_isInsideRadius ? PulseColors.surfaceVariant : null,
+                    boxShadow: [
+                      if (_isInsideRadius)
                         BoxShadow(
                           color: PulseColors.primary.withOpacity(0.4),
                           blurRadius: 24,
                           spreadRadius: 4,
                         ),
-                      ],
-                    ),
-                    child: Center(
-                      child: _isLoading
-                          ? const CircularProgressIndicator(color: Colors.white)
-                          : Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const Icon(Icons.touch_app_rounded, size: 40, color: Colors.white),
-                                const SizedBox(height: 8),
-                                Text('CHECK IN', style: PulseTextStyles.button.copyWith(fontSize: 14)),
-                              ],
-                            ),
-                    ),
+                    ],
+                  ),
+                  child: Center(
+                    child: _isLoading
+                        ? const CircularProgressIndicator(color: Colors.white)
+                        : Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.touch_app_rounded, size: 36, color: _isInsideRadius ? Colors.white : PulseColors.textHint),
+                              const SizedBox(width: 12),
+                              Text(
+                                _isInsideRadius ? 'CHECK IN' : 'OUTSIDE RADIUS', 
+                                style: PulseTextStyles.button.copyWith(
+                                  fontSize: 18, 
+                                  color: _isInsideRadius ? Colors.white : PulseColors.textHint,
+                                ),
+                              ),
+                            ],
+                          ),
                   ),
                 ),
               ),

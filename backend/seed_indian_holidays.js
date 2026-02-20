@@ -1,6 +1,10 @@
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
-const db = new sqlite3.Database(path.join(__dirname, 'time_tracker.db'));
+const nodeEnv = process.env.NODE_ENV || 'development';
+require('dotenv').config({ path: `.env.${nodeEnv}` });
+
+const dbFile = process.env.DB_FILE || './time_tracker.db';
+const db = new sqlite3.Database(dbFile);
 
 const holidays = [
   // January

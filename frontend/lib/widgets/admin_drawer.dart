@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../core/theme/pulse_colors.dart';
 import '../core/theme/pulse_text_styles.dart';
 import '../services/api_service.dart';
+import '../screens/edit_profile_screen.dart';
 
 class AdminDrawer extends StatelessWidget {
   final Map<String, dynamic> user;
@@ -75,38 +76,27 @@ class AdminDrawer extends StatelessWidget {
             },
           ),
           _DrawerTile(
-            icon: Icons.history_rounded,
-            title: 'All Attendance',
+            icon: Icons.person_outline,
+            title: 'Profile Settings',
             onTap: () {
               Navigator.pop(context);
-              Navigator.pushNamed(context, '/admin-attendance');
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => EditProfileScreen(
+                    user: user,
+                    onUserUpdated: onUserUpdated,
+                  ),
+                ),
+              );
             },
           ),
           _DrawerTile(
-            icon: Icons.people_alt_rounded,
-            title: 'Employees',
+            icon: Icons.notifications_none_rounded,
+            title: 'Notifications',
             onTap: () {
               Navigator.pop(context);
-              Navigator.pushNamed(context, '/admin-employees');
-            },
-          ),
-          _DrawerTile(
-            icon: Icons.beach_access_rounded,
-            title: 'Leave Management',
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.pushNamed(context, '/admin-leaves');
-            },
-          ),
-
-          const Divider(color: PulseColors.divider, indent: 24, endIndent: 24),
-
-          _DrawerTile(
-            icon: Icons.settings_rounded,
-            title: 'Settings',
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.pushNamed(context, '/admin-settings');
+              Navigator.pushNamed(context, '/notifications');
             },
           ),
 

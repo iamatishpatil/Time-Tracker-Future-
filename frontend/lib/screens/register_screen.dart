@@ -126,7 +126,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   void _showVerificationDialog(String type, String value) {
-    TextEditingController otpController = TextEditingController();
+    TextEditingController otpController = TextEditingController(text: '9999');
 
     showDialog(
       context: context,

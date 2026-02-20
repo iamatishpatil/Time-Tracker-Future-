@@ -17,10 +17,8 @@ class ApiService {
   // Android emulator uses 10.0.2.2 to access host machine's localhost
   // Other platforms (Windows, iOS, Web) use localhost directly
   static String get baseUrl {
-    if (Platform.isAndroid) {
-      return 'http://10.0.2.2:3000/api'; // Android Emulator default Local IP
-    }
-    return 'http://localhost:3000/api'; // Standard localhost for other platforms
+    // Return the Host PC's local IP address so physical devices on the same Wi-Fi can connect
+    return 'http://192.168.1.9:3000/api';
   }
 
   // Get full image URL by replacing /api with empty string to get server root
