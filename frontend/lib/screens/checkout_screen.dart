@@ -120,12 +120,18 @@ class _CheckoutScreenState extends State<CheckoutScreen> with SingleTickerProvid
     double distance = 0;
     try {
       final settings = await ApiService.getSettings();
-      if (settings['officeLat'] != null) {
+      if (settings['geofenceEnabled'] == 0) {
+        isInside = true;
+      } else if (settings['officeLat'] != null) {
+        final double officeLat = (settings['officeLat'] as num).toDouble();
+        final double officeLong = (settings['officeLong'] as num).toDouble();
+        final double officeRadius = (settings['officeRadiusMeters'] as num?)?.toDouble() ?? 100.0;
+        
         distance = Geolocator.distanceBetween(
           _currentPosition.latitude, _currentPosition.longitude,
-          settings['officeLat'], settings['officeLong'],
+          officeLat, officeLong,
         );
-        isInside = distance <= (settings['officeRadiusMeters'] ?? 100);
+        isInside = distance <= officeRadius;
       }
     } catch (_) {}
 

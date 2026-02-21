@@ -42,7 +42,7 @@ class AdminDrawer extends StatelessWidget {
                       ? NetworkImage(ApiService.getImageUrl(user['profilePicture']))
                       : null,
                   child: user['profilePicture'] == null
-                      ? const Icon(Icons.admin_panel_settings, size: 28, color: PulseColors.primary)
+                      ? Icon(Icons.admin_panel_settings, size: 28, color: PulseColors.primary)
                       : null,
                 ),
                 const SizedBox(height: 16),
@@ -97,6 +97,31 @@ class AdminDrawer extends StatelessWidget {
             onTap: () {
               Navigator.pop(context);
               Navigator.pushNamed(context, '/notifications');
+            },
+          ),
+          FutureBuilder<Map<String, dynamic>>(
+            future: ApiService.getSettings(),
+            builder: (context, snapshot) {
+              final payrollEnabled = snapshot.data?['payrollEnabled'] != 0;
+              if (payrollEnabled) {
+                return _DrawerTile(
+                  icon: Icons.payments_outlined,
+                  title: 'Payslips',
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.pushNamed(context, '/admin-payslips');
+                  },
+                );
+              }
+              return const SizedBox.shrink();
+            },
+          ),
+          _DrawerTile(
+            icon: Icons.settings_outlined,
+            title: 'Settings',
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.pushNamed(context, '/admin-settings');
             },
           ),
 

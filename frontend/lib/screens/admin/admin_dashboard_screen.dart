@@ -27,6 +27,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   Map<String, dynamic>? _user;
   List<dynamic> _upcomingHolidays = [];
   List<dynamic> _recentActivity = [];
+  Map<String, dynamic>? _settings;
   bool _isLoading = true;
 
   @override
@@ -47,8 +48,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     try {
       final user = await ApiService.getStoredUser();
       final stats = await ApiService.getAdminStats();
-      final holidays = await ApiService.getHolidays();
       final attendance = await ApiService.getAllAttendance();
+      final settings = await ApiService.getSettings();
+      final holidays = await ApiService.getHolidays();
 
       final now = DateTime.now();
       List<dynamic> upcoming = [];
@@ -70,6 +72,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           _stats = stats;
           _upcomingHolidays = upcoming;
           _recentActivity = recent;
+          _settings = settings;
         });
       }
     } catch (e) {
@@ -106,6 +109,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
+                              if (_settings != null && _settings!['companyLogo'] != null)
+                                Container(
+                                  margin: const EdgeInsets.only(bottom: 12),
+                                  height: 40,
+                                  alignment: Alignment.centerLeft,
+                                  child: Image.network(
+                                    ApiService.getImageUrl(_settings!['companyLogo']),
+                                    fit: BoxFit.contain,
+                                    errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                                  ),
+                                ).animate().fadeIn(),
                               Text('${_getGreeting()},', style: PulseTextStyles.body.copyWith(color: PulseColors.textSecondary)),
                               Text(_user?['fullName'] ?? 'Admin', style: PulseTextStyles.h2),
                               const SizedBox(height: 4),
@@ -121,11 +135,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           radius: 28,
                           backgroundColor: PulseColors.surfaceVariant,
                           backgroundImage: _user?['profilePicture'] != null ? NetworkImage(ApiService.getImageUrl(_user!['profilePicture'])) : null,
-                          child: _user?['profilePicture'] == null ? const Icon(Icons.shield_outlined, color: PulseColors.primary) : null,
+                          child: _user?['profilePicture'] == null ? Icon(Icons.shield_outlined, color: PulseColors.primary) : null,
                         ).animate().scale(delay: 200.ms, duration: 400.ms, curve: Curves.easeOutBack),
                       ],
                     ),
-                    const SizedBox(height: 32),
+                    const SizedBox(height: 20),
 
                     Text('Overview', style: PulseTextStyles.h3),
                     const SizedBox(height: 14),
@@ -227,7 +241,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         _action('Employees', Icons.person_add, PulseColors.primary, 0, () => Navigator.push(context, MaterialPageRoute(builder: (_) => AdminEmployeesScreen()))),
                         _action('Attendance', Icons.history, PulseColors.accent, 1, () => Navigator.push(context, MaterialPageRoute(builder: (_) => AdminAttendanceScreen()))),
                         _action('Leaves', Icons.beach_access, PulseColors.warning, 2, () => Navigator.push(context, MaterialPageRoute(builder: (_) => AdminLeavesScreen()))),
-                        _action('Payroll', Icons.payments, PulseColors.success, 3, () => Navigator.push(context, MaterialPageRoute(builder: (_) => AdminPayrollScreen()))),
+                        if (_settings?['payrollEnabled'] != 0)
+                          _action('Payroll', Icons.payments, PulseColors.success, 3, () => Navigator.push(context, MaterialPageRoute(builder: (_) => AdminPayrollScreen()))),
                         _action('Reports', Icons.assessment, const Color(0xFF26A69A), 4, () => Navigator.pushNamed(context, '/admin-reports')),
                         _action('Shifts', Icons.schedule, const Color(0xFFE91E63), 5, () => Navigator.push(context, MaterialPageRoute(builder: (_) => AdminShiftsScreen()))),
                         _action('Settings', Icons.settings, PulseColors.textHint, 6, () => Navigator.push(context, MaterialPageRoute(builder: (_) => AdminSettingsScreen()))),

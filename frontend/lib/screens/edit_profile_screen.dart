@@ -96,12 +96,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               ),
             ),
             ListTile(
-              leading: const Icon(Icons.photo_library, color: PulseColors.primary),
+              leading: Icon(Icons.photo_library, color: PulseColors.primary),
               title: Text('Gallery', style: PulseTextStyles.body.copyWith(color: Colors.white)),
               onTap: () => Navigator.pop(ctx, ImageSource.gallery),
             ),
             ListTile(
-              leading: const Icon(Icons.camera_alt, color: PulseColors.primary),
+              leading: Icon(Icons.camera_alt, color: PulseColors.primary),
               title: Text('Camera', style: PulseTextStyles.body.copyWith(color: Colors.white)),
               onTap: () => Navigator.pop(ctx, ImageSource.camera),
             ),
@@ -229,9 +229,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                             right: 0,
                             child: Container(
                               padding: const EdgeInsets.all(6),
-                              decoration: const BoxDecoration(
+                              decoration: BoxDecoration(
                                 color: PulseColors.primary,
-                                shape: BoxShape.circle,
+                                borderRadius: BorderRadius.circular(10),
                               ),
                               child: const Icon(Icons.edit, size: 14, color: Colors.white),
                             ),
@@ -275,7 +275,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       Icons.location_on_outlined, 
                       maxLines: 2,
                       suffixIcon: IconButton(
-                        icon: const Icon(Icons.my_location, color: PulseColors.primary),
+                        icon: Icon(Icons.my_location, color: PulseColors.primary),
                         onPressed: _fetchCurrentAddress,
                       ),
                     ),

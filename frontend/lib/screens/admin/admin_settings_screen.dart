@@ -8,6 +8,10 @@ import '../../core/widgets/pulse_card.dart';
 import '../../core/widgets/pulse_shimmer.dart';
 import '../../services/api_service.dart';
 import 'admin_holidays_screen.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:palette_generator/palette_generator.dart';
+import '../../core/widgets/pulse_button.dart';
+import 'dart:io';
 
 class AdminSettingsScreen extends StatefulWidget {
   const AdminSettingsScreen({super.key});
@@ -20,12 +24,18 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
   final _nameController = TextEditingController();
   LatLng _officeLocation = const LatLng(51.5, -0.09);
   double _radius = 100.0;
+  bool _geofenceEnabled = true;
+  bool _payrollEnabled = true;
   bool _isLoading = true;
   final MapController _mapController = MapController();
 
   final List<String> _allDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   Set<String> _workingDays = {'Mon', 'Tue', 'Wed', 'Thu', 'Fri'};
   Set<String> _weekendDays = {'Sat', 'Sun'};
+
+  String? _currentLogoUrl;
+  String? _currentThemeColor;
+  XFile? _selectedLogo;
 
   @override
   void initState() {
@@ -41,10 +51,17 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
         if (mounted) {
           setState(() {
             _nameController.text = settings['companyName'] ?? '';
+            _currentLogoUrl = settings['companyLogo'];
+            _currentThemeColor = settings['themeColor'];
             if (settings['officeLat'] != null && settings['officeLong'] != null) {
-              _officeLocation = LatLng(settings['officeLat'], settings['officeLong']);
+              _officeLocation = LatLng(
+                (settings['officeLat'] as num).toDouble(),
+                (settings['officeLong'] as num).toDouble(),
+              );
             }
             _radius = (settings['officeRadiusMeters'] as num?)?.toDouble() ?? 100.0;
+             _geofenceEnabled = settings['geofenceEnabled'] != 0;
+             _payrollEnabled = settings['payrollEnabled'] != 0;
             if (settings['workingDays'] != null) {
               try {
                 final wd = settings['workingDays'];
@@ -99,12 +116,61 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
         'officeLat': _officeLocation.latitude,
         'officeLong': _officeLocation.longitude,
         'officeRadiusMeters': _radius,
+        'geofenceEnabled': _geofenceEnabled ? 1 : 0,
+        'payrollEnabled': _payrollEnabled ? 1 : 0,
         'workingDays': _workingDays.toList(),
         'weekendDays': _weekendDays.toList(),
       });
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Settings Saved!')));
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _pickAndUploadLogo() async {
+    final ImagePicker picker = ImagePicker();
+    final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+    if (image == null) return;
+
+    setState(() {
+      _isLoading = true;
+      _selectedLogo = image;
+    });
+
+    try {
+      // Extract dominant color
+      final PaletteGenerator paletteGenerator = await PaletteGenerator.fromImageProvider(
+        FileImage(File(image.path)),
+        maximumColorCount: 10,
+      );
+
+      final dominantColor = paletteGenerator.dominantColor?.color 
+          ?? paletteGenerator.vibrantColor?.color 
+          ?? PulseColors.primary;
+          
+      final hexColor = '#${dominantColor.value.toRadixString(16).substring(2).toUpperCase()}';
+
+      await ApiService.updateBranding(logo: image, themeColor: hexColor);
+      PulseColors.setCompanyBrandColor(dominantColor);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Branding updated successfully! Applying new theme...'),
+          backgroundColor: PulseColors.success,
+        ));
+        
+        // Force the app to re-evaluate the entire widget tree with the new theme colors
+        // by resetting the navigation stack to the admin home.
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (mounted) {
+            Navigator.pushNamedAndRemoveUntil(context, '/admin', (route) => false);
+          }
+        });
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to update branding: $e')));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -130,17 +196,78 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Company Name
                   PulseCard(
                     padding: const EdgeInsets.all(16),
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       Row(children: [
-                        const Icon(Icons.business, color: PulseColors.primary, size: 20),
+                        Icon(Icons.business, color: PulseColors.primary, size: 20),
                         const SizedBox(width: 8),
                         Text('Company Name', style: PulseTextStyles.bodyBold),
                       ]),
                       const SizedBox(height: 10),
                       TextField(controller: _nameController, decoration: const InputDecoration(hintText: 'Enter company name')),
+                    ]),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Branding
+                  PulseCard(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Row(children: [
+                        const Icon(Icons.palette, color: PulseColors.accent, size: 20),
+                        const SizedBox(width: 8),
+                        Text('App Branding & Theme', style: PulseTextStyles.bodyBold),
+                      ]),
+                      const SizedBox(height: 10),
+                      Text('Upload your company logo. The app will automatically extract its dominant color and update the entire application\'s theme for all your employees.', style: PulseTextStyles.caption),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Container(
+                            width: 80,
+                            height: 80,
+                            decoration: BoxDecoration(
+                              color: PulseColors.surfaceVariant,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: PulseColors.border),
+                              image: _selectedLogo != null 
+                                ? DecorationImage(image: FileImage(File(_selectedLogo!.path)), fit: BoxFit.contain)
+                                : (_currentLogoUrl != null 
+                                    ? DecorationImage(image: NetworkImage(ApiService.getImageUrl(_currentLogoUrl!)), fit: BoxFit.contain)
+                                    : null),
+                            ),
+                            child: (_selectedLogo == null && _currentLogoUrl == null) 
+                                ? const Icon(Icons.business, size: 30, color: PulseColors.textHint)
+                                : null,
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: PulseButton(
+                              text: 'Upload Logo',
+                              icon: Icons.upload,
+                              onPressed: _pickAndUploadLogo,
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (_currentThemeColor != null) ...[
+                        const SizedBox(height: 16),
+                        Row(
+                          children: [
+                            Text('Current Theme Color: ', style: PulseTextStyles.captionBold),
+                            Container(
+                              width: 20, height: 20,
+                              margin: const EdgeInsets.only(left: 8),
+                              decoration: BoxDecoration(
+                                color: PulseColors.primary,
+                                shape: BoxShape.circle,
+                                border: Border.all(color: Colors.white, width: 2),
+                              ),
+                            ),
+                          ],
+                        )
+                      ],
                     ]),
                   ),
                   const SizedBox(height: 14),
@@ -247,12 +374,32 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
                         ),
                       ),
                       const SizedBox(height: 12),
-                      Text('Geofence Radius: ${_radius.toInt()} meters', style: PulseTextStyles.caption),
-                      Slider(
-                        value: _radius, min: 50, max: 1000, divisions: 19,
-                        label: '${_radius.toInt()}m',
+                      SwitchListTile(
+                        title: Text('Enable Geofencing restriction', style: PulseTextStyles.bodyBold),
+                        subtitle: Text('Users must be within radius to punch in', style: PulseTextStyles.caption),
                         activeColor: PulseColors.primary,
-                        onChanged: (val) => setState(() => _radius = val),
+                        contentPadding: EdgeInsets.zero,
+                        value: _geofenceEnabled,
+                        onChanged: (val) => setState(() => _geofenceEnabled = val),
+                      ),
+                      if (_geofenceEnabled) ...[
+                        const SizedBox(height: 12),
+                        Text('Geofence Radius: ${_radius.toInt()} meters', style: PulseTextStyles.caption),
+                        Slider(
+                          value: _radius, min: 50, max: 1000, divisions: 19,
+                          label: '${_radius.toInt()}m',
+                          activeColor: PulseColors.primary,
+                          onChanged: (val) => setState(() => _radius = val),
+                        ),
+                      ],
+                      const Divider(height: 32),
+                      SwitchListTile(
+                        title: Text('Enable Payroll & Payslips', style: PulseTextStyles.bodyBold),
+                        subtitle: Text('Generate and manage employee payslips', style: PulseTextStyles.caption),
+                        activeColor: PulseColors.success,
+                        contentPadding: EdgeInsets.zero,
+                        value: _payrollEnabled,
+                        onChanged: (val) => setState(() => _payrollEnabled = val),
                       ),
                     ]),
                   ),

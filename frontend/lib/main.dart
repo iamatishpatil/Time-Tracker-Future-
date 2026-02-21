@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'core/theme/pulse_theme.dart';
+import 'core/theme/pulse_colors.dart';
 import 'screens/login_screen.dart';
 import 'screens/register_screen.dart';
 import 'screens/checkout_screen.dart';
@@ -15,9 +16,12 @@ import 'screens/change_password_screen.dart';
 import 'screens/main_container.dart';
 import 'screens/notification_screen.dart';
 import 'screens/user_holidays_screen.dart';
+import 'screens/user_shifts_screen.dart';
+import 'screens/user_payslips_screen.dart';
+import 'screens/admin/admin_payslips_screen.dart';
 import 'services/api_service.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
@@ -27,6 +31,20 @@ void main() {
       systemNavigationBarIconBrightness: Brightness.light,
     ),
   );
+
+  // Attempt to fetch dynamic theme before rendering
+  try {
+    final settings = await ApiService.getSettings();
+    if (settings['themeColor'] != null && settings['themeColor'].toString().isNotEmpty) {
+      String hexColor = settings['themeColor'];
+      hexColor = hexColor.toUpperCase().replaceAll("#", "");
+      if (hexColor.length == 6) hexColor = "FF$hexColor";
+      PulseColors.setCompanyBrandColor(Color(int.parse(hexColor, radix: 16)));
+    }
+  } catch (e) {
+    debugPrint("Failed to load dynamic theme on startup: $e");
+  }
+
   runApp(const TimeTrackerApp());
 }
 
@@ -71,7 +89,10 @@ class TimeTrackerApp extends StatelessWidget {
         '/notifications': (context) => NotificationScreen(),
         '/checkout': (context) => const CheckoutScreen(),
         '/user-holidays': (context) => const UserHolidaysScreen(),
+        '/user-shifts': (context) => UserShiftsScreen(),
+        '/user-payslips': (context) => const UserPayslipsScreen(),
         '/admin-reports': (context) => const AdminReportsScreen(),
+        '/admin-payslips': (context) => const AdminPayslipsScreen(),
       },
       home: FutureBuilder(
         future: ApiService.getStoredUser(),

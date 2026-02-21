@@ -66,7 +66,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.shield_outlined, color: PulseColors.primary, size: 24),
+                    Icon(Icons.shield_outlined, color: PulseColors.primary, size: 24),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(

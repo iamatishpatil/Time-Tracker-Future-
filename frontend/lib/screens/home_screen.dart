@@ -207,12 +207,18 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     bool isInside = false;
     try {
       _settings ??= await ApiService.getSettings();
-      if (_settings != null && _settings!['officeLat'] != null) {
+      if (_settings != null && _settings!['geofenceEnabled'] == 0) {
+        isInside = true;
+      } else if (_settings != null && _settings!['officeLat'] != null) {
+        final double officeLat = (_settings!['officeLat'] as num).toDouble();
+        final double officeLong = (_settings!['officeLong'] as num).toDouble();
+        final double officeRadius = (_settings!['officeRadiusMeters'] as num?)?.toDouble() ?? 100.0;
+        
         double distance = Geolocator.distanceBetween(
           position.latitude, position.longitude,
-          _settings!['officeLat'], _settings!['officeLong'],
+          officeLat, officeLong,
         );
-        isInside = distance <= (_settings!['officeRadiusMeters'] ?? 100);
+        isInside = distance <= officeRadius;
       }
     } catch (_) {}
 
@@ -239,13 +245,17 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     if (!_isInsideRadius) {
       double distance = 0;
       if (_settings != null && _settings!['officeLat'] != null) {
+        final double officeLat = (_settings!['officeLat'] as num).toDouble();
+        final double officeLong = (_settings!['officeLong'] as num).toDouble();
+        
         distance = Geolocator.distanceBetween(
           _currentPosition.latitude, _currentPosition.longitude,
-          _settings!['officeLat'], _settings!['officeLong'],
+          officeLat, officeLong,
         );
       }
+      final double officeRadius = (_settings?['officeRadiusMeters'] as num?)?.toDouble() ?? 100.0;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('You are ${distance.toInt()}m away. Move within ${(_settings?['officeRadiusMeters'] ?? 100)}m of office.'),
+        content: Text('You are ${distance.toInt()}m away. Move within ${officeRadius.toInt()}m of office.'),
       ));
       return;
     }
@@ -296,11 +306,13 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               CircleAvatar(
                 radius: 24,
                 backgroundColor: PulseColors.surfaceVariant,
-                backgroundImage: _user?['profilePicture'] != null
-                    ? NetworkImage(ApiService.getImageUrl(_user!['profilePicture']))
-                    : null,
-                child: _user?['profilePicture'] == null
-                    ? const Icon(Icons.person, size: 24, color: PulseColors.textHint)
+                backgroundImage: _settings?['companyLogo'] != null
+                    ? NetworkImage(ApiService.getImageUrl(_settings!['companyLogo']))
+                    : (_user?['profilePicture'] != null 
+                        ? NetworkImage(ApiService.getImageUrl(_user!['profilePicture'])) 
+                        : null),
+                child: (_settings?['companyLogo'] == null && _user?['profilePicture'] == null)
+                    ? const Icon(Icons.business, size: 24, color: PulseColors.textHint)
                     : null,
               ),
               const SizedBox(width: 12),
@@ -315,37 +327,73 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
+                    const SizedBox(height: 4),
+                    if (_user?['shiftName'] != null)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: PulseColors.accent.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.schedule, size: 10, color: PulseColors.accent),
+                            const SizedBox(width: 4),
+                            Text(
+                              '${_user!['shiftName']} (${_user!['shiftStart']} - ${_user!['shiftEnd']})',
+                              style: PulseTextStyles.captionBold.copyWith(
+                                fontSize: 10,
+                                color: PulseColors.accent,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    else
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: PulseColors.textHint.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          'No Shift Assigned',
+                          style: PulseTextStyles.caption.copyWith(fontSize: 10),
+                        ),
+                      ),
                   ],
                 ),
               ),
               // Geofence Badge
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: (_isInsideRadius ? PulseColors.success : PulseColors.error).withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: (_isInsideRadius ? PulseColors.success : PulseColors.error).withOpacity(0.3),
+              if (_settings == null || _settings!['geofenceEnabled'] != 0)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: (_isInsideRadius ? PulseColors.success : PulseColors.error).withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: (_isInsideRadius ? PulseColors.success : PulseColors.error).withOpacity(0.3),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _isInsideRadius ? Icons.check_circle : Icons.warning_amber_rounded,
+                        color: _isInsideRadius ? PulseColors.success : PulseColors.error,
+                        size: 14,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        _isInsideRadius ? 'In Office' : 'Outside',
+                        style: PulseTextStyles.captionBold.copyWith(
+                          color: _isInsideRadius ? PulseColors.success : PulseColors.error,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      _isInsideRadius ? Icons.check_circle : Icons.warning_amber_rounded,
-                      color: _isInsideRadius ? PulseColors.success : PulseColors.error,
-                      size: 14,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      _isInsideRadius ? 'In Office' : 'Outside',
-                      style: PulseTextStyles.captionBold.copyWith(
-                        color: _isInsideRadius ? PulseColors.success : PulseColors.error,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
             ],
           ),
           const SizedBox(height: 20),
@@ -392,7 +440,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                         text: _timeString.split(':')[0],
                         style: const TextStyle(fontWeight: FontWeight.w800, color: Colors.white),
                       ),
-                      const TextSpan(
+                      TextSpan(
                         text: ':',
                         style: TextStyle(color: PulseColors.primary, fontWeight: FontWeight.w300),
                       ),
@@ -400,7 +448,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                         text: _timeString.split(':')[1],
                         style: const TextStyle(fontWeight: FontWeight.w400, color: PulseColors.textSecondary),
                       ),
-                      const TextSpan(
+                      TextSpan(
                         text: ':',
                         style: TextStyle(color: PulseColors.primary, fontWeight: FontWeight.w300),
                       ),
@@ -574,7 +622,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                         CircleLayer(
                           circles: [
                             CircleMarker(
-                              point: LatLng(_settings!['officeLat'], _settings!['officeLong']),
+                              point: LatLng(
+                                (_settings!['officeLat'] as num).toDouble(),
+                                (_settings!['officeLong'] as num).toDouble(),
+                              ),
                               color: PulseColors.primary.withOpacity(0.2),
                               borderStrokeWidth: 2,
                               borderColor: PulseColors.primary,
@@ -586,7 +637,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                         MarkerLayer(
                           markers: [
                             Marker(
-                              point: LatLng(_settings!['officeLat'], _settings!['officeLong']),
+                              point: LatLng(
+                                (_settings!['officeLat'] as num).toDouble(),
+                                (_settings!['officeLong'] as num).toDouble(),
+                              ),
                               width: 30,
                               height: 30,
                               child: const Icon(Icons.business, color: PulseColors.accent, size: 28),
@@ -600,7 +654,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                             point: _currentPosition,
                             width: 40,
                             height: 40,
-                            child: const Icon(Icons.person_pin_circle, color: PulseColors.primary, size: 36),
+                            child: Icon(Icons.person_pin_circle, color: PulseColors.primary, size: 36),
                           ),
                         ],
                       ),

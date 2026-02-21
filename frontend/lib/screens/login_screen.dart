@@ -259,7 +259,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                           shape: BoxShape.circle,
                                           border: Border.all(color: PulseColors.border),
                                         ),
-                                        child: const Icon(Icons.fingerprint,
+                                        child: Icon(Icons.fingerprint,
                                             size: 36, color: PulseColors.primary),
                                       ),
                                     ),

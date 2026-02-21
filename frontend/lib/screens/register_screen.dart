@@ -27,9 +27,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _experienceController = TextEditingController();
   final _technologiesController = TextEditingController();
   final _addressController = TextEditingController();
+  final _companyController = TextEditingController();
 
   String _completePhoneNumber = '';
   String? _selectedGender;
+  String _selectedRole = 'User';
   XFile? _profileImage;
   bool _isLoading = false;
   bool _isMobileVerified = false;
@@ -211,7 +213,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
         'mobileNumber': _completePhoneNumber,
         'gender': _selectedGender!,
         'password': _passwordController.text,
-        'role': 'User',
+        'company': _companyController.text,
+        'role': _selectedRole,
         'experience': _experienceController.text,
         'technologies': _technologiesController.text,
         'address': _addressController.text,
@@ -265,7 +268,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       right: 0,
                       child: Container(
                         padding: const EdgeInsets.all(6),
-                        decoration: const BoxDecoration(
+                        decoration: BoxDecoration(
                           color: PulseColors.primary,
                           shape: BoxShape.circle,
                         ),
@@ -334,11 +337,28 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
               const SizedBox(height: 16),
 
+              DropdownButtonFormField<String>(
+                value: _selectedRole,
+                decoration: const InputDecoration(
+                  labelText: 'Role',
+                  prefixIcon: Icon(Icons.admin_panel_settings_rounded),
+                ),
+                dropdownColor: PulseColors.surfaceVariant,
+                items: const [
+                  DropdownMenuItem(value: 'User', child: Text('User / Employee')),
+                  DropdownMenuItem(value: 'Admin', child: Text('Admin / Company Owner')),
+                ],
+                onChanged: (value) => setState(() => _selectedRole = value!),
+              ),
+              const SizedBox(height: 16),
+
               _buildField(_passwordController, 'Password', Icons.lock_outline_rounded, obscureText: true),
 
               const SizedBox(height: 24),
               _sectionHeader('Professional Details'),
               const SizedBox(height: 12),
+              _buildField(_companyController, 'Company Name', Icons.business_rounded),
+              const SizedBox(height: 16),
               _buildField(_experienceController, 'Work Experience', Icons.work_outline_rounded),
               const SizedBox(height: 16),
               _buildField(_technologiesController, 'Technologies', Icons.code_rounded),

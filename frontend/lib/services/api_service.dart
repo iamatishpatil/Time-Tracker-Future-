@@ -27,6 +27,19 @@ class ApiService {
     if (path.startsWith('http')) return path;
     return baseUrl.replaceAll('/api', '') + path;
   }
+
+  // Get current user's company
+  static Future<String?> _getCompany() async {
+    final prefs = await SharedPreferences.getInstance();
+    final userStr = prefs.getString('user');
+    if (userStr != null) {
+      try {
+        final user = json.decode(userStr);
+        return user['company'];
+      } catch (_) {}
+    }
+    return null;
+  }
   // Register a new user with profile picture and user details
   // Parameters:
   //   - fields: Map containing all user information (name, email, password, etc.)
@@ -130,6 +143,9 @@ class ApiService {
   //   - fields: Map of fields to update
   // Returns: Updated user map
   static Future<Map<String, dynamic>> updateUser(int userId, Map<String, dynamic> fields, {XFile? image}) async {
+    final company = await _getCompany();
+    if (company != null) fields['company'] = company;
+
     var uri = Uri.parse('$baseUrl/user/$userId');
     var request = http.MultipartRequest('PUT', uri);
     
@@ -414,12 +430,19 @@ class ApiService {
 
   // Get dynamic leave types
   static Future<List<String>> getLeaveTypes() async {
-    final response = await http.get(Uri.parse('$baseUrl/leaves/types'));
+    final company = await _getCompany();
+    String qs = company != null ? '?company=${Uri.encodeComponent(company)}' : '';
+    final response = await http.get(Uri.parse('$baseUrl/leaves/types$qs'));
     if (response.statusCode == 200) {
-      final List<dynamic> data = json.decode(response.body);
-      return data.map((t) => t.toString()).toList();
+      List<dynamic> data = json.decode(response.body);
+      return data.map((e) => e.toString()).toList();
     } else {
-      throw Exception('Failed to load leave types');
+      return [
+        'Sick Leave', 'Casual Leave', 'Earned Leave (Privilege)', 
+        'Maternity Leave', 'Paternity Leave', 'Bereavement Leave', 
+        'Compensatory Off (Comp-off)', 'Marriage Leave', 
+        'Leave Without Pay (LWP)', 'Sabbatical Leave'
+      ];
     }
   }
 
@@ -427,7 +450,9 @@ class ApiService {
 
   // Get Admin Dashboard Stats
   static Future<Map<String, dynamic>> getAdminStats() async {
-    final response = await http.get(Uri.parse('$baseUrl/admin/stats'));
+    final company = await _getCompany();
+    String qs = company != null ? '?company=${Uri.encodeComponent(company)}' : '';
+    final response = await http.get(Uri.parse('$baseUrl/admin/stats$qs'));
     if (response.statusCode == 200) {
       return json.decode(response.body);
     } else {
@@ -437,7 +462,9 @@ class ApiService {
 
   // Get All Employees
   static Future<List<dynamic>> getAllUsers() async {
-    final response = await http.get(Uri.parse('$baseUrl/admin/users'));
+    final company = await _getCompany();
+    String qs = company != null ? '?company=${Uri.encodeComponent(company)}' : '';
+    final response = await http.get(Uri.parse('$baseUrl/admin/users$qs'));
     if (response.statusCode == 200) {
       return json.decode(response.body);
     } else {
@@ -447,7 +474,9 @@ class ApiService {
 
   // Get Absent Employees
   static Future<List<dynamic>> getAbsentEmployees() async {
-    final response = await http.get(Uri.parse('$baseUrl/admin/absent'));
+    final company = await _getCompany();
+    String qs = company != null ? '?company=${Uri.encodeComponent(company)}' : '';
+    final response = await http.get(Uri.parse('$baseUrl/admin/absent$qs'));
     if (response.statusCode == 200) {
       return json.decode(response.body);
     } else {
@@ -462,6 +491,10 @@ class ApiService {
     if (startDate != null) params['startDate'] = DateFormat('yyyy-MM-dd').format(startDate);
     if (endDate != null) params['endDate'] = DateFormat('yyyy-MM-dd').format(endDate);
     if (department != null) params['department'] = department;
+    
+    final company = await _getCompany();
+    if (company != null) params['company'] = company;
+
     final uri = Uri.parse('$baseUrl/admin/attendance').replace(queryParameters: params.isNotEmpty ? params : null);
     final response = await http.get(uri);
     if (response.statusCode == 200) {
@@ -499,7 +532,9 @@ class ApiService {
 
   // Get All Leave Requests
   static Future<List<dynamic>> getAllLeaves() async {
-    final response = await http.get(Uri.parse('$baseUrl/admin/leaves'));
+    final company = await _getCompany();
+    String qs = company != null ? '?company=${Uri.encodeComponent(company)}' : '';
+    final response = await http.get(Uri.parse('$baseUrl/admin/leaves$qs'));
     if (response.statusCode == 200) {
       return json.decode(response.body);
     } else {
@@ -521,6 +556,9 @@ class ApiService {
 
   // Create New User
   static Future<void> createUser(Map<String, dynamic> userData, {XFile? image}) async {
+    final company = await _getCompany();
+    if (company != null) userData['company'] = company;
+
     var request = http.MultipartRequest('POST', Uri.parse('$baseUrl/admin/users'));
     userData.forEach((key, value) {
       request.fields[key] = value.toString();
@@ -539,6 +577,7 @@ class ApiService {
       throw Exception(error);
     }
   }
+
 
   // Delete User
   static Future<void> deleteUser(int id) async {
@@ -565,7 +604,9 @@ class ApiService {
 
   // Get All Shifts
   static Future<List<dynamic>> getShifts() async {
-    final response = await http.get(Uri.parse('$baseUrl/admin/shifts'));
+    final company = await _getCompany();
+    String qs = company != null ? '?company=${Uri.encodeComponent(company)}' : '';
+    final response = await http.get(Uri.parse('$baseUrl/admin/shifts$qs'));
     if (response.statusCode == 200) {
       return json.decode(response.body);
     } else {
@@ -575,6 +616,8 @@ class ApiService {
 
   // Create Shift
   static Future<void> createShift(Map<String, dynamic> shiftData) async {
+    final company = await _getCompany();
+    if (company != null) shiftData['company'] = company;
     final response = await http.post(
       Uri.parse('$baseUrl/admin/shifts'),
       headers: {'Content-Type': 'application/json'},
@@ -589,7 +632,9 @@ class ApiService {
 
   // Get Settings
   static Future<Map<String, dynamic>> getSettings() async {
-    final response = await http.get(Uri.parse('$baseUrl/settings'));
+    final company = await _getCompany();
+    String qs = company != null ? '?company=${Uri.encodeComponent(company)}' : '';
+    final response = await http.get(Uri.parse('$baseUrl/settings$qs'));
     if (response.statusCode == 200) {
       return json.decode(response.body);
     } else {
@@ -599,13 +644,37 @@ class ApiService {
 
   // Update Settings
   static Future<void> updateSettings(Map<String, dynamic> settingsData) async {
+    final company = await _getCompany();
+    if (company != null) settingsData['companyName'] = company; // Settings already used companyName col
     final response = await http.post(
       Uri.parse('$baseUrl/admin/settings'),
       headers: {'Content-Type': 'application/json'},
       body: json.encode(settingsData),
     );
      if (response.statusCode != 200) {
-      throw Exception('Failed to update settings: ${response.body}');
+      throw Exception('Failed to update settings');
+    }
+  }
+
+  // Update Branding (Logo & Theme Color)
+  static Future<void> updateBranding({XFile? logo, String? themeColor}) async {
+    final company = await _getCompany();
+    if (company == null) throw Exception('No company associated with admin');
+
+    var request = http.MultipartRequest('POST', Uri.parse('$baseUrl/admin/branding'));
+    request.fields['company'] = company;
+    if (themeColor != null) request.fields['themeColor'] = themeColor;
+
+    if (logo != null) {
+      request.files.add(await http.MultipartFile.fromPath('logo', logo.path));
+    }
+
+    var streamedResponse = await request.send();
+    var response = await http.Response.fromStream(streamedResponse);
+
+    if (response.statusCode != 200) {
+      final error = json.decode(response.body)['error'] ?? 'Failed to update branding';
+      throw Exception(error);
     }
   }
   // ============ NOTIFICATIONS METHODS ============
@@ -631,10 +700,14 @@ class ApiService {
   // Get Attendance Report
   static Future<List<dynamic>> getAttendanceReport({DateTime? startDate, DateTime? endDate}) async {
     String query = '';
+    final company = await _getCompany();
     if (startDate != null && endDate != null) {
       final startStr = DateFormat('yyyy-MM-dd').format(startDate);
       final endStr = DateFormat('yyyy-MM-dd').format(endDate);
       query = '?startDate=$startStr&endDate=$endStr';
+      if (company != null) query += '&company=${Uri.encodeComponent(company)}';
+    } else if (company != null) {
+      query = '?company=${Uri.encodeComponent(company)}';
     }
     
     final response = await http.get(Uri.parse('$baseUrl/admin/reports/attendance$query'));
@@ -663,21 +736,27 @@ class ApiService {
   // ============ HOLIDAYS ============
 
   static Future<List<dynamic>> getHolidays() async {
-    final response = await http.get(Uri.parse('$baseUrl/admin/holidays'));
+    final company = await _getCompany();
+    String qs = company != null ? '?company=${Uri.encodeComponent(company)}' : '';
+    final response = await http.get(Uri.parse('$baseUrl/admin/holidays$qs'));
     if (response.statusCode == 200) return json.decode(response.body);
     throw Exception('Failed to load holidays');
   }
 
   static Future<void> addHoliday(String name, String date, {String type = 'Public', String duration = 'Full Day'}) async {
+    final company = await _getCompany();
+    final data = {
+      'name': name,
+      'date': date,
+      'type': type,
+      'duration': duration,
+    };
+    if (company != null) data['company'] = company;
+    
     final response = await http.post(
       Uri.parse('$baseUrl/admin/holidays'),
       headers: {'Content-Type': 'application/json'},
-      body: json.encode({
-        'name': name,
-        'date': date,
-        'type': type,
-        'duration': duration,
-      }),
+      body: json.encode(data),
     );
     if (response.statusCode != 200) throw Exception('Failed to add holiday');
   }
@@ -690,12 +769,16 @@ class ApiService {
   // ============ LEAVE POLICIES ============
 
   static Future<List<dynamic>> getLeavePolicies() async {
-    final response = await http.get(Uri.parse('$baseUrl/admin/leave-policies'));
+    final company = await _getCompany();
+    String qs = company != null ? '?company=${Uri.encodeComponent(company)}' : '';
+    final response = await http.get(Uri.parse('$baseUrl/admin/leave-policies$qs'));
     if (response.statusCode == 200) return json.decode(response.body);
     throw Exception('Failed to load leave policies');
   }
 
   static Future<void> saveLeavePolicy(Map<String, dynamic> data) async {
+    final company = await _getCompany();
+    if (company != null) data['company'] = company;
     final response = await http.post(
       Uri.parse('$baseUrl/admin/leave-policies'),
       headers: {'Content-Type': 'application/json'},
@@ -717,10 +800,14 @@ class ApiService {
 
   static Future<List<dynamic>> getOvertimeReport({DateTime? startDate, DateTime? endDate}) async {
     String query = '';
+    final company = await _getCompany();
     if (startDate != null && endDate != null) {
       final s = '${startDate.year}-${startDate.month.toString().padLeft(2,'0')}-${startDate.day.toString().padLeft(2,'0')}';
       final e = '${endDate.year}-${endDate.month.toString().padLeft(2,'0')}-${endDate.day.toString().padLeft(2,'0')}';
       query = '?startDate=$s&endDate=$e';
+      if (company != null) query += '&company=${Uri.encodeComponent(company)}';
+    } else if (company != null) {
+      query = '?company=${Uri.encodeComponent(company)}';
     }
     final response = await http.get(Uri.parse('$baseUrl/admin/reports/overtime$query'));
     if (response.statusCode == 200) return json.decode(response.body);
@@ -729,10 +816,14 @@ class ApiService {
 
   static Future<List<dynamic>> getSalaryHoursReport({DateTime? startDate, DateTime? endDate}) async {
     String query = '';
+    final company = await _getCompany();
     if (startDate != null && endDate != null) {
       final s = '${startDate.year}-${startDate.month.toString().padLeft(2,'0')}-${startDate.day.toString().padLeft(2,'0')}';
       final e = '${endDate.year}-${endDate.month.toString().padLeft(2,'0')}-${endDate.day.toString().padLeft(2,'0')}';
       query = '?startDate=$s&endDate=$e';
+      if (company != null) query += '&company=${Uri.encodeComponent(company)}';
+    } else if (company != null) {
+      query = '?company=${Uri.encodeComponent(company)}';
     }
     final response = await http.get(Uri.parse('$baseUrl/admin/reports/salary-hours$query'));
     if (response.statusCode == 200) return json.decode(response.body);
@@ -741,13 +832,51 @@ class ApiService {
 
   static Future<List<dynamic>> getPayrollReport({DateTime? startDate, DateTime? endDate}) async {
     String query = '';
+    final company = await _getCompany();
     if (startDate != null && endDate != null) {
       final s = '${startDate.year}-${startDate.month.toString().padLeft(2,'0')}-${startDate.day.toString().padLeft(2,'0')}';
       final e = '${endDate.year}-${endDate.month.toString().padLeft(2,'0')}-${endDate.day.toString().padLeft(2,'0')}';
       query = '?startDate=$s&endDate=$e';
+      if (company != null) query += '&company=${Uri.encodeComponent(company)}';
+    } else if (company != null) {
+      query = '?company=${Uri.encodeComponent(company)}';
     }
     final response = await http.get(Uri.parse('$baseUrl/admin/reports/payroll$query'));
     if (response.statusCode == 200) return json.decode(response.body);
     throw Exception('Failed to load payroll report');
+  }
+
+  // ============ PAYSLIPS ============
+
+  static Future<void> createPayslip(Map<String, dynamic> data) async {
+    final company = await _getCompany();
+    if (company != null) data['company'] = company;
+    
+    final response = await http.post(
+      Uri.parse('$baseUrl/admin/payslips'),
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode(data),
+    );
+    if (response.statusCode != 200) throw Exception('Failed to create payslip');
+  }
+
+  static Future<List<dynamic>> getAdminPayslips() async {
+    final company = await _getCompany();
+    String qs = company != null ? '?company=${Uri.encodeComponent(company)}' : '';
+    final response = await http.get(Uri.parse('$baseUrl/admin/payslips$qs'));
+    
+    if (response.statusCode == 200) return json.decode(response.body);
+    throw Exception('Failed to load payslips');
+  }
+
+  static Future<List<dynamic>> getUserPayslips(int userId) async {
+    final response = await http.get(Uri.parse('$baseUrl/payslips/$userId'));
+    if (response.statusCode == 200) return json.decode(response.body);
+    throw Exception('Failed to load your payslips');
+  }
+
+  static Future<void> deletePayslip(int id) async {
+    final response = await http.delete(Uri.parse('$baseUrl/admin/payslips/$id'));
+    if (response.statusCode != 200) throw Exception('Failed to delete payslip');
   }
 }

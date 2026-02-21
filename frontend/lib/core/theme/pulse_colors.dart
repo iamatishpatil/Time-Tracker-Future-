@@ -3,16 +3,29 @@ import 'package:flutter/material.dart';
 class PulseColors {
   PulseColors._();
 
+  // Dynamic Primary Base Variables (Default is the original purple)
+  static Color _dynamicPrimary = const Color(0xFF7C4DFF);
+  static Color _dynamicPrimaryLight = const Color(0xFF9E7BFF);
+  static Color _dynamicPrimaryDark = const Color(0xFF5C2DC9);
+
+  // Method to inject the company branding color
+  static void setCompanyBrandColor(Color color) {
+    _dynamicPrimary = color;
+    // Calculate light and dark variants algorithmically
+    _dynamicPrimaryLight = Color.lerp(color, Colors.white, 0.3) ?? color;
+    _dynamicPrimaryDark = Color.lerp(color, Colors.black, 0.3) ?? color;
+  }
+
   // Background
   static const Color background = Color(0xFF0F0F1A);
   static const Color surface = Color(0xFF1A1A2E);
   static const Color surfaceVariant = Color(0xFF252540);
   static const Color surfaceLight = Color(0xFF2E2E4A);
 
-  // Primary
-  static const Color primary = Color(0xFF7C4DFF);
-  static const Color primaryLight = Color(0xFF9E7BFF);
-  static const Color primaryDark = Color(0xFF5C2DC9);
+  // Primary (Now Dynamic)
+  static Color get primary => _dynamicPrimary;
+  static Color get primaryLight => _dynamicPrimaryLight;
+  static Color get primaryDark => _dynamicPrimaryDark;
 
   // Accent
   static const Color accent = Color(0xFF00E5FF);
@@ -33,7 +46,7 @@ class PulseColors {
 
   // Border
   static const Color border = Color(0xFF2E2E4A);
-  static const Color borderFocused = primary;
+  static Color get borderFocused => _dynamicPrimary;
 
   // Misc
   static const Color shimmerBase = Color(0xFF1A1A2E);
@@ -41,9 +54,9 @@ class PulseColors {
   static const Color divider = Color(0xFF252540);
   static const Color overlay = Color(0x80000000);
 
-  // Gradients
-  static const LinearGradient primaryGradient = LinearGradient(
-    colors: [Color(0xFF7C4DFF), Color(0xFF651FFF)],
+  // Gradients (Now Dynamic)
+  static LinearGradient get primaryGradient => LinearGradient(
+    colors: [_dynamicPrimary, _dynamicPrimaryDark],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );

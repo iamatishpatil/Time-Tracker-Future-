@@ -74,7 +74,7 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
                             color: PulseColors.primary.withOpacity(0.15),
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          child: const Icon(Icons.history_rounded, color: PulseColors.primary, size: 24),
+                          child: Icon(Icons.history_rounded, color: PulseColors.primary, size: 24),
                         ),
                         const SizedBox(width: 14),
                         Expanded(
@@ -90,7 +90,7 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
                           ),
                         ),
                         IconButton(
-                          icon: const Icon(Icons.picture_as_pdf_rounded, color: PulseColors.primaryLight, size: 22),
+                          icon: Icon(Icons.picture_as_pdf_rounded, color: PulseColors.primaryLight, size: 22),
                           onPressed: () => PdfService.generateAttendanceReport(_userName, _history, holidays: _holidays),
                           tooltip: 'Export PDF',
                         ),

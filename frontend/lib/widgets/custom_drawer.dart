@@ -55,7 +55,7 @@ class CustomDrawer extends StatelessWidget {
                         right: 0,
                         child: Container(
                           padding: const EdgeInsets.all(4),
-                          decoration: const BoxDecoration(
+                          decoration: BoxDecoration(
                             color: PulseColors.primary,
                             shape: BoxShape.circle,
                           ),
@@ -128,6 +128,31 @@ class CustomDrawer extends StatelessWidget {
               Navigator.pushNamed(context, '/user-holidays');
             },
           ),
+          _DrawerTile(
+            icon: Icons.schedule,
+            title: 'Company Shifts',
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.pushNamed(context, '/user-shifts');
+            },
+          ),
+          FutureBuilder<Map<String, dynamic>>(
+            future: ApiService.getSettings(),
+            builder: (context, snapshot) {
+              final payrollEnabled = snapshot.data?['payrollEnabled'] != 0;
+              if (payrollEnabled) {
+                return _DrawerTile(
+                  icon: Icons.receipt_long_outlined,
+                  title: 'My Payslips',
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.pushNamed(context, '/user-payslips');
+                  },
+                );
+              }
+              return const SizedBox.shrink();
+            },
+          ),
 
           const Spacer(),
           const Divider(color: PulseColors.divider),
@@ -179,6 +204,10 @@ class CustomDrawer extends StatelessWidget {
             _detailRow('Department', user['department'] ?? 'N/A'),
             _detailRow('Gender', user['gender'] ?? 'N/A'),
             _detailRow('Week Offs', user['weekOffs'] ?? 'Sunday'),
+            if (user['shiftName'] != null)
+              _detailRow('Shift', '${user['shiftName']} (${user['shiftStart']} - ${user['shiftEnd']})')
+            else
+              _detailRow('Shift', 'Not Assigned'),
           ],
         ),
         actions: [

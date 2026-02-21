@@ -11,7 +11,7 @@ class PulseTheme {
       useMaterial3: true,
       brightness: Brightness.dark,
 
-      colorScheme: const ColorScheme.dark(
+      colorScheme: ColorScheme.dark(
         primary: PulseColors.primary,
         onPrimary: Colors.white,
         secondary: PulseColors.accent,
@@ -80,7 +80,7 @@ class PulseTheme {
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           foregroundColor: PulseColors.primary,
-          side: const BorderSide(color: PulseColors.primary, width: 1.5),
+          side: BorderSide(color: PulseColors.primary, width: 1.5),
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           textStyle: GoogleFonts.inter(
@@ -116,7 +116,7 @@ class PulseTheme {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: PulseColors.primary, width: 2),
+          borderSide: BorderSide(color: PulseColors.primary, width: 2),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
@@ -210,11 +210,11 @@ class PulseTheme {
       ),
 
       // FAB
-      floatingActionButtonTheme: const FloatingActionButtonThemeData(
+      floatingActionButtonTheme: FloatingActionButtonThemeData(
         backgroundColor: PulseColors.primary,
         foregroundColor: Colors.white,
         elevation: 4,
-        shape: CircleBorder(),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
 
       // Divider
@@ -251,7 +251,7 @@ class PulseTheme {
       ),
 
       // ProgressIndicator
-      progressIndicatorTheme: const ProgressIndicatorThemeData(
+      progressIndicatorTheme: ProgressIndicatorThemeData(
         color: PulseColors.primary,
         linearTrackColor: PulseColors.surfaceVariant,
       ),

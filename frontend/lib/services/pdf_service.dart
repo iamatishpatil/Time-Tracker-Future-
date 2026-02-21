@@ -141,5 +141,146 @@ class PdfService {
 
     await Printing.layoutPdf(onLayout: (format) async => pdf.save());
   }
-}
 
+  static Future<void> generateIndividualPayslip(Map<String, dynamic> payslip, Map<String, dynamic> user, Map<String, dynamic> company) async {
+    final pdf = pw.Document();
+    
+    final monthYear = DateFormat('MMMM yyyy').format(DateTime(payslip['year'], payslip['month']));
+    final companyName = company['companyName'] ?? 'Company';
+    
+    // Parse values to ensure they are doubles
+    final basic = double.parse(payslip['basicSalary'].toString());
+    final allowances = double.parse(payslip['allowances'].toString());
+    final deductions = double.parse(payslip['deductions'].toString());
+    final net = double.parse(payslip['netSalary'].toString());
+
+    pdf.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(40),
+        build: (context) => pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            // Header
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Text(companyName, style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold, color: PdfColors.deepPurple)),
+                    pw.Text('Payslip for $monthYear', style: pw.TextStyle(fontSize: 14, color: PdfColors.grey700)),
+                  ],
+                ),
+                pw.Text('CONFIDENTIAL', style: pw.TextStyle(fontSize: 10, color: PdfColors.red, letterSpacing: 2)),
+              ],
+            ),
+            
+            pw.SizedBox(height: 30),
+            pw.Divider(color: PdfColors.grey400),
+            pw.SizedBox(height: 20),
+
+            // Employee Details
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Text('Employee Name:', style: pw.TextStyle(color: PdfColors.grey600)),
+                    pw.Text('${user['fullName']}', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+                    pw.SizedBox(height: 10),
+                    pw.Text('Email:', style: pw.TextStyle(color: PdfColors.grey600)),
+                    pw.Text('${user['email']}'),
+                  ],
+                ),
+                pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Text('Designation/Role:', style: pw.TextStyle(color: PdfColors.grey600)),
+                    pw.Text('${user['role']}'),
+                    pw.SizedBox(height: 10),
+                    pw.Text('Generated On:', style: pw.TextStyle(color: PdfColors.grey600)),
+                    pw.Text(DateFormat('dd MMM yyyy').format(DateTime.now())),
+                  ],
+                ),
+              ],
+            ),
+
+            pw.SizedBox(height: 30),
+
+            // Salary Structure Table
+            pw.Table(
+              border: pw.TableBorder.all(color: PdfColors.grey300),
+              children: [
+                // Table Header
+                pw.TableRow(
+                  decoration: const pw.BoxDecoration(color: PdfColors.deepPurple),
+                  children: [
+                    pw.Padding(padding: const pw.EdgeInsets.all(8), child: pw.Text('Earnings', style: pw.TextStyle(color: PdfColors.white, fontWeight: pw.FontWeight.bold))),
+                    pw.Padding(padding: const pw.EdgeInsets.all(8), child: pw.Text('Amount (₹)', style: pw.TextStyle(color: PdfColors.white, fontWeight: pw.FontWeight.bold))),
+                    pw.Padding(padding: const pw.EdgeInsets.all(8), child: pw.Text('Deductions', style: pw.TextStyle(color: PdfColors.white, fontWeight: pw.FontWeight.bold))),
+                    pw.Padding(padding: const pw.EdgeInsets.all(8), child: pw.Text('Amount (₹)', style: pw.TextStyle(color: PdfColors.white, fontWeight: pw.FontWeight.bold))),
+                  ]
+                ),
+                // Data Row
+                pw.TableRow(
+                  children: [
+                    pw.Padding(padding: const pw.EdgeInsets.all(8), child: pw.Text('Basic Salary\n\nAllowances/Bonus')),
+                    pw.Padding(padding: const pw.EdgeInsets.all(8), child: pw.Text('${basic.toStringAsFixed(2)}\n\n${allowances.toStringAsFixed(2)}')),
+                    pw.Padding(padding: const pw.EdgeInsets.all(8), child: pw.Text('Taxes/Penalties')),
+                    pw.Padding(padding: const pw.EdgeInsets.all(8), child: pw.Text('${deductions.toStringAsFixed(2)}')),
+                  ]
+                ),
+                // Total Row
+                pw.TableRow(
+                  decoration: const pw.BoxDecoration(color: PdfColors.grey100),
+                  children: [
+                    pw.Padding(padding: const pw.EdgeInsets.all(8), child: pw.Text('Gross Earnings', style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
+                    pw.Padding(padding: const pw.EdgeInsets.all(8), child: pw.Text('${(basic + allowances).toStringAsFixed(2)}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
+                    pw.Padding(padding: const pw.EdgeInsets.all(8), child: pw.Text('Total Deductions', style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
+                    pw.Padding(padding: const pw.EdgeInsets.all(8), child: pw.Text('${deductions.toStringAsFixed(2)}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
+                  ]
+                ),
+              ]
+            ),
+
+            pw.SizedBox(height: 30),
+
+            // Net Payable
+            pw.Container(
+              padding: const pw.EdgeInsets.all(16),
+              decoration: pw.BoxDecoration(
+                border: pw.Border.all(color: PdfColors.deepPurple, width: 2),
+                borderRadius: const pw.BorderRadius.all(pw.Radius.circular(8)),
+                color: PdfColors.purple50,
+              ),
+              child: pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text('NET PAYABLE SALARY', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold, color: PdfColors.deepPurple)),
+                  pw.Text('₹ ${net.toStringAsFixed(2)}', style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold, color: PdfColors.deepPurple)),
+                ]
+              )
+            ),
+            
+            pw.Spacer(),
+            
+            pw.Divider(color: PdfColors.grey300),
+            pw.SizedBox(height: 10),
+            pw.Center(
+              child: pw.Text('This is a computer generated document and does not require a signature.', 
+                style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey600)),
+            ),
+          ]
+        ),
+      ),
+    );
+
+    // Prompt user to print/save the file
+    await Printing.layoutPdf(
+      onLayout: (PdfPageFormat format) async => pdf.save(),
+      name: 'Payslip_${user['fullName']}_$monthYear.pdf'
+    );
+  }
+}

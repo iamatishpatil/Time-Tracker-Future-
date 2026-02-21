@@ -159,7 +159,7 @@ class _AdminShiftsScreenState extends State<AdminShiftsScreen> {
                                 color: PulseColors.primary.withOpacity(0.15),
                                 borderRadius: BorderRadius.circular(12),
                               ),
-                              child: const Icon(Icons.schedule, color: PulseColors.primary, size: 22),
+                              child: Icon(Icons.schedule, color: PulseColors.primary, size: 22),
                             ),
                             const SizedBox(width: 12),
                             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

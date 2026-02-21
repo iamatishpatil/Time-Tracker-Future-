@@ -153,9 +153,11 @@ db.serialize(() => {
   // Leave Policies Table
   db.run(`CREATE TABLE IF NOT EXISTS leave_policies (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    leaveType TEXT NOT NULL UNIQUE,
+    leaveType TEXT NOT NULL,
     daysPerYear INTEGER DEFAULT 10,
-    isPaid INTEGER DEFAULT 1
+    isPaid INTEGER DEFAULT 1,
+    company TEXT,
+    UNIQUE(leaveType, company)
   )`);
 
   // Leave Balances Table (admin overrides)
@@ -172,9 +174,26 @@ db.serialize(() => {
   db.run(`CREATE TABLE IF NOT EXISTS holidays (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
-    date TEXT NOT NULL UNIQUE,
+    date TEXT NOT NULL,
     type TEXT DEFAULT 'Public',
-    duration TEXT DEFAULT 'Full Day'
+    duration TEXT DEFAULT 'Full Day',
+    company TEXT,
+    UNIQUE(date, company)
+  )`);
+
+  // Payslips Table
+  db.run(`CREATE TABLE IF NOT EXISTS payslips (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    userId INTEGER,
+    company TEXT,
+    month INTEGER,
+    year INTEGER,
+    basicSalary REAL,
+    allowances REAL DEFAULT 0,
+    deductions REAL DEFAULT 0,
+    netSalary REAL,
+    generatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(userId) REFERENCES users(id)
   )`);
 });
 
@@ -209,8 +228,6 @@ const calculateDistance = (lat1, lon1, lat2, lon2) => {
 
 // --- Shifts ---
 
-// --- Shifts ---
-
 db.serialize(() => {
   db.run(`CREATE TABLE IF NOT EXISTS shifts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -218,19 +235,24 @@ db.serialize(() => {
     startTime TEXT NOT NULL,
     endTime TEXT NOT NULL,
     gracePeriodMins INTEGER DEFAULT 0,
-    overtimeRate REAL DEFAULT 1.0
+    overtimeRate REAL DEFAULT 1.0,
+    company TEXT
   )`);
 
-  // --- Company Settings ---
-
+  // Settings Table
   db.run(`CREATE TABLE IF NOT EXISTS settings (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     companyName TEXT,
+    company TEXT UNIQUE,
     officeLat REAL,
     officeLong REAL,
     officeRadiusMeters REAL DEFAULT 100,
+    geofenceEnabled INTEGER DEFAULT 1,
+    payrollEnabled INTEGER DEFAULT 1,
     workingDays TEXT DEFAULT '["Mon","Tue","Wed","Thu","Fri"]',
-    weekendDays TEXT DEFAULT '["Sat","Sun"]'
+    weekendDays TEXT DEFAULT '["Sat","Sun"]',
+    companyLogo TEXT,
+    themeColor TEXT
   )`);
 
   db.run(`ALTER TABLE users ADD COLUMN shiftId INTEGER`, (err) => {
@@ -250,9 +272,16 @@ db.serialize(() => {
     if (!err) console.log('Backfilled NULL isActive values to 1');
   });
   db.run(`ALTER TABLE shifts ADD COLUMN latePenaltyPerMin REAL DEFAULT 0`, (err) => {});
+  db.run(`ALTER TABLE shifts ADD COLUMN company TEXT`, (err) => {});
+  db.run(`ALTER TABLE holidays ADD COLUMN company TEXT`, (err) => {});
+  db.run(`ALTER TABLE leave_policies ADD COLUMN company TEXT`, (err) => {});
   db.run(`ALTER TABLE leaves ADD COLUMN leaveType TEXT DEFAULT 'Casual Leave'`, (err) => {});
   db.run(`ALTER TABLE settings ADD COLUMN workingDays TEXT`, (err) => {});
   db.run(`ALTER TABLE settings ADD COLUMN weekendDays TEXT`, (err) => {});
+  db.run(`ALTER TABLE settings ADD COLUMN geofenceEnabled INTEGER DEFAULT 1`, (err) => {});
+  db.run(`ALTER TABLE settings ADD COLUMN payrollEnabled INTEGER DEFAULT 1`, (err) => {});
+  db.run(`ALTER TABLE settings ADD COLUMN companyLogo TEXT`, (err) => {});
+  db.run(`ALTER TABLE settings ADD COLUMN themeColor TEXT`, (err) => {});
   
   // Ensure 'status' and 'overtimeHours' exist in attendance
   db.run(`ALTER TABLE attendance ADD COLUMN status TEXT`, (err) => {});
@@ -513,17 +542,25 @@ app.post('/api/checkin', upload.single('photo'), (req, res) => {
   db.get('SELECT * FROM attendance WHERE userId = ? AND checkOutTime IS NULL', [userId], (err, row) => {
     if (row) return res.status(400).json({ error: 'Already checked in' });
     
-    // 2. Geofencing check
-    db.get('SELECT * FROM settings ORDER BY id DESC LIMIT 1', (err, settings) => {
-      if (settings && settings.officeLat && settings.officeLong && lat && long) {
-        const distance = calculateDistance(lat, long, settings.officeLat, settings.officeLong);
-        if (distance > settings.officeRadiusMeters) {
-          return res.status(403).json({ error: `Outside office radius. Distance: ${Math.round(distance)}m, Max: ${settings.officeRadiusMeters}m` });
-        }
+    // 2. Get User Shift Info and Settings
+    getUserWithShift(userId).then(user => {
+      const company = user ? user.company : null;
+      let q = 'SELECT * FROM settings ORDER BY id DESC LIMIT 1';
+      let p = [];
+      if (company) {
+        q = 'SELECT * FROM settings WHERE companyName = ? ORDER BY id DESC LIMIT 1';
+        p = [company];
       }
+      
+      db.get(q, p, (err, settings) => {
+        // 3. Geofencing check
+        if (settings && settings.geofenceEnabled !== 0 && settings.officeLat && settings.officeLong && lat && long) {
+          const distance = calculateDistance(lat, long, settings.officeLat, settings.officeLong);
+          if (distance > settings.officeRadiusMeters) {
+            return res.status(403).json({ error: `Outside office radius. Distance: ${Math.round(distance)}m, Max: ${settings.officeRadiusMeters}m` });
+          }
+        }
 
-      // 3. Get User Shift Info
-      getUserWithShift(userId).then(user => {
         let status = 'On Time'; 
         if (user && user.shiftStart) {
           try {
@@ -548,17 +585,16 @@ app.post('/api/checkin', upload.single('photo'), (req, res) => {
             if (status === 'Late') {
               createNotification(userId, 'Late Check-in Alert', `You checked in late at ${new Date(now).toLocaleTimeString()}.`);
             }
-            
             res.json({ message: 'Check-in successful', time: now, status: status });
           });
-      }).catch(err => {
-        db.run(`INSERT INTO attendance (userId, checkInTime, checkInLat, checkInLong, checkInAddress, checkInPhoto, status) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [userId, now, lat, long, address, photo, 'Present'],
-          (err) => {
-            if (err) return res.status(500).json({ error: err.message });
-            res.json({ message: 'Check-in successful', time: now });
-          });
       });
+    }).catch(err => {
+      db.run(`INSERT INTO attendance (userId, checkInTime, checkInLat, checkInLong, checkInAddress, checkInPhoto, status) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [userId, now, lat, long, address, photo, 'Present'],
+        (err) => {
+          if (err) return res.status(500).json({ error: err.message });
+          res.json({ message: 'Check-in successful', time: now });
+        });
     });
   });
 });
@@ -573,17 +609,25 @@ app.post('/api/checkout', upload.single('photo'), (req, res) => {
   db.get('SELECT * FROM attendance WHERE userId = ? AND checkOutTime IS NULL', [userId], (err, row) => {
     if (err || !row) return res.status(400).json({ error: 'No active check-in' });
 
-    // 2. Geofencing check
-    db.get('SELECT * FROM settings ORDER BY id DESC LIMIT 1', (err, settings) => {
-      if (settings && settings.officeLat && settings.officeLong && lat && long) {
-        const distance = calculateDistance(lat, long, settings.officeLat, settings.officeLong);
-        if (distance > settings.officeRadiusMeters) {
-          return res.status(403).json({ error: `Outside office radius. Distance: ${Math.round(distance)}m, Max: ${settings.officeRadiusMeters}m` });
-        }
+    getUserWithShift(userId).then(user => {
+      const company = user ? user.company : null;
+      let q = 'SELECT * FROM settings ORDER BY id DESC LIMIT 1';
+      let p = [];
+      if (company) {
+        q = 'SELECT * FROM settings WHERE companyName = ? ORDER BY id DESC LIMIT 1';
+        p = [company];
       }
+      
+      db.get(q, p, (err, settings) => {
+        // 2. Geofencing check
+        if (settings && settings.geofenceEnabled !== 0 && settings.officeLat && settings.officeLong && lat && long) {
+          const distance = calculateDistance(lat, long, settings.officeLat, settings.officeLong);
+          if (distance > settings.officeRadiusMeters) {
+            return res.status(403).json({ error: `Outside office radius. Distance: ${Math.round(distance)}m, Max: ${settings.officeRadiusMeters}m` });
+          }
+        }
 
-      // 3. Calculate Overtime
-      getUserWithShift(userId).then(user => {
+        // 3. Calculate Overtime
         let overtime = 0.0;
         if (user && user.shiftEnd) {
           try {
@@ -616,6 +660,14 @@ app.post('/api/checkout', upload.single('photo'), (req, res) => {
             res.json({ message: 'Check-out successful', time: now, overtime: overtime.toFixed(2) });
           });
       });
+    }).catch(err => {
+        db.run(`UPDATE attendance SET checkOutTime = ?, checkOutLat = ?, checkOutLong = ?, checkOutAddress = ?, checkOutPhoto = ?, overtimeHours = 0
+           WHERE userId = ? AND checkOutTime IS NULL`,
+          [now, lat, long, address, photo, userId],
+          function(err) {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ message: 'Check-out successful', time: now, overtime: "0.00" });
+          });
     });
   });
 });
@@ -649,30 +701,50 @@ app.patch('/api/admin/users/:id/active', (req, res) => {
 });
 
 app.get('/api/admin/stats', (req, res) => {
+  const company = req.query.company;
   const stats = {};
   const now = new Date();
   const today = now.toISOString().split('T')[0];
   const dayName = now.toLocaleDateString('en-US', { weekday: 'long' });
   
-  db.get('SELECT COUNT(*) as count FROM users WHERE role = "User"', (err, row) => {
+  let uQuery = 'SELECT COUNT(*) as count FROM users WHERE role = "User"';
+  let uParams = [];
+  if (company) {
+    uQuery += ' AND company = ?';
+    uParams = [company];
+  }
+  db.get(uQuery, uParams, (err, row) => {
     if (err) return res.status(500).json({ error: err.message });
     stats.totalEmployees = row ? row.count : 0;
     
-    db.all('SELECT userId FROM attendance WHERE checkInTime LIKE ?', [`${today}%`], (err, attendanceRows) => {
+      let attQuery = `SELECT a.userId FROM attendance a JOIN users u ON a.userId = u.id WHERE a.checkInTime LIKE ?`;
+      let attParams = [`${today}%`];
+      if (company) {
+        attQuery += ' AND u.company = ?';
+        attParams.push(company);
+      }
+      db.all(attQuery, attParams, (err, attendanceRows) => {
       if (err) return res.status(500).json({ error: err.message });
       
       const presentUserIds = new Set(attendanceRows.map(a => a.userId));
       stats.presentToday = presentUserIds.size;
 
+      let hQuery = 'SELECT name FROM holidays WHERE date = ? AND (duration = "Full Day" OR duration IS NULL)';
+      let hParams = [today];
+      if (company) { hQuery += ' AND company = ?'; hParams.push(company); }
+
       // Check for Holiday
-      db.get('SELECT name FROM holidays WHERE date = ? AND (duration = "Full Day" OR duration IS NULL)', [today], (err, holiday) => {
+      db.get(hQuery, hParams, (err, holiday) => {
         if (err) return res.status(500).json({ error: err.message });
         
         if (holiday) {
           stats.absentToday = 0;
           proceedToFinalStats();
         } else {
-          db.all('SELECT id, weekOffs FROM users WHERE role = "User"', (err, users) => {
+          let uaQuery = 'SELECT id, weekOffs FROM users WHERE role = "User"';
+          let uaParams = [];
+          if (company) { uaQuery += ' AND company = ?'; uaParams.push(company); }
+          db.all(uaQuery, uaParams, (err, users) => {
             if (err) return res.status(500).json({ error: err.message });
             
             let absentCount = 0;
@@ -691,12 +763,18 @@ app.get('/api/admin/stats', (req, res) => {
       });
 
       function proceedToFinalStats() {
-        db.get('SELECT COUNT(*) as count FROM attendance WHERE checkInTime LIKE ? AND status = "Late"', [`${today}%`], (err, row) => {
+        let laQuery = `SELECT COUNT(*) as count FROM attendance a JOIN users u ON a.userId = u.id WHERE a.checkInTime LIKE ? AND a.status = "Late"`;
+        let laParams = [`${today}%`];
+        if (company) { laQuery += ' AND u.company = ?'; laParams.push(company); }
+        db.get(laQuery, laParams, (err, row) => {
           stats.lateToday = row ? row.count : 0;
           
-          db.get(`SELECT COUNT(DISTINCT userId) as count FROM leaves 
-                  WHERE status = 'Approved' 
-                  AND date(?) BETWEEN date(startDate) AND date(endDate)`, [today], (err, row) => {
+          let lvQuery = `SELECT COUNT(DISTINCT l.userId) as count FROM leaves l JOIN users u ON l.userId = u.id 
+                  WHERE l.status = 'Approved' 
+                  AND date(?) BETWEEN date(l.startDate) AND date(l.endDate)`;
+          let lvParams = [today];
+          if (company) { lvQuery += ' AND u.company = ?'; lvParams.push(company); }
+          db.get(lvQuery, lvParams, (err, row) => {
             stats.onLeaveToday = row ? row.count : 0;
             res.json(stats);
           });
@@ -708,9 +786,16 @@ app.get('/api/admin/stats', (req, res) => {
 
 
 app.get('/api/admin/users', (req, res) => {
-  db.all(`SELECT u.id, u.fullName, u.email, u.mobileNumber, u.role, u.profilePicture, u.weekOffs, s.name as shiftName 
+  const company = req.query.company;
+  let query = `SELECT u.id, u.fullName, u.email, u.mobileNumber, u.role, u.profilePicture, u.weekOffs, u.company, s.name as shiftName 
           FROM users u 
-          LEFT JOIN shifts s ON u.shiftId = s.id`, (err, rows) => {
+          LEFT JOIN shifts s ON u.shiftId = s.id`;
+  let params = [];
+  if (company) {
+    query += ' WHERE u.company = ?';
+    params.push(company);
+  }
+  db.all(query, params, (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows);
   });
@@ -730,12 +815,12 @@ app.delete('/api/admin/users/:id', (req, res) => {
 });
 
 app.post('/api/admin/users', upload.single('profilePicture'), async (req, res) => {
-  const { fullName, mobileNumber, email, password, role, department, salary, shiftId, isActive, weekOffs } = req.body;
+  const { fullName, mobileNumber, email, password, role, department, salary, shiftId, isActive, weekOffs, company } = req.body;
   const profilePicture = req.file ? `/uploads/${req.file.filename}` : null;
   const hashedPassword = await bcrypt.hash(password, 10);
   
-  db.run(`INSERT INTO users (fullName, mobileNumber, email, password, role, profilePicture, department, salary, shiftId, isActive, weekOffs) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [fullName, mobileNumber, email, hashedPassword, role || 'User', profilePicture, department || 'General', salary || 0, shiftId, isActive !== undefined ? isActive : 1, weekOffs || 'Sunday'],
+  db.run(`INSERT INTO users (fullName, mobileNumber, email, password, role, profilePicture, department, salary, shiftId, isActive, weekOffs, company) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [fullName, mobileNumber, email, hashedPassword, role || 'User', profilePicture, department || 'General', salary || 0, shiftId, isActive !== undefined ? isActive : 1, weekOffs || 'Sunday', company],
     function(err) {
       if (err) {
         if (err.message.includes('UNIQUE constraint failed')) {
@@ -750,7 +835,7 @@ app.post('/api/admin/users', upload.single('profilePicture'), async (req, res) =
 // Consolidated User and Attendance endpoints
 
 app.get('/api/admin/attendance', (req, res) => {
-  const { userId, startDate, endDate, department } = req.query;
+  const { userId, startDate, endDate, department, company } = req.query;
   let query = `
     SELECT a.*, u.fullName, u.profilePicture, u.department, s.name as shiftName 
     FROM attendance a 
@@ -763,6 +848,10 @@ app.get('/api/admin/attendance', (req, res) => {
   if (userId) {
     query += ' AND a.userId = ?';
     params.push(userId);
+  }
+  if (company) {
+    query += ' AND u.company = ?';
+    params.push(company);
   }
   if (startDate && endDate) {
     query += ' AND date(a.checkInTime) BETWEEN date(?) AND date(?)';
@@ -812,24 +901,39 @@ app.put('/api/admin/attendance/:id', (req, res) => {
 // Note: Merged into above endpoint
 
 app.get('/api/admin/absent', (req, res) => {
+  const company = req.query.company;
   const now = new Date();
   const today = now.toISOString().split('T')[0];
   const dayName = now.toLocaleDateString('en-US', { weekday: 'long' });
 
+  let holQuery = 'SELECT name FROM holidays WHERE date = ? AND (duration = "Full Day" OR duration IS NULL)';
+  let holParams = [today];
+  if (company) {
+    holQuery += ' AND company = ?';
+    holParams.push(company);
+  }
+
   // First check if today is a public holiday
-  db.get('SELECT name FROM holidays WHERE date = ? AND (duration = "Full Day" OR duration IS NULL)', [today], (err, holiday) => {
+  db.get(holQuery, holParams, (err, holiday) => {
     if (err) return res.status(500).json({ error: err.message });
     if (holiday) {
       // It's a holiday, so nobody is "absent" in the traditional sense
       return res.json([]);
     }
 
-    // Not a holiday, check absences excluding week-offs
-    db.all(`SELECT id, fullName, mobileNumber, profilePicture, weekOffs 
+    let usersQuery = `SELECT id, fullName, mobileNumber, profilePicture, weekOffs 
             FROM users 
             WHERE role = "User" AND id NOT IN (
               SELECT userId FROM attendance WHERE checkInTime LIKE ?
-            )`, [`${today}%`], (err, rows) => {
+            )`;
+    let usersParams = [`${today}%`];
+    if (company) {
+      usersQuery += ' AND company = ?';
+      usersParams.push(company);
+    }
+
+    // Not a holiday, check absences excluding week-offs
+    db.all(usersQuery, usersParams, (err, rows) => {
       if (err) return res.status(500).json({ error: err.message });
       
       // Filter out those whose week-off is today
@@ -846,7 +950,14 @@ app.get('/api/admin/absent', (req, res) => {
 // --- Shifts Management ---
 
 app.get('/api/admin/shifts', (req, res) => {
-  db.all('SELECT * FROM shifts', (err, rows) => {
+  const company = req.query.company;
+  let query = 'SELECT * FROM shifts';
+  let params = [];
+  if (company) {
+    query += ' WHERE company = ?';
+    params.push(company);
+  }
+  db.all(query, params, (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows);
   });
@@ -873,9 +984,9 @@ app.delete('/api/admin/shifts/:id', (req, res) => {
 });
 
 app.post('/api/admin/shifts', (req, res) => {
-  const { name, startTime, endTime, gracePeriodMins, overtimeRate, latePenaltyPerMin } = req.body;
-  db.run(`INSERT INTO shifts (name, startTime, endTime, gracePeriodMins, overtimeRate, latePenaltyPerMin) VALUES (?, ?, ?, ?, ?, ?)`,
-    [name, startTime, endTime, gracePeriodMins, overtimeRate, latePenaltyPerMin || 0],
+  const { name, startTime, endTime, gracePeriodMins, overtimeRate, latePenaltyPerMin, company } = req.body;
+  db.run(`INSERT INTO shifts (name, startTime, endTime, gracePeriodMins, overtimeRate, latePenaltyPerMin, company) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [name, startTime, endTime, gracePeriodMins, overtimeRate, latePenaltyPerMin || 0, company],
     function(err) {
       if (err) return res.status(500).json({ error: err.message });
       res.json({ message: 'Shift created', id: this.lastID });
@@ -885,38 +996,96 @@ app.post('/api/admin/shifts', (req, res) => {
 // --- Company Settings ---
 
 app.get('/api/settings', (req, res) => {
-  db.get('SELECT * FROM settings ORDER BY id DESC LIMIT 1', (err, row) => {
+  const company = req.query.company;
+  let query = 'SELECT * FROM settings ORDER BY id DESC LIMIT 1';
+  let params = [];
+  if (company) {
+    query = 'SELECT * FROM settings WHERE companyName = ? ORDER BY id DESC LIMIT 1';
+    params = [company];
+  }
+  db.get(query, params, (err, row) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(row || {});
   });
 });
 
 app.post('/api/admin/settings', (req, res) => {
-  const { companyName, officeLat, officeLong, officeRadiusMeters, workingDays, weekendDays } = req.body;
-  // Always insert a new row (latest row is used)
-  db.run(
-    `INSERT INTO settings (companyName, officeLat, officeLong, officeRadiusMeters, workingDays, weekendDays) VALUES (?, ?, ?, ?, ?, ?)`,
-    [companyName, officeLat, officeLong, officeRadiusMeters,
-      workingDays ? JSON.stringify(workingDays) : '["Mon","Tue","Wed","Thu","Fri"]',
-      weekendDays ? JSON.stringify(weekendDays) : '["Sat","Sun"]'],
-    function(err) {
-      if (err) return res.status(500).json({ error: err.message });
-      res.json({ message: 'Settings updated' });
-    });
+  const { companyName, officeLat, officeLong, officeRadiusMeters, workingDays, weekendDays, geofenceEnabled, payrollEnabled } = req.body;
+  const wDays = workingDays ? JSON.stringify(workingDays) : '["Mon","Tue","Wed","Thu","Fri"]';
+  const wkDays = weekendDays ? JSON.stringify(weekendDays) : '["Sat","Sun"]';
+  const geoEnabled = geofenceEnabled !== undefined ? geofenceEnabled : 1;
+  const payEnabled = payrollEnabled !== undefined ? payrollEnabled : 1;
+
+  db.get('SELECT * FROM settings WHERE companyName = ? ORDER BY id DESC LIMIT 1', [companyName], (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    
+    if (row) {
+      db.run('UPDATE settings SET officeLat = ?, officeLong = ?, officeRadiusMeters = ?, workingDays = ?, weekendDays = ?, geofenceEnabled = ?, payrollEnabled = ? WHERE id = ?',
+        [officeLat, officeLong, officeRadiusMeters, wDays, wkDays, geoEnabled, payEnabled, row.id], function(err) {
+          if (err) return res.status(500).json({ error: err.message });
+          res.json({ message: 'Settings updated' });
+      });
+    } else {
+      db.run(
+        `INSERT INTO settings (companyName, officeLat, officeLong, officeRadiusMeters, workingDays, weekendDays, geofenceEnabled, payrollEnabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [companyName, officeLat, officeLong, officeRadiusMeters, wDays, wkDays, geoEnabled, payEnabled],
+        function(err) {
+          if (err) return res.status(500).json({ error: err.message });
+          res.json({ message: 'Settings updated' });
+        });
+    }
+  });
 });
+
+// --- Branding & Logo API ---
+app.post('/api/admin/branding', upload.single('logo'), (req, res) => {
+  const { company, themeColor } = req.body;
+  const logoUrl = req.file ? `/uploads/${req.file.filename}` : undefined;
+  
+  if (!company) return res.status(400).json({ error: 'Company Name is required' });
+
+  db.get('SELECT * FROM settings WHERE companyName = ? ORDER BY id DESC LIMIT 1', [company], (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    
+    if (row) {
+      // Update existing
+      const newLogoUrl = logoUrl !== undefined ? logoUrl : row.companyLogo;
+      const newColor = themeColor !== undefined ? themeColor : row.themeColor;
+      db.run('UPDATE settings SET companyLogo = ?, themeColor = ? WHERE id = ?', [newLogoUrl, newColor, row.id], function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ message: 'Branding updated successfully', logo: newLogoUrl, color: newColor });
+      });
+    } else {
+      // Create new settings row for this company just for branding (rare, but possible if they haven't set settings yet)
+      db.run('INSERT INTO settings (companyName, companyLogo, themeColor) VALUES (?, ?, ?)', [company, logoUrl, themeColor], function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ message: 'Branding initialized successfully', logo: logoUrl, color: themeColor });
+      });
+    }
+  });
+});
+
 
 // --- Holidays ---
 app.get('/api/admin/holidays', (req, res) => {
-  db.all('SELECT * FROM holidays ORDER BY date ASC', (err, rows) => {
+  const company = req.query.company;
+  let query = 'SELECT * FROM holidays';
+  let params = [];
+  if (company) {
+    query += ' WHERE company = ?';
+    params.push(company);
+  }
+  query += ' ORDER BY date ASC';
+  db.all(query, params, (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows);
   });
 });
 
 app.post('/api/admin/holidays', (req, res) => {
-  const { name, date, type, duration } = req.body;
-  db.run('INSERT INTO holidays (name, date, type, duration) VALUES (?, ?, ?, ?)', 
-    [name, date, type || 'Public', duration || 'Full Day'], 
+  const { name, date, type, duration, company } = req.body;
+  db.run('INSERT INTO holidays (name, date, type, duration, company) VALUES (?, ?, ?, ?, ?)', 
+    [name, date, type || 'Public', duration || 'Full Day', company], 
     function(err) {
       if (err) return res.status(500).json({ error: err.message });
       res.json({ message: 'Holiday added', id: this.lastID });
@@ -932,7 +1101,14 @@ app.delete('/api/admin/holidays/:id', (req, res) => {
 
 // --- Leave Policies ---
 app.get('/api/admin/leave-policies', (req, res) => {
-  db.all('SELECT * FROM leave_policies', (err, rows) => {
+  const company = req.query.company;
+  let query = 'SELECT * FROM leave_policies';
+  let params = [];
+  if (company) {
+    query += ' WHERE company = ?';
+    params.push(company);
+  }
+  db.all(query, params, (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     // Return defaults if empty
     if (!rows || rows.length === 0) {
@@ -954,10 +1130,10 @@ app.get('/api/admin/leave-policies', (req, res) => {
 });
 
 app.post('/api/admin/leave-policies', (req, res) => {
-  const { leaveType, daysPerYear, isPaid } = req.body;
+  const { leaveType, daysPerYear, isPaid, company } = req.body;
   db.run(
-    'INSERT OR REPLACE INTO leave_policies (leaveType, daysPerYear, isPaid) VALUES (?, ?, ?)',
-    [leaveType, daysPerYear, isPaid ? 1 : 0],
+    'INSERT OR REPLACE INTO leave_policies (leaveType, daysPerYear, isPaid, company) VALUES (?, ?, ?, ?)',
+    [leaveType, daysPerYear, isPaid ? 1 : 0, company],
     function(err) {
       if (err) return res.status(500).json({ error: err.message });
       res.json({ message: 'Policy saved' });
@@ -998,7 +1174,14 @@ app.post('/api/leaves/apply', (req, res) => {
 });
 
 app.get('/api/leaves/types', (req, res) => {
-  db.all('SELECT * FROM leave_policies', (err, rows) => {
+  const company = req.query.company;
+  let q = 'SELECT * FROM leave_policies';
+  let p = [];
+  if (company) {
+    q += ' WHERE company = ?';
+    p.push(company);
+  }
+  db.all(q, p, (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     if (!rows || rows.length === 0) {
       return res.json([
@@ -1021,11 +1204,16 @@ app.get('/api/leaves/:userId', (req, res) => {
 
 app.get('/api/leaves/balance/:userId', (req, res) => {
   // Fetch holidays and user week-offs once
-  db.get('SELECT weekOffs FROM users WHERE id = ?', [req.params.userId], (errUser, user) => {
+  db.get('SELECT weekOffs, company FROM users WHERE id = ?', [req.params.userId], (errUser, user) => {
     if (errUser) return res.status(500).json({ error: errUser.message });
     const weekOffs = (user?.weekOffs || 'Sunday').split(',').map(s => s.trim());
+    const company = user?.company;
 
-    db.all('SELECT date, duration FROM holidays', (errHolidays, holidays) => {
+    let hQuery = 'SELECT date, duration FROM holidays';
+    let hParams = [];
+    if (company) { hQuery += ' WHERE company = ?'; hParams.push(company); }
+
+    db.all(hQuery, hParams, (errHolidays, holidays) => {
       if (errHolidays) return res.status(500).json({ error: errHolidays.message });
       const holidayMap = {};
       holidays.forEach(h => holidayMap[h.date] = h.duration || 'Full Day');
@@ -1060,7 +1248,11 @@ app.get('/api/leaves/balance/:userId', (req, res) => {
         });
 
         // Get dynamic leave types
-        db.all('SELECT * FROM leave_policies', (errPolicies, policies) => {
+        let lpQuery = 'SELECT * FROM leave_policies';
+        let lpParams = [];
+        if (company) { lpQuery += ' WHERE company = ?'; lpParams.push(company); }
+
+        db.all(lpQuery, lpParams, (errPolicies, policies) => {
           let leaveTypes = ['Sick Leave', 'Casual Leave', 'Annual Leave', 'Unpaid Leave'];
           if (policies && policies.length > 0) {
             leaveTypes = policies.map(p => p.leaveType);
@@ -1113,10 +1305,17 @@ app.put('/api/leaves/:id/cancel', (req, res) => {
 
 // Admin Leave Management
 app.get('/api/admin/leaves', (req, res) => {
-  db.all(`SELECT l.*, u.fullName 
+  const company = req.query.company;
+  let query = `SELECT l.*, u.fullName 
           FROM leaves l 
-          JOIN users u ON l.userId = u.id 
-          ORDER BY l.createdAt DESC`, (err, rows) => {
+          JOIN users u ON l.userId = u.id`;
+  let params = [];
+  if (company) {
+    query += ' WHERE u.company = ?';
+    params.push(company);
+  }
+  query += ' ORDER BY l.createdAt DESC';
+  db.all(query, params, (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows);
   });
@@ -1144,12 +1343,16 @@ app.put('/api/admin/leaves/:id', (req, res) => {
 
 // Overtime Report
 app.get('/api/admin/reports/overtime', (req, res) => {
-  const { startDate, endDate } = req.query;
+  const { startDate, endDate, company } = req.query;
   let query = `SELECT a.userId, u.fullName, SUM(a.overtimeHours) as totalOvertimeHours, COUNT(*) as overtimeDays
                FROM attendance a
                JOIN users u ON a.userId = u.id
                WHERE a.overtimeHours > 0`;
   const params = [];
+  if (company) {
+    query += ` AND u.company = ?`;
+    params.push(company);
+  }
   if (startDate && endDate) {
     query += ` AND a.checkInTime BETWEEN ? AND ?`;
     params.push(startDate + 'T00:00:00', endDate + 'T23:59:59');
@@ -1163,7 +1366,7 @@ app.get('/api/admin/reports/overtime', (req, res) => {
 
 // Salary Hours Report
 app.get('/api/admin/reports/salary-hours', (req, res) => {
-  const { startDate, endDate } = req.query;
+  const { startDate, endDate, company } = req.query;
   let query = `SELECT a.userId, u.fullName, u.salary,
                SUM(CASE WHEN a.checkOutTime IS NOT NULL
                  THEN (julianday(a.checkOutTime) - julianday(a.checkInTime)) * 24
@@ -1171,10 +1374,15 @@ app.get('/api/admin/reports/salary-hours', (req, res) => {
                SUM(a.overtimeHours) as totalOvertimeHours,
                COUNT(CASE WHEN a.status = 'Late' THEN 1 END) as lateDays
                FROM attendance a
-               JOIN users u ON a.userId = u.id`;
+               JOIN users u ON a.userId = u.id
+               WHERE 1=1`;
   const params = [];
+  if (company) {
+    query += ` AND u.company = ?`;
+    params.push(company);
+  }
   if (startDate && endDate) {
-    query += ` WHERE a.checkInTime BETWEEN ? AND ?`;
+    query += ` AND a.checkInTime BETWEEN ? AND ?`;
     params.push(startDate + 'T00:00:00', endDate + 'T23:59:59');
   }
   query += ` GROUP BY a.userId ORDER BY u.fullName`;
@@ -1186,7 +1394,7 @@ app.get('/api/admin/reports/salary-hours', (req, res) => {
 
 // Payroll Report
 app.get('/api/admin/reports/payroll', (req, res) => {
-  const { startDate, endDate } = req.query;
+  const { startDate, endDate, company } = req.query;
   let query = `SELECT a.userId, u.fullName, u.salary, u.weekOffs,
                s.overtimeRate, s.latePenaltyPerMin, s.gracePeriodMins,
                SUM(CASE WHEN a.checkOutTime IS NOT NULL
@@ -1196,10 +1404,15 @@ app.get('/api/admin/reports/payroll', (req, res) => {
                COUNT(CASE WHEN a.status = 'Late' THEN 1 END) as lateDays
                FROM attendance a
                JOIN users u ON a.userId = u.id
-               LEFT JOIN shifts s ON u.shiftId = s.id`;
+               LEFT JOIN shifts s ON u.shiftId = s.id
+               WHERE 1=1`;
   const params = [];
+  if (company) {
+    query += ` AND u.company = ?`;
+    params.push(company);
+  }
   if (startDate && endDate) {
-    query += ` WHERE a.checkInTime BETWEEN ? AND ?`;
+    query += ` AND a.checkInTime BETWEEN ? AND ?`;
     params.push(startDate + 'T00:00:00', endDate + 'T23:59:59');
   }
   db.all(query, params, async (err, rows) => {
@@ -1252,15 +1465,20 @@ app.get('/api/admin/reports/payroll', (req, res) => {
 });
 
 app.get('/api/admin/reports/attendance', (req, res) => {
-  const { startDate, endDate } = req.query;
+  const { startDate, endDate, company } = req.query;
   let query = `SELECT a.*, u.fullName, u.id as employeeId, s.name as shiftName
                FROM attendance a 
                JOIN users u ON a.userId = u.id
-               LEFT JOIN shifts s ON u.shiftId = s.id`;
+               LEFT JOIN shifts s ON u.shiftId = s.id
+               WHERE 1=1`;
   
   const params = [];
+  if (company) {
+    query += ` AND u.company = ?`;
+    params.push(company);
+  }
   if (startDate && endDate) {
-    query += ` WHERE a.checkInTime BETWEEN ? AND ?`;
+    query += ` AND a.checkInTime BETWEEN ? AND ?`;
     params.push(startDate + 'T00:00:00', endDate + 'T23:59:59');
   }
   
@@ -1274,6 +1492,63 @@ app.get('/api/admin/reports/attendance', (req, res) => {
 
 // Admin Manual Attendance
 // Note: Merged into /api/admin/attendance at the top
+
+// ============ PAYSLIPS ============
+
+// Admin: Create Payslip
+app.post('/api/admin/payslips', (req, res) => {
+  const { userId, company, month, year, basicSalary, allowances, deductions, netSalary } = req.body;
+  if (!userId || !month || !year || basicSalary === undefined) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  db.run(`INSERT INTO payslips (userId, company, month, year, basicSalary, allowances, deductions, netSalary) 
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [userId, company, month, year, basicSalary, allowances || 0, deductions || 0, netSalary],
+    function(err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ message: 'Payslip created', id: this.lastID });
+    });
+});
+
+// Admin: Get all Payslips for Company
+app.get('/api/admin/payslips', (req, res) => {
+  const company = req.query.company;
+  let query = `SELECT p.*, u.fullName, u.email 
+               FROM payslips p
+               JOIN users u ON p.userId = u.id`;
+  let params = [];
+  if (company) {
+    query += ` WHERE p.company = ?`;
+    params.push(company);
+  }
+  query += ` ORDER BY p.year DESC, p.month DESC`;
+
+  db.all(query, params, (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
+// Admin: Delete a Payslip
+app.delete('/api/admin/payslips/:id', (req, res) => {
+  db.run('DELETE FROM payslips WHERE id = ?', [req.params.id], function(err) {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ message: 'Payslip deleted' });
+  });
+});
+
+// User: Get My Payslips
+app.get('/api/payslips/:userId', (req, res) => {
+  db.all(`SELECT p.*, u.fullName, u.email
+          FROM payslips p
+          JOIN users u ON p.userId = u.id
+          WHERE p.userId = ? 
+          ORDER BY p.year DESC, p.month DESC`, [req.params.userId], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
 
 // Check-out Reminders (Scan for active check-ins)
 app.post('/api/admin/notifications/reminders', (req, res) => {

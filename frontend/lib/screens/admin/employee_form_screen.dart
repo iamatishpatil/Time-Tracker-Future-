@@ -131,7 +131,7 @@ class _EmployeeFormScreenState extends State<EmployeeFormScreen> {
     return Scaffold(
       appBar: AppBar(title: Text(isEdit ? 'Edit Employee' : 'Add Employee')),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: PulseColors.primary))
+          ? Center(child: CircularProgressIndicator(color: PulseColors.primary))
           : SingleChildScrollView(
               padding: const EdgeInsets.all(20),
               child: Form(

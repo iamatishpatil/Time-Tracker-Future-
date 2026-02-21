@@ -88,7 +88,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 color: PulseColors.surfaceVariant,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.lock_reset_rounded, size: 48, color: PulseColors.primary),
+              child: Icon(Icons.lock_reset_rounded, size: 48, color: PulseColors.primary),
             ),
             const SizedBox(height: 24),
             Text('Forgot Password?', style: PulseTextStyles.h2),
