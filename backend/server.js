@@ -106,6 +106,7 @@ db.serialize(() => {
     checkOutAddress TEXT,
     checkOutPhoto TEXT,
     status TEXT DEFAULT 'Present',
+    minutesLate INTEGER DEFAULT 0,
     overtimeHours REAL DEFAULT 0,
     isManual INTEGER DEFAULT 0,
     editedBy INTEGER,
@@ -562,6 +563,7 @@ app.post('/api/checkin', upload.single('photo'), (req, res) => {
         }
 
         let status = 'On Time'; 
+        let minutesLate = 0;
         if (user && user.shiftStart) {
           try {
             const shiftStartParts = user.shiftStart.split(':');
@@ -569,16 +571,19 @@ app.post('/api/checkin', upload.single('photo'), (req, res) => {
             shiftDate.setHours(parseInt(shiftStartParts[0]), parseInt(shiftStartParts[1]), 0, 0);
             
             const graceMins = user.gracePeriodMins || 0;
-            shiftDate.setMinutes(shiftDate.getMinutes() + graceMins);
+            const thresholdDate = new Date(shiftDate);
+            thresholdDate.setMinutes(thresholdDate.getMinutes() + graceMins);
             
-            if (new Date() > shiftDate) {
+            if (new Date() > thresholdDate) {
               status = 'Late';
+              const diffMs = new Date() - shiftDate;
+              minutesLate = Math.floor(diffMs / (1000 * 60));
             }
           } catch(e) { status = 'On Time'; }
         }
       
-        db.run(`INSERT INTO attendance (userId, checkInTime, checkInLat, checkInLong, checkInAddress, checkInPhoto, status) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [userId, now, lat, long, address, photo, status],
+        db.run(`INSERT INTO attendance (userId, checkInTime, checkInLat, checkInLong, checkInAddress, checkInPhoto, status, minutesLate) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [userId, now, lat, long, address, photo, status, minutesLate],
           (err) => {
             if (err) return res.status(500).json({ error: err.message });
             
@@ -731,7 +736,8 @@ app.get('/api/admin/stats', (req, res) => {
 
       let hQuery = 'SELECT name FROM holidays WHERE date = ? AND (duration = "Full Day" OR duration IS NULL)';
       let hParams = [today];
-      if (company) { hQuery += ' AND company = ?'; hParams.push(company); }
+      if (company) { hQuery += ' AND (company = ? OR company IS NULL)'; hParams.push(company); }
+      else { hQuery += ' AND company IS NULL'; }
 
       // Check for Holiday
       db.get(hQuery, hParams, (err, holiday) => {
@@ -909,8 +915,10 @@ app.get('/api/admin/absent', (req, res) => {
   let holQuery = 'SELECT name FROM holidays WHERE date = ? AND (duration = "Full Day" OR duration IS NULL)';
   let holParams = [today];
   if (company) {
-    holQuery += ' AND company = ?';
+    holQuery += ' AND (company = ? OR company IS NULL)';
     holParams.push(company);
+  } else {
+    holQuery += ' AND company IS NULL';
   }
 
   // First check if today is a public holiday
@@ -964,13 +972,15 @@ app.get('/api/admin/shifts', (req, res) => {
 });
 
 app.put('/api/admin/shifts/:id', (req, res) => {
-  const { name, startTime, endTime, gracePeriodMins, overtimeRate, latePenaltyPerMin } = req.body;
+  const { name, startTime, endTime, gracePeriodMins, overtimeRate, latePenaltyPerMin, company } = req.body;
+  if (!company) return res.status(400).json({ error: 'Company is required' });
+  
   db.run(
-    `UPDATE shifts SET name = ?, startTime = ?, endTime = ?, gracePeriodMins = ?, overtimeRate = ?, latePenaltyPerMin = ? WHERE id = ?`,
-    [name, startTime, endTime, gracePeriodMins, overtimeRate, latePenaltyPerMin || 0, req.params.id],
+    `UPDATE shifts SET name = ?, startTime = ?, endTime = ?, gracePeriodMins = ?, overtimeRate = ?, latePenaltyPerMin = ? WHERE id = ? AND company = ?`,
+    [name, startTime, endTime, gracePeriodMins, overtimeRate, latePenaltyPerMin || 0, req.params.id, company],
     function(err) {
       if (err) return res.status(500).json({ error: err.message });
-      if (this.changes === 0) return res.status(404).json({ error: 'Shift not found' });
+      if (this.changes === 0) return res.status(404).json({ error: 'Shift not found or access denied' });
       res.json({ message: 'Shift updated' });
     }
   );
@@ -1072,7 +1082,7 @@ app.get('/api/admin/holidays', (req, res) => {
   let query = 'SELECT * FROM holidays';
   let params = [];
   if (company) {
-    query += ' WHERE company = ?';
+    query += ' WHERE (company = ? OR company IS NULL)';
     params.push(company);
   }
   query += ' ORDER BY date ASC';
@@ -1211,7 +1221,12 @@ app.get('/api/leaves/balance/:userId', (req, res) => {
 
     let hQuery = 'SELECT date, duration FROM holidays';
     let hParams = [];
-    if (company) { hQuery += ' WHERE company = ?'; hParams.push(company); }
+    if (company) { 
+      hQuery += ' WHERE (company = ? OR company IS NULL)'; 
+      hParams.push(company); 
+    } else {
+      hQuery += ' WHERE company IS NULL';
+    }
 
     db.all(hQuery, hParams, (errHolidays, holidays) => {
       if (errHolidays) return res.status(500).json({ error: errHolidays.message });
@@ -1322,21 +1337,23 @@ app.get('/api/admin/leaves', (req, res) => {
 });
 
 app.put('/api/admin/leaves/:id', (req, res) => {
-  const { status, rejectionReason } = req.body;
-  db.run(`UPDATE leaves SET status = ?, rejectionReason = ? WHERE id = ?`,
-    [status, rejectionReason, req.params.id],
-    function(err) {
-      if (err) return res.status(500).json({ error: err.message });
-      
-      // Fetch userId to notify
-      db.get('SELECT userId FROM leaves WHERE id = ?', [req.params.id], (err, row) => {
-        if (row) {
-          createNotification(row.userId, `Leave ${status}`, `Your leave request has been ${status}. ${rejectionReason ? 'Reason: ' + rejectionReason : ''}`);
-        }
-      });
+  const { status, rejectionReason, company } = req.body;
+  if (!company) return res.status(400).json({ error: 'Company is required' });
 
-      res.json({ message: 'Leave status updated' });
-    });
+  // Verify that the leave record belongs to a user in the same company
+  db.get(`SELECT l.userId FROM leaves l JOIN users u ON l.userId = u.id WHERE l.id = ? AND u.company = ?`, [req.params.id, company], (err, record) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!record) return res.status(403).json({ error: 'Access denied: Leave record not found in your company' });
+
+    db.run(`UPDATE leaves SET status = ?, rejectionReason = ? WHERE id = ?`,
+      [status, rejectionReason, req.params.id],
+      function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        
+        createNotification(record.userId, `Leave ${status}`, `Your leave request has been ${status}. ${rejectionReason ? 'Reason: ' + rejectionReason : ''}`);
+        res.json({ message: 'Leave status updated' });
+      });
+  });
 });
 
 // --- Reports ---
@@ -1401,6 +1418,7 @@ app.get('/api/admin/reports/payroll', (req, res) => {
                  THEN (julianday(a.checkOutTime) - julianday(a.checkInTime)) * 24
                  ELSE 0 END) as totalHours,
                SUM(a.overtimeHours) as totalOvertimeHours,
+               SUM(a.minutesLate) as totalMinutesLate,
                COUNT(CASE WHEN a.status = 'Late' THEN 1 END) as lateDays
                FROM attendance a
                JOIN users u ON a.userId = u.id
@@ -1419,7 +1437,16 @@ app.get('/api/admin/reports/payroll', (req, res) => {
     if (err) return res.status(500).json({ error: err.message });
     
     // Fetch all holidays once for calculation
-    db.all('SELECT date, duration, type FROM holidays', async (hErr, holidays) => {
+    let holQuery = 'SELECT date, duration, type FROM holidays';
+    let holParams = [];
+    if (company) {
+      holQuery += ' WHERE (company = ? OR company IS NULL)';
+      holParams.push(company);
+    } else {
+      holQuery += ' WHERE company IS NULL';
+    }
+
+    db.all(holQuery, holParams, async (hErr, holidays) => {
       const holidayMap = {};
       holidays.forEach(h => holidayMap[h.date] = (h.type === 'Optional') ? 'Optional' : (h.duration || 'Full Day'));
       
@@ -1448,7 +1475,7 @@ app.get('/api/admin/reports/payroll', (req, res) => {
         const dailySalary = (r.salary || 0) / workingDays;
         const hourlyRate = dailySalary / 8;
         const overtimePay = (r.totalOvertimeHours || 0) * hourlyRate * (r.overtimeRate || 1.5);
-        const latePenalty = (r.lateDays || 0) * (r.latePenaltyPerMin || 0) * (r.gracePeriodMins || 0);
+        const latePenalty = (r.totalMinutesLate || 0) * (r.latePenaltyPerMin || 0);
         const netSalary = (r.salary || 0) + overtimePay - latePenalty;
         
         return { 

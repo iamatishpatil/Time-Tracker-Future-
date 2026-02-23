@@ -1,3 +1,9 @@
+// --- 7. The Control Tower (Settings) ---
+// This is the most powerful screen for the Admin. It controls the "Rules of the Game":
+// 1. Where the office is (Geofencing)
+// 2. What the app looks like (Dynamic Branding)
+// 3. Which features are active (Payroll toggle)
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -12,15 +18,19 @@ import 'package:image_picker/image_picker.dart';
 import 'package:palette_generator/palette_generator.dart';
 import '../../core/widgets/pulse_button.dart';
 import 'dart:io';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/providers/branding_provider.dart';
+import '../../core/widgets/pulse_app_bar.dart';
 
-class AdminSettingsScreen extends StatefulWidget {
-  const AdminSettingsScreen({super.key});
+class AdminSettingsScreen extends ConsumerStatefulWidget {
+  final bool isTab;
+  const AdminSettingsScreen({super.key, this.isTab = false});
 
   @override
-  State<AdminSettingsScreen> createState() => _AdminSettingsScreenState();
+  ConsumerState<AdminSettingsScreen> createState() => _AdminSettingsScreenState();
 }
 
-class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
+class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
   final _nameController = TextEditingController();
   LatLng _officeLocation = const LatLng(51.5, -0.09);
   double _radius = 100.0;
@@ -140,7 +150,6 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
     });
 
     try {
-      // Extract dominant color
       final PaletteGenerator paletteGenerator = await PaletteGenerator.fromImageProvider(
         FileImage(File(image.path)),
         maximumColorCount: 10,
@@ -152,22 +161,20 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
           
       final hexColor = '#${dominantColor.value.toRadixString(16).substring(2).toUpperCase()}';
 
-      await ApiService.updateBranding(logo: image, themeColor: hexColor);
-      PulseColors.setCompanyBrandColor(dominantColor);
+      final response = await ApiService.updateBranding(logo: image, themeColor: hexColor);
+      
+      // Real-time branding update via provider (now asynchronous for full extraction)
+      await ref.read(brandingProvider.notifier).updateBranding(
+        response['logo'], // Use the server-relative path
+        dominantColor,
+        companyName: _nameController.text,
+      );
       
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('Branding updated successfully! Applying new theme...'),
           backgroundColor: PulseColors.success,
         ));
-        
-        // Force the app to re-evaluate the entire widget tree with the new theme colors
-        // by resetting the navigation stack to the admin home.
-        Future.delayed(const Duration(milliseconds: 500), () {
-          if (mounted) {
-            Navigator.pushNamedAndRemoveUntil(context, '/admin', (route) => false);
-          }
-        });
       }
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to update branding: $e')));
@@ -178,9 +185,247 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final content = _isLoading
+        ? Padding(padding: const EdgeInsets.all(20), child: PulseShimmer.list(count: 3, itemHeight: 60))
+        : SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                PulseCard(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Row(children: [
+                      Icon(Icons.business, color: PulseColors.primary, size: 20),
+                      const SizedBox(width: 8),
+                      Text('Company Name', style: PulseTextStyles.bodyBold),
+                    ]),
+                    const SizedBox(height: 10),
+                    TextField(controller: _nameController, decoration: const InputDecoration(hintText: 'Enter company name')),
+                  ]),
+                ),
+                const SizedBox(height: 14),
+
+                // Branding
+                PulseCard(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Row(children: [
+                      Icon(Icons.palette, color: PulseColors.accent, size: 20),
+                      const SizedBox(width: 8),
+                      Text('App Branding & Theme', style: PulseTextStyles.bodyBold),
+                    ]),
+                    const SizedBox(height: 10),
+                    Text('Upload your company logo. The app will automatically extract its dominant color and update the entire application\'s theme for all your employees.', style: PulseTextStyles.caption),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Container(
+                          width: 80,
+                          height: 80,
+                          decoration: BoxDecoration(
+                            color: PulseColors.surfaceVariant,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: PulseColors.border),
+                            image: _selectedLogo != null 
+                              ? DecorationImage(image: FileImage(File(_selectedLogo!.path)), fit: BoxFit.contain)
+                              : (_currentLogoUrl != null 
+                                  ? DecorationImage(image: NetworkImage(ApiService.getImageUrl(_currentLogoUrl!)), fit: BoxFit.contain)
+                                  : null),
+                          ),
+                          child: (_selectedLogo == null && _currentLogoUrl == null) 
+                              ? Icon(Icons.business, size: 30, color: PulseColors.textHint)
+                              : null,
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: PulseButton(
+                            text: 'Upload Logo',
+                            icon: Icons.upload,
+                            onPressed: _pickAndUploadLogo,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Brand Ribbon (Extracted Palette)', style: PulseTextStyles.captionBold),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            _colorCircle(PulseColors.brandPrimary, 'PR'),
+                            _colorCircle(PulseColors.brandVibrant, 'VB'),
+                            _colorCircle(PulseColors.brandMuted, 'MT'),
+                            _colorCircle(PulseColors.brandLight, 'LT'),
+                            _colorCircle(PulseColors.primaryDark, 'DK'),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ]),
+                ),
+                const SizedBox(height: 14),
+
+                // Working Days
+                PulseCard(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Row(children: [
+                      Icon(Icons.work_outline, color: PulseColors.success, size: 20),
+                      const SizedBox(width: 8),
+                      Text('Working Days', style: PulseTextStyles.bodyBold),
+                    ]),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      children: _allDays.map((day) {
+                        final isWorking = _workingDays.contains(day);
+                        return FilterChip(
+                          label: Text(day, style: TextStyle(color: isWorking ? Colors.white : PulseColors.textSecondary, fontSize: 12, fontWeight: FontWeight.w600)),
+                          selected: isWorking,
+                          selectedColor: PulseColors.success,
+                          backgroundColor: PulseColors.surfaceVariant,
+                          checkmarkColor: Colors.white,
+                          onSelected: (selected) {
+                            setState(() {
+                              if (selected) { _workingDays.add(day); _weekendDays.remove(day); } else { _workingDays.remove(day); }
+                            });
+                          },
+                        );
+                      }).toList(),
+                    ),
+                  ]),
+                ),
+                const SizedBox(height: 14),
+
+                // Weekend Days
+                PulseCard(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Row(children: [
+                      Icon(Icons.weekend, color: PulseColors.warning, size: 20),
+                      const SizedBox(width: 8),
+                      Text('Weekend Days', style: PulseTextStyles.bodyBold),
+                    ]),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      children: _allDays.map((day) {
+                        final isWeekend = _weekendDays.contains(day);
+                        return FilterChip(
+                          label: Text(day, style: TextStyle(color: isWeekend ? Colors.white : PulseColors.textSecondary, fontSize: 12, fontWeight: FontWeight.w600)),
+                          selected: isWeekend,
+                          selectedColor: PulseColors.warning,
+                          backgroundColor: PulseColors.surfaceVariant,
+                          checkmarkColor: Colors.white,
+                          onSelected: (selected) {
+                            setState(() {
+                              if (selected) { _weekendDays.add(day); _workingDays.remove(day); } else { _weekendDays.remove(day); }
+                            });
+                          },
+                        );
+                      }).toList(),
+                    ),
+                  ]),
+                ),
+                const SizedBox(height: 14),
+
+                // --- The Office Map & Geofencing ---
+                PulseCard(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Row(children: [
+                      Icon(Icons.location_on, color: PulseColors.error, size: 20),
+                      const SizedBox(width: 8),
+                      Text('Office Location & Radius', style: PulseTextStyles.bodyBold),
+                    ]),
+                    const SizedBox(height: 12),
+                    // The interactive map
+                    Container(
+                      height: 250,
+                      decoration: BoxDecoration(
+                        border: Border.all(color: PulseColors.border),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: FlutterMap(
+                          mapController: _mapController,
+                          options: MapOptions(
+                            initialCenter: _officeLocation,
+                            initialZoom: 15.0,
+                            onTap: (tapPosition, point) => setState(() => _officeLocation = point),
+                          ),
+                          children: [
+                            TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', userAgentPackageName: 'com.timetracker.frontend'),
+                            // This circle shows the "Allowed Area" for check-ins
+                            CircleLayer(circles: [
+                              CircleMarker(point: _officeLocation, color: PulseColors.primary.withOpacity(0.25), borderStrokeWidth: 2, borderColor: PulseColors.primary, radius: _radius, useRadiusInMeter: true),
+                            ]),
+                            MarkerLayer(markers: [
+                              Marker(point: _officeLocation, width: 40, height: 40, child: Icon(Icons.location_on, color: PulseColors.error, size: 40)),
+                            ]),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    // Toggle to turn off geofencing globally (useful for remote teams)
+                    SwitchListTile(
+                      title: Text('Enable Geofencing restriction', style: PulseTextStyles.bodyBold),
+                      subtitle: Text('Users must be within radius to punch in', style: PulseTextStyles.caption),
+                      activeColor: PulseColors.primary,
+                      contentPadding: EdgeInsets.zero,
+                      value: _geofenceEnabled,
+                      onChanged: (val) => setState(() => _geofenceEnabled = val),
+                    ),
+                    if (_geofenceEnabled) ...[
+                      const SizedBox(height: 12),
+                      Text('Geofence Radius: ${_radius.toInt()} meters', style: PulseTextStyles.caption),
+                      Slider(
+                        value: _radius, min: 50, max: 1000, divisions: 19,
+                        label: '${_radius.toInt()}m',
+                        activeColor: PulseColors.primary,
+                        onChanged: (val) => setState(() => _radius = val),
+                      ),
+                    ],
+                    const Divider(height: 32),
+                    // MASTER SWITCH: Enable/Disable the entire Payroll module
+                    SwitchListTile(
+                      title: Text('Enable Payroll & Payslips', style: PulseTextStyles.bodyBold),
+                      subtitle: Text('Generate and manage employee payslips', style: PulseTextStyles.caption),
+                      activeColor: PulseColors.success,
+                      contentPadding: EdgeInsets.zero,
+                      value: _payrollEnabled,
+                      onChanged: (val) => setState(() => _payrollEnabled = val),
+                    ),
+                  ]),
+                ),
+                const SizedBox(height: 24),
+
+                SizedBox(
+                  height: 50,
+                  child: ElevatedButton(
+                    onPressed: _saveSettings,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: PulseColors.primary,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: const Text('SAVE SETTINGS', style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1)),
+                  ),
+                ),
+              ],
+            ),
+          );
+
+    if (widget.isTab) return content;
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Company Settings'),
+      appBar: PulseAppBar(
+        title: 'Company Settings',
         actions: [
           IconButton(
             icon: const Icon(Icons.beach_access),
@@ -189,237 +434,42 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
           ),
         ],
       ),
-      body: _isLoading
-          ? Padding(padding: const EdgeInsets.all(20), child: PulseShimmer.list(count: 3, itemHeight: 60))
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  PulseCard(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Row(children: [
-                        Icon(Icons.business, color: PulseColors.primary, size: 20),
-                        const SizedBox(width: 8),
-                        Text('Company Name', style: PulseTextStyles.bodyBold),
-                      ]),
-                      const SizedBox(height: 10),
-                      TextField(controller: _nameController, decoration: const InputDecoration(hintText: 'Enter company name')),
-                    ]),
-                  ),
-                  const SizedBox(height: 14),
+      body: content,
+    );
+  }
 
-                  // Branding
-                  PulseCard(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Row(children: [
-                        const Icon(Icons.palette, color: PulseColors.accent, size: 20),
-                        const SizedBox(width: 8),
-                        Text('App Branding & Theme', style: PulseTextStyles.bodyBold),
-                      ]),
-                      const SizedBox(height: 10),
-                      Text('Upload your company logo. The app will automatically extract its dominant color and update the entire application\'s theme for all your employees.', style: PulseTextStyles.caption),
-                      const SizedBox(height: 16),
-                      Row(
-                        children: [
-                          Container(
-                            width: 80,
-                            height: 80,
-                            decoration: BoxDecoration(
-                              color: PulseColors.surfaceVariant,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: PulseColors.border),
-                              image: _selectedLogo != null 
-                                ? DecorationImage(image: FileImage(File(_selectedLogo!.path)), fit: BoxFit.contain)
-                                : (_currentLogoUrl != null 
-                                    ? DecorationImage(image: NetworkImage(ApiService.getImageUrl(_currentLogoUrl!)), fit: BoxFit.contain)
-                                    : null),
-                            ),
-                            child: (_selectedLogo == null && _currentLogoUrl == null) 
-                                ? const Icon(Icons.business, size: 30, color: PulseColors.textHint)
-                                : null,
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: PulseButton(
-                              text: 'Upload Logo',
-                              icon: Icons.upload,
-                              onPressed: _pickAndUploadLogo,
-                            ),
-                          ),
-                        ],
-                      ),
-                      if (_currentThemeColor != null) ...[
-                        const SizedBox(height: 16),
-                        Row(
-                          children: [
-                            Text('Current Theme Color: ', style: PulseTextStyles.captionBold),
-                            Container(
-                              width: 20, height: 20,
-                              margin: const EdgeInsets.only(left: 8),
-                              decoration: BoxDecoration(
-                                color: PulseColors.primary,
-                                shape: BoxShape.circle,
-                                border: Border.all(color: Colors.white, width: 2),
-                              ),
-                            ),
-                          ],
-                        )
-                      ],
-                    ]),
-                  ),
-                  const SizedBox(height: 14),
-
-                  // Working Days
-                  PulseCard(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Row(children: [
-                        const Icon(Icons.work_outline, color: PulseColors.success, size: 20),
-                        const SizedBox(width: 8),
-                        Text('Working Days', style: PulseTextStyles.bodyBold),
-                      ]),
-                      const SizedBox(height: 10),
-                      Wrap(
-                        spacing: 8,
-                        children: _allDays.map((day) {
-                          final isWorking = _workingDays.contains(day);
-                          return FilterChip(
-                            label: Text(day, style: TextStyle(color: isWorking ? Colors.white : PulseColors.textSecondary, fontSize: 12, fontWeight: FontWeight.w600)),
-                            selected: isWorking,
-                            selectedColor: PulseColors.success,
-                            backgroundColor: PulseColors.surfaceVariant,
-                            checkmarkColor: Colors.white,
-                            onSelected: (selected) {
-                              setState(() {
-                                if (selected) { _workingDays.add(day); _weekendDays.remove(day); } else { _workingDays.remove(day); }
-                              });
-                            },
-                          );
-                        }).toList(),
-                      ),
-                    ]),
-                  ),
-                  const SizedBox(height: 14),
-
-                  // Weekend Days
-                  PulseCard(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Row(children: [
-                        const Icon(Icons.weekend, color: PulseColors.warning, size: 20),
-                        const SizedBox(width: 8),
-                        Text('Weekend Days', style: PulseTextStyles.bodyBold),
-                      ]),
-                      const SizedBox(height: 10),
-                      Wrap(
-                        spacing: 8,
-                        children: _allDays.map((day) {
-                          final isWeekend = _weekendDays.contains(day);
-                          return FilterChip(
-                            label: Text(day, style: TextStyle(color: isWeekend ? Colors.white : PulseColors.textSecondary, fontSize: 12, fontWeight: FontWeight.w600)),
-                            selected: isWeekend,
-                            selectedColor: PulseColors.warning,
-                            backgroundColor: PulseColors.surfaceVariant,
-                            checkmarkColor: Colors.white,
-                            onSelected: (selected) {
-                              setState(() {
-                                if (selected) { _weekendDays.add(day); _workingDays.remove(day); } else { _weekendDays.remove(day); }
-                              });
-                            },
-                          );
-                        }).toList(),
-                      ),
-                    ]),
-                  ),
-                  const SizedBox(height: 14),
-
-                  // Office Location
-                  PulseCard(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Row(children: [
-                        const Icon(Icons.location_on, color: PulseColors.error, size: 20),
-                        const SizedBox(width: 8),
-                        Text('Office Location & Radius', style: PulseTextStyles.bodyBold),
-                      ]),
-                      const SizedBox(height: 12),
-                      Container(
-                        height: 250,
-                        decoration: BoxDecoration(
-                          border: Border.all(color: PulseColors.border),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: FlutterMap(
-                            mapController: _mapController,
-                            options: MapOptions(
-                              initialCenter: _officeLocation,
-                              initialZoom: 15.0,
-                              onTap: (tapPosition, point) => setState(() => _officeLocation = point),
-                            ),
-                            children: [
-                              TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', userAgentPackageName: 'com.timetracker.frontend'),
-                              CircleLayer(circles: [
-                                CircleMarker(point: _officeLocation, color: PulseColors.primary.withOpacity(0.25), borderStrokeWidth: 2, borderColor: PulseColors.primary, radius: _radius, useRadiusInMeter: true),
-                              ]),
-                              MarkerLayer(markers: [
-                                Marker(point: _officeLocation, width: 40, height: 40, child: const Icon(Icons.location_on, color: Colors.red, size: 40)),
-                              ]),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      SwitchListTile(
-                        title: Text('Enable Geofencing restriction', style: PulseTextStyles.bodyBold),
-                        subtitle: Text('Users must be within radius to punch in', style: PulseTextStyles.caption),
-                        activeColor: PulseColors.primary,
-                        contentPadding: EdgeInsets.zero,
-                        value: _geofenceEnabled,
-                        onChanged: (val) => setState(() => _geofenceEnabled = val),
-                      ),
-                      if (_geofenceEnabled) ...[
-                        const SizedBox(height: 12),
-                        Text('Geofence Radius: ${_radius.toInt()} meters', style: PulseTextStyles.caption),
-                        Slider(
-                          value: _radius, min: 50, max: 1000, divisions: 19,
-                          label: '${_radius.toInt()}m',
-                          activeColor: PulseColors.primary,
-                          onChanged: (val) => setState(() => _radius = val),
-                        ),
-                      ],
-                      const Divider(height: 32),
-                      SwitchListTile(
-                        title: Text('Enable Payroll & Payslips', style: PulseTextStyles.bodyBold),
-                        subtitle: Text('Generate and manage employee payslips', style: PulseTextStyles.caption),
-                        activeColor: PulseColors.success,
-                        contentPadding: EdgeInsets.zero,
-                        value: _payrollEnabled,
-                        onChanged: (val) => setState(() => _payrollEnabled = val),
-                      ),
-                    ]),
-                  ),
-                  const SizedBox(height: 24),
-
-                  SizedBox(
-                    height: 50,
-                    child: ElevatedButton(
-                      onPressed: _saveSettings,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: PulseColors.primary,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      child: const Text('SAVE SETTINGS', style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1)),
-                    ),
-                  ),
-                ],
+  Widget _colorCircle(Color color, String label) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 36,
+          height: 36,
+          margin: const EdgeInsets.only(right: 12),
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+            border: Border.all(color: PulseColors.border, width: 2),
+            boxShadow: [
+              BoxShadow(
+                color: color.withOpacity(0.2),
+                blurRadius: 8,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Center(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                color: color.computeLuminance() > 0.5 ? Colors.black : Colors.white,
               ),
             ),
+          ),
+        ),
+      ],
     );
   }
 }

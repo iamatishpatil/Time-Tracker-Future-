@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import '../core/theme/pulse_colors.dart';
 import '../core/theme/pulse_text_styles.dart';
 import '../services/api_service.dart';
+import '../core/widgets/branded_logo.dart';
+
+import '../core/widgets/branded_background.dart';
 
 class CustomDrawer extends StatelessWidget {
   final Map<String, dynamic> user;
@@ -12,178 +15,187 @@ class CustomDrawer extends StatelessWidget {
   Widget build(BuildContext context) {
     return Drawer(
       backgroundColor: PulseColors.surface,
-      child: Column(
-        children: [
-          // Profile Header
-          Container(
-            width: double.infinity,
-            padding: EdgeInsets.only(
-              top: MediaQuery.of(context).padding.top + 24,
-              left: 24,
-              right: 24,
-              bottom: 24,
-            ),
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Color(0xFF1A1A2E), Color(0xFF252540)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
+      child: BrandedBackground(
+        child: Column(
+          children: [
+            // Profile Header
+            Container(
+              width: double.infinity,
+              padding: EdgeInsets.only(
+                top: MediaQuery.of(context).padding.top + 24,
+                left: 24,
+                right: 24,
+                bottom: 24,
+              ),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [PulseColors.surface, PulseColors.primary.withOpacity(0.1)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.pop(context);
+                          Navigator.pushNamed(context, '/edit-profile');
+                        },
+                        child: Stack(
+                          children: [
+                            CircleAvatar(
+                              radius: 36,
+                              backgroundColor: PulseColors.surfaceVariant,
+                              backgroundImage: user['profilePicture'] != null
+                                  ? NetworkImage(ApiService.getImageUrl(user['profilePicture']))
+                                  : null,
+                              child: user['profilePicture'] == null
+                                  ? const Icon(Icons.person, size: 32, color: PulseColors.textHint)
+                                  : null,
+                            ),
+                            Positioned(
+                              bottom: 0,
+                              right: 3,
+                              child: Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: BoxDecoration(
+                                  color: PulseColors.primary,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(Icons.edit, size: 12, color: Colors.white),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      BrandedLogo(size: 50, showText: false),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    user['fullName'] ?? 'User',
+                    style: PulseTextStyles.h3,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    user['email'] ?? '',
+                    style: PulseTextStyles.caption,
+                  ),
+                  if (user['role'] != null) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: PulseColors.primary.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        user['role'],
+                        style: PulseTextStyles.captionBold.copyWith(color: PulseColors.primary),
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                GestureDetector(
-                  onTap: () {
-                    Navigator.pop(context);
-                    Navigator.pushNamed(context, '/edit-profile');
-                  },
-                  child: Stack(
-                    children: [
-                      CircleAvatar(
-                        radius: 36,
-                        backgroundColor: PulseColors.surfaceVariant,
-                        backgroundImage: user['profilePicture'] != null
-                            ? NetworkImage(ApiService.getImageUrl(user['profilePicture']))
-                            : null,
-                        child: user['profilePicture'] == null
-                            ? const Icon(Icons.person, size: 32, color: PulseColors.textHint)
-                            : null,
-                      ),
-                      Positioned(
-                        bottom: 0,
-                        right: 0,
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            color: PulseColors.primary,
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(Icons.edit, size: 12, color: Colors.white),
-                        ),
+
+            const SizedBox(height: 8),
+
+            // Menu Items
+            _DrawerTile(
+              icon: Icons.person_outline_rounded,
+              title: 'User Details',
+              onTap: () {
+                Navigator.pop(context);
+                _showUserDetailsDialog(context);
+              },
+            ),
+            _DrawerTile(
+              icon: Icons.lock_outline_rounded,
+              title: 'Change Password',
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.pushNamed(context, '/change-password');
+              },
+            ),
+            _DrawerTile(
+              icon: Icons.notifications_outlined,
+              title: 'Notifications',
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.pushNamed(context, '/notifications');
+              },
+            ),
+            _DrawerTile(
+              icon: Icons.calendar_today_outlined,
+              title: 'Holidays',
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.pushNamed(context, '/user-holidays');
+              },
+            ),
+            _DrawerTile(
+              icon: Icons.schedule,
+              title: 'Company Shifts',
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.pushNamed(context, '/user-shifts');
+              },
+            ),
+            FutureBuilder<Map<String, dynamic>>(
+              future: ApiService.getSettings(),
+              builder: (context, snapshot) {
+                final payrollEnabled = snapshot.data?['payrollEnabled'] != 0;
+                if (payrollEnabled) {
+                  return _DrawerTile(
+                    icon: Icons.receipt_long_outlined,
+                    title: 'My Payslips',
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.pushNamed(context, '/user-payslips');
+                    },
+                  );
+                }
+                return const SizedBox.shrink();
+              },
+            ),
+
+            const Spacer(),
+            const Divider(color: PulseColors.divider),
+            _DrawerTile(
+              icon: Icons.logout_rounded,
+              title: 'Logout',
+              isDestructive: true,
+              onTap: () async {
+                showDialog(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: const Text('Confirm Logout'),
+                    content: const Text('Are you sure you want to log out?'),
+                    actions: [
+                      TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+                      TextButton(
+                        onPressed: () async {
+                          await ApiService.logout();
+                          if (context.mounted) {
+                            Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+                          }
+                        },
+                        child: Text('Logout', style: TextStyle(color: PulseColors.error)),
                       ),
                     ],
                   ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  user['fullName'] ?? 'User',
-                  style: PulseTextStyles.h3,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  user['email'] ?? '',
-                  style: PulseTextStyles.caption,
-                ),
-                if (user['role'] != null) ...[
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: PulseColors.primary.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      user['role'],
-                      style: PulseTextStyles.captionBold.copyWith(color: PulseColors.primaryLight),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 8),
-
-          // Menu Items
-          _DrawerTile(
-            icon: Icons.person_outline_rounded,
-            title: 'User Details',
-            onTap: () {
-              Navigator.pop(context);
-              _showUserDetailsDialog(context);
-            },
-          ),
-          _DrawerTile(
-            icon: Icons.lock_outline_rounded,
-            title: 'Change Password',
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.pushNamed(context, '/change-password');
-            },
-          ),
-          _DrawerTile(
-            icon: Icons.notifications_outlined,
-            title: 'Notifications',
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.pushNamed(context, '/notifications');
-            },
-          ),
-          _DrawerTile(
-            icon: Icons.calendar_today_outlined,
-            title: 'Holidays',
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.pushNamed(context, '/user-holidays');
-            },
-          ),
-          _DrawerTile(
-            icon: Icons.schedule,
-            title: 'Company Shifts',
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.pushNamed(context, '/user-shifts');
-            },
-          ),
-          FutureBuilder<Map<String, dynamic>>(
-            future: ApiService.getSettings(),
-            builder: (context, snapshot) {
-              final payrollEnabled = snapshot.data?['payrollEnabled'] != 0;
-              if (payrollEnabled) {
-                return _DrawerTile(
-                  icon: Icons.receipt_long_outlined,
-                  title: 'My Payslips',
-                  onTap: () {
-                    Navigator.pop(context);
-                    Navigator.pushNamed(context, '/user-payslips');
-                  },
                 );
-              }
-              return const SizedBox.shrink();
-            },
-          ),
-
-          const Spacer(),
-          const Divider(color: PulseColors.divider),
-          _DrawerTile(
-            icon: Icons.logout_rounded,
-            title: 'Logout',
-            isDestructive: true,
-            onTap: () async {
-              showDialog(
-                context: context,
-                builder: (ctx) => AlertDialog(
-                  title: const Text('Confirm Logout'),
-                  content: const Text('Are you sure you want to log out?'),
-                  actions: [
-                    TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-                    TextButton(
-                      onPressed: () async {
-                        await ApiService.logout();
-                        if (context.mounted) {
-                          Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
-                        }
-                      },
-                      child: Text('Logout', style: TextStyle(color: PulseColors.error)),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-          const SizedBox(height: 16),
-        ],
+              },
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
       ),
     );
   }

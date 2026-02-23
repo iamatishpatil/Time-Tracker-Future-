@@ -99,9 +99,9 @@ class _PulseButtonState extends State<PulseButton>
             boxShadow: _isFilled && !isDisabled
                 ? [
                     BoxShadow(
-                      color: _gradient.colors.first.withOpacity(0.3),
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
+                      color: PulseColors.brandPrimary.withOpacity(0.35),
+                      blurRadius: 16,
+                      offset: const Offset(0, 6),
                     ),
                   ]
                 : null,

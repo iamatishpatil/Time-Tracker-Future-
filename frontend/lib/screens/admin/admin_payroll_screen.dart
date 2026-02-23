@@ -1,3 +1,7 @@
+// --- 5. The Payroll & Finance Screen ---
+// This is the most complex Admin module. It calculates exactly how much
+// to pay each employee based on their worked hours, late entries, and overtime.
+
 import 'package:flutter/material.dart';
 import '../../core/theme/pulse_colors.dart';
 import '../../core/theme/pulse_text_styles.dart';
@@ -28,12 +32,18 @@ class _AdminPayrollScreenState extends State<AdminPayrollScreen> {
     _loadData();
   }
 
+  // Fetch payroll data for the selected period (e.g., this month)
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
     try {
+      // We fetch 3 different perspectives from the server:
+      // 1. Full Payroll (Money)
       final payroll = await ApiService.getPayrollReport(startDate: _dateRange?.start, endDate: _dateRange?.end);
+      // 2. Overtime focus (Extra hours)
       final overtime = await ApiService.getOvertimeReport(startDate: _dateRange?.start, endDate: _dateRange?.end);
+      // 3. Raw Hours audit (Basic attendance stats)
       final salaryHours = await ApiService.getSalaryHoursReport(startDate: _dateRange?.start, endDate: _dateRange?.end);
+      
       if (mounted) setState(() { _payroll = payroll; _overtime = overtime; _salaryHours = salaryHours; });
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
@@ -117,6 +127,7 @@ class _AdminPayrollScreenState extends State<AdminPayrollScreen> {
     );
   }
 
+  // --- TAB 1: The Money View ---
   Widget _buildPayrollTab() {
     if (_payroll.isEmpty) return const Center(child: Text('No payroll data', style: TextStyle(color: PulseColors.textHint)));
     return ListView.builder(
@@ -139,8 +150,10 @@ class _AdminPayrollScreenState extends State<AdminPayrollScreen> {
               _payRow('Overtime (+)', '₹${ot.toStringAsFixed(2)}', PulseColors.success),
               _payRow('Late Penalty (-)', '₹${penalty.toStringAsFixed(2)}', PulseColors.error),
               Divider(height: 16, color: PulseColors.border),
+              // THE BOTTOM LINE: What they actually get in the bank
               _payRow('Net Salary', '₹${net.toStringAsFixed(2)}', PulseColors.primary, bold: true),
               const SizedBox(height: 4),
+              // Footnote showing the raw data behind the numbers
               Text('Days: ${p['workingDays'] ?? 22}  •  Hrs: ${(p['totalHours'] as num?)?.toStringAsFixed(1) ?? '0'}  •  OT: ${(p['totalOvertimeHours'] as num?)?.toStringAsFixed(1) ?? '0'}h  •  Late: ${p['lateDays'] ?? 0}d',
                   style: PulseTextStyles.caption.copyWith(fontSize: 10)),
             ]),
@@ -160,6 +173,7 @@ class _AdminPayrollScreenState extends State<AdminPayrollScreen> {
     );
   }
 
+  // --- TAB 2: The Overtime Audit ---
   Widget _buildOvertimeTab() {
     if (_overtime.isEmpty) return const Center(child: Text('No overtime records', style: TextStyle(color: PulseColors.textHint)));
     return ListView.builder(
@@ -182,6 +196,7 @@ class _AdminPayrollScreenState extends State<AdminPayrollScreen> {
                 Text(o['fullName'] ?? 'Unknown', style: PulseTextStyles.bodyBold),
                 Text('${o['overtimeDays']} overtime days', style: PulseTextStyles.caption),
               ])),
+              // Shows total extra hours worked this month
               Text('${(o['totalOvertimeHours'] as num?)?.toStringAsFixed(1) ?? '0'}h',
                   style: PulseTextStyles.h3.copyWith(color: PulseColors.warning, fontSize: 18)),
             ]),
@@ -191,6 +206,7 @@ class _AdminPayrollScreenState extends State<AdminPayrollScreen> {
     );
   }
 
+  // --- TAB 3: The Productivity Audit ---
   Widget _buildHoursTab() {
     if (_salaryHours.isEmpty) return const Center(child: Text('No hours data', style: TextStyle(color: PulseColors.textHint)));
     return ListView.builder(
@@ -213,6 +229,7 @@ class _AdminPayrollScreenState extends State<AdminPayrollScreen> {
                 Text(s['fullName'] ?? 'Unknown', style: PulseTextStyles.bodyBold),
                 Text('Late: ${s['lateDays'] ?? 0}d  •  OT: ${(s['totalOvertimeHours'] as num?)?.toStringAsFixed(1) ?? '0'}h', style: PulseTextStyles.caption),
               ])),
+              // Shows total working hours (Base + OT)
               Text('${(s['totalHours'] as num?)?.toStringAsFixed(1) ?? '0'}h',
                   style: PulseTextStyles.h3.copyWith(color: PulseColors.accent, fontSize: 18)),
             ]),

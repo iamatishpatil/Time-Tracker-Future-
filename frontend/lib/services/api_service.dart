@@ -1,34 +1,28 @@
-// Import Dart's JSON encoding/decoding library
-import 'dart:convert';
-// Import HTTP client for making API requests
-import 'package:http/http.dart' as http;
-// Import image picker for handling profile picture files
+// --- 1. The API Bridge (Service Layer) ---
+// This file is like a "postman". Its only job is to take data from our 
+// Flutter screens and "deliver" it to the server, then bring back the answer.
+
+import 'dart:convert'; // Converts text/json into stuff Dart understand
+import 'package:http/http.dart' as http; // The tool we use to talk to the internet
 import 'package:image_picker/image_picker.dart';
-// Import shared preferences for storing user data locally
-import 'package:shared_preferences/shared_preferences.dart';
-// Import dart:io for platform detection
-import 'dart:io';
-// Import intl for date formatting
+import 'package:shared_preferences/shared_preferences.dart'; // Local storage (like a tiny vault)
 import 'package:intl/intl.dart';
 
-// ApiService class contains all methods for communicating with the backend server
 class ApiService {
-  // Get the base URL for API requests based on the platform
-  // Android emulator uses 10.0.2.2 to access host machine's localhost
-  // Other platforms (Windows, iOS, Web) use localhost directly
+  // --- The Server Address ---
+  // Every server has an address (IP). We use this to tell Flutter where to send data.
   static String get baseUrl {
-    // Return the Host PC's local IP address so physical devices on the same Wi-Fi can connect
-    return 'http://192.168.1.9:3000/api';
+    return 'http://192.168.4.21:3000/api';
   }
 
-  // Get full image URL by replacing /api with empty string to get server root
+  // Helper to get full URLs for images stored on the server
   static String getImageUrl(String? path) {
     if (path == null || path.isEmpty) return '';
     if (path.startsWith('http')) return path;
     return baseUrl.replaceAll('/api', '') + path;
   }
 
-  // Get current user's company
+  // A private helper to find out which company the current user belongs to
   static Future<String?> _getCompany() async {
     final prefs = await SharedPreferences.getInstance();
     final userStr = prefs.getString('user');
@@ -40,43 +34,35 @@ class ApiService {
     }
     return null;
   }
-  // Register a new user with profile picture and user details
-  // Parameters:
-  //   - fields: Map containing all user information (name, email, password, etc.)
-  //   - image: Optional profile picture file from image picker
-  // Returns: Map with registration response data
-  // Throws: Exception if registration fails
+
+  // --- Registration Logic ---
   static Future<Map<String, dynamic>> register(Map<String, String> fields, XFile? image) async {
-    // Create URI for the register endpoint
     var uri = Uri.parse('$baseUrl/register');
-    // Create multipart request (required for file uploads)
+    
+    // MultipartRequest is used when we need to upload FILES (like a photo)
     var request = http.MultipartRequest('POST', uri);
-    // Add all text fields to the request
+    
+    // Add all the text data (name, email, etc.)
     request.fields.addAll(fields);
     
-    // If profile picture is provided, add it to the request
+    // If there is a photo, attach it to the request "package"
     if (image != null) {
       request.files.add(await http.MultipartFile.fromPath('profilePicture', image.path));
     }
 
     try {
-      // Send the request and get streamed response
       var streamedResponse = await request.send();
-      // Convert streamed response to regular response
       var response = await http.Response.fromStream(streamedResponse);
       
-      // Check if registration was successful (HTTP 200)
       if (response.statusCode == 200) {
-        return json.decode(response.body); // Return parsed JSON response
+        return json.decode(response.body); // Server says YES!
       } else {
-        // Try to parse error message from JSON
+        // Server said NO, let's find out why (e.g., email already exists)
         String errorMessage = 'Failed to register';
         try {
           final errorData = json.decode(response.body);
           if (errorData['error'] != null) errorMessage = errorData['error'];
-        } catch (_) {
-          errorMessage = response.body;
-        }
+        } catch (_) {}
         throw Exception(errorMessage);
       }
     } catch (e) {
@@ -84,38 +70,32 @@ class ApiService {
     }
   }
 
-  // ========== USER LOGIN METHOD ==========
-  // Authenticate user with mobile number and password
-  // Parameters:
-  //   - mobileNumber: User's mobile number (used as username)
-  //   - password: User's password
-  // Returns: Map with login response including user data
-  // Throws: Exception if login fails
-  // Side effect: Stores user data in SharedPreferences for persistence
+  // --- Login Logic ---
   static Future<Map<String, dynamic>> login(String mobileNumber, String password) async {
     try {
-      // Send POST request to login endpoint with credentials
+      // http.post sends a standard "package" of data to the server
       final response = await http.post(
         Uri.parse('$baseUrl/login'),
-        headers: {'Content-Type': 'application/json'}, // Specify JSON content type
-        body: json.encode({'mobileNumber': mobileNumber, 'password': password}), // Encode credentials as JSON
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'mobileNumber': mobileNumber, 'password': password}),
       );
 
-      // Check if login was successful
       if (response.statusCode == 200) {
-        final data = json.decode(response.body); // Parse response JSON
-        // Store user data locally for future sessions
+        final data = json.decode(response.body);
+        
+        // --- IMPORTANT: Session Persistence ---
+        // We save the user's data in the phone's memory (SharedPreferences)
+        // so the app remembers they are logged in even if they close it.
         final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('user', json.encode(data['user'])); // Save user object as JSON string
+        await prefs.setString('user', json.encode(data['user']));
+        
         return data;
       } else {
         String errorMessage = 'Failed to login';
         try {
           final errorData = json.decode(response.body);
           if (errorData['error'] != null) errorMessage = errorData['error'];
-        } catch (_) {
-          errorMessage = response.body;
-        }
+        } catch (_) {}
         throw Exception(errorMessage);
       }
     } catch (e) {
@@ -123,17 +103,15 @@ class ApiService {
     }
   }
 
-  // ========== GET STORED USER METHOD ==========
-  // Retrieve user data from local storage (SharedPreferences)
-  // Returns: Map with user data if logged in, null if not logged in
-  // Used to check if user is already logged in when app starts
+  // --- Auto-Login Check ---
+  // When the app starts, we check the "vault" to see if a user is already there.
   static Future<Map<String, dynamic>?> getStoredUser() async {
      final prefs = await SharedPreferences.getInstance();
-     String? userStr = prefs.getString('user'); // Get stored user JSON string
+     String? userStr = prefs.getString('user');
      if (userStr != null) {
-       return json.decode(userStr); // Parse and return user object
+       return json.decode(userStr);
      }
-     return null; // No user stored (not logged in)
+     return null; // Vault is empty, user must login
   }
 
   // ========== UPDATE USER METHOD ==========
@@ -186,15 +164,8 @@ class ApiService {
     }
   }
   
-  // ========== CHECK-IN METHOD ==========
-  // Record user check-in with optional location data and photo
-  // Parameters:
-  //   - userId: ID of the user checking in
-  //   - lat: Optional latitude coordinate
-  //   - long: Optional longitude coordinate
-  //   - address: Optional human-readable address
-  //   - photo: Optional photo file
-  // Throws: Exception if check-in fails (e.g., already checked in)
+  // --- Attendance: Check-In & Check-Out ---
+  // These methods report the user's location and a selfie to the server.
   static Future<void> checkIn(int userId, {double? lat, double? long, String? address, XFile? photo}) async {
     var uri = Uri.parse('$baseUrl/checkin');
     var request = http.MultipartRequest('POST', uri);
@@ -217,9 +188,7 @@ class ApiService {
         try {
           final errorData = json.decode(response.body);
           if (errorData['error'] != null) errorMessage = errorData['error'];
-        } catch (_) {
-          errorMessage = response.body;
-        }
+        } catch (_) {}
         throw Exception(errorMessage);
       }
     } catch (e) {
@@ -227,15 +196,6 @@ class ApiService {
     }
   }
 
-  // ========== CHECK-OUT METHOD ==========
-  // Record user check-out with optional location data and photo
-  // Parameters:
-  //   - userId: ID of the user checking out
-  //   - lat: Optional latitude coordinate
-  //   - long: Optional longitude coordinate
-  //   - address: Optional human-readable address
-  //   - photo: Optional photo file
-  // Throws: Exception if check-out fails (e.g., no active check-in)
   static Future<void> checkOut(int userId, {double? lat, double? long, String? address, XFile? photo}) async {
     var uri = Uri.parse('$baseUrl/checkout');
     var request = http.MultipartRequest('POST', uri);
@@ -258,9 +218,7 @@ class ApiService {
         try {
           final errorData = json.decode(response.body);
           if (errorData['error'] != null) errorMessage = errorData['error'];
-        } catch (_) {
-          errorMessage = response.body;
-        }
+        } catch (_) {}
         throw Exception(errorMessage);
       }
     } catch (e) {
@@ -268,43 +226,30 @@ class ApiService {
     }
   }
 
-  // ========== GET ATTENDANCE HISTORY METHOD ==========
-  // Retrieve all attendance records for a specific user
-  // Parameters:
-  //   - userId: ID of the user
-  // Returns: List of attendance records (each record is a Map)
-  // Throws: Exception if request fails
+  // --- Fetching Attendance Data ---
   static Future<List<dynamic>> getAttendance(int userId) async {
-    // Send GET request to fetch attendance history
     final response = await http.get(Uri.parse('$baseUrl/attendance/$userId'));
     if (response.statusCode == 200) {
-      return json.decode(response.body); // Return parsed list of attendance records
+      return json.decode(response.body);
     } else {
       throw Exception('Failed to load attendance');
     }
   }
 
-  // ========== GET CHECK-IN STATUS METHOD ==========
-  // Check if user currently has an active check-in session
-  // Parameters:
-  //   - userId: ID of the user
-  // Returns: true if user is checked in, false otherwise
+  // Checks if the user is currently "on the clock"
   static Future<bool> getCheckInStatus(int userId) async {
-    // Send GET request to check current status
     final response = await http.get(Uri.parse('$baseUrl/attendance/status/$userId'));
     if (response.statusCode == 200) {
       final data = json.decode(response.body);
-      return data['isCheckedIn'] ?? false; // Return check-in status (default to false)
+      return data['isCheckedIn'] ?? false;
     }
-    return false; // Return false if request fails
+    return false;
   }
   
-  // ========== LOGOUT METHOD ==========
-  // Clear user data from local storage (log out)
-  // Side effect: Removes user data from SharedPreferences
+  // Clear the phone's memory to log the user out
   static Future<void> logout() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('user'); // Remove stored user data
+    await prefs.remove('user');
   }
 
   // --- OTP & Password Recovery ---
@@ -315,8 +260,8 @@ class ApiService {
       Uri.parse('$baseUrl/otp/send'),
       headers: {'Content-Type': 'application/json'},
       body: json.encode({
-        'mobileNumber': ?mobileNumber,
-        'email': ?email,
+        'mobileNumber': mobileNumber,
+        'email': email,
       }),
     );
 
@@ -333,8 +278,8 @@ class ApiService {
       Uri.parse('$baseUrl/otp/verify'),
       headers: {'Content-Type': 'application/json'},
       body: json.encode({
-        'mobileNumber': ?mobileNumber,
-        'email': ?email,
+        'mobileNumber': mobileNumber,
+        'email': email,
         'otp': otp,
       }),
     );
@@ -363,7 +308,7 @@ class ApiService {
     }
   }
 
-  // Change Password
+  // --- Password Management ---
   static Future<void> changePassword(int userId, String oldPassword, String newPassword) async {
     final response = await http.post(
       Uri.parse('$baseUrl/change-password'),
@@ -381,9 +326,8 @@ class ApiService {
     }
   }
 
-  // ============ LEAVE MANAGEMENT METHODS ============
-
-  // Apply for leave
+  // --- Leave Management (User Side) ---
+  // Apply for leave (Sick leave, Casual leave, etc.)
   static Future<void> applyLeave(Map<String, dynamic> data) async {
     final response = await http.post(
       Uri.parse('$baseUrl/leaves/apply'),
@@ -395,7 +339,7 @@ class ApiService {
     }
   }
 
-  // Get leave history
+  // Get a list of all leaves the CURRENT user has applied for
   static Future<List<dynamic>> getLeaveHistory(int userId) async {
     final response = await http.get(Uri.parse('$baseUrl/leaves/$userId'));
     if (response.statusCode == 200) {
@@ -405,7 +349,7 @@ class ApiService {
     }
   }
 
-  // Cancel Leave
+  // Cancel a leave request that hasn't started yet
   static Future<void> cancelLeave(int leaveId, int userId) async {
     final response = await http.put(
       Uri.parse('$baseUrl/leaves/$leaveId/cancel'),
@@ -418,7 +362,7 @@ class ApiService {
     }
   }
 
-  // Get leave balance
+  // Find out how many leave days are LEFT for the user (e.g., 10 Sick leaves remaining)
   static Future<Map<String, dynamic>> getLeaveBalance(int userId) async {
     final response = await http.get(Uri.parse('$baseUrl/leaves/balance/$userId'));
     if (response.statusCode == 200) {
@@ -428,7 +372,7 @@ class ApiService {
     }
   }
 
-  // Get dynamic leave types
+  // Get a list of the types of leave allowed by the company
   static Future<List<String>> getLeaveTypes() async {
     final company = await _getCompany();
     String qs = company != null ? '?company=${Uri.encodeComponent(company)}' : '';
@@ -437,18 +381,15 @@ class ApiService {
       List<dynamic> data = json.decode(response.body);
       return data.map((e) => e.toString()).toList();
     } else {
-      return [
-        'Sick Leave', 'Casual Leave', 'Earned Leave (Privilege)', 
-        'Maternity Leave', 'Paternity Leave', 'Bereavement Leave', 
-        'Compensatory Off (Comp-off)', 'Marriage Leave', 
-        'Leave Without Pay (LWP)', 'Sabbatical Leave'
-      ];
+      // Default list if the server request fails
+      return ['Sick Leave', 'Casual Leave', 'Earned Leave'];
     }
   }
 
   // ============ ADMIN METHODS ============
 
-  // Get Admin Dashboard Stats
+  // --- Admin: Metrics & Reports ---
+  // Get counts for the dashboard (e.g., Total Employees: 50, Present: 40)
   static Future<Map<String, dynamic>> getAdminStats() async {
     final company = await _getCompany();
     String qs = company != null ? '?company=${Uri.encodeComponent(company)}' : '';
@@ -460,7 +401,7 @@ class ApiService {
     }
   }
 
-  // Get All Employees
+  // Get a list of ALL employees in the company
   static Future<List<dynamic>> getAllUsers() async {
     final company = await _getCompany();
     String qs = company != null ? '?company=${Uri.encodeComponent(company)}' : '';
@@ -472,7 +413,7 @@ class ApiService {
     }
   }
 
-  // Get Absent Employees
+  // Find employees who didn't show up today
   static Future<List<dynamic>> getAbsentEmployees() async {
     final company = await _getCompany();
     String qs = company != null ? '?company=${Uri.encodeComponent(company)}' : '';
@@ -484,7 +425,8 @@ class ApiService {
     }
   }
 
-  // Get All Attendance Records (with optional filters)
+  // --- Admin: Advanced Attendance & User Management ---
+  // Get all records, but with options to filter by date, user, or department
   static Future<List<dynamic>> getAllAttendance({int? userId, DateTime? startDate, DateTime? endDate, String? department}) async {
     final params = <String, String>{};
     if (userId != null) params['userId'] = userId.toString();
@@ -504,7 +446,7 @@ class ApiService {
     }
   }
 
-  // Update an attendance record (Admin edit)
+  // Admin can change an employee's check-in/out time if they made a mistake
   static Future<void> updateAttendance(int id, Map<String, dynamic> data) async {
     final response = await http.put(
       Uri.parse('$baseUrl/admin/attendance/$id'),
@@ -517,7 +459,7 @@ class ApiService {
     }
   }
 
-  // Create manual attendance entry (Admin)
+  // Admin can manually add an attendance entry for someone
   static Future<void> createManualAttendance(Map<String, dynamic> data) async {
     final response = await http.post(
       Uri.parse('$baseUrl/admin/attendance'),
@@ -530,7 +472,7 @@ class ApiService {
     }
   }
 
-  // Get All Leave Requests
+  // Get ALL leave requests from EVERYONE for a manager to approve
   static Future<List<dynamic>> getAllLeaves() async {
     final company = await _getCompany();
     String qs = company != null ? '?company=${Uri.encodeComponent(company)}' : '';
@@ -542,7 +484,7 @@ class ApiService {
     }
   }
 
-  // Update Leave Status (Approve/Reject)
+  // Approve or Reject a leave request
   static Future<void> updateLeaveStatus(int id, String status, {String? rejectionReason}) async {
     final response = await http.put(
       Uri.parse('$baseUrl/admin/leaves/$id'),
@@ -554,7 +496,7 @@ class ApiService {
     }
   }
 
-  // Create New User
+  // Create a brand new employee account
   static Future<void> createUser(Map<String, dynamic> userData, {XFile? image}) async {
     final company = await _getCompany();
     if (company != null) userData['company'] = company;
@@ -578,8 +520,7 @@ class ApiService {
     }
   }
 
-
-  // Delete User
+  // Permanently remove a user from the system
   static Future<void> deleteUser(int id) async {
     final response = await http.delete(Uri.parse('$baseUrl/admin/users/$id'));
     if (response.statusCode != 200) {
@@ -587,7 +528,7 @@ class ApiService {
     }
   }
 
-  // Toggle Employee Active/Inactive Status
+  // Temporarily disable an employee's access
   static Future<void> toggleEmployeeActive(int id, bool isActive) async {
     final response = await http.patch(
       Uri.parse('$baseUrl/admin/users/$id/active'),
@@ -600,9 +541,8 @@ class ApiService {
     }
   }
 
-  // ============ SHIFT MANAGEMENT METHODS ============
-
-  // Get All Shifts
+  // --- Shift Management ---
+  // Shifts define when people work (e.g., Morning Shift: 9 AM to 5 PM)
   static Future<List<dynamic>> getShifts() async {
     final company = await _getCompany();
     String qs = company != null ? '?company=${Uri.encodeComponent(company)}' : '';
@@ -614,7 +554,6 @@ class ApiService {
     }
   }
 
-  // Create Shift
   static Future<void> createShift(Map<String, dynamic> shiftData) async {
     final company = await _getCompany();
     if (company != null) shiftData['company'] = company;
@@ -628,13 +567,27 @@ class ApiService {
     }
   }
 
-  // ============ COMPANY SETTINGS METHODS ============
+  static Future<void> updateShift(int id, Map<String, dynamic> data) async {
+    final response = await http.put(
+      Uri.parse('$baseUrl/admin/shifts/$id'),
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode(data),
+    );
+    if (response.statusCode != 200) throw Exception('Failed to update shift');
+  }
 
-  // Get Settings
-  static Future<Map<String, dynamic>> getSettings() async {
-    final company = await _getCompany();
-    String qs = company != null ? '?company=${Uri.encodeComponent(company)}' : '';
-    final response = await http.get(Uri.parse('$baseUrl/settings$qs'));
+  static Future<void> deleteShift(int id) async {
+    final response = await http.delete(Uri.parse('$baseUrl/admin/shifts/$id'));
+    if (response.statusCode != 200) throw Exception('Failed to delete shift');
+  }
+
+  // --- Company Settings ---
+  // Settings like "Company Name", "Country", or "Currency"
+  static Future<Map<String, dynamic>> getSettings({String? company}) async {
+    final effectiveCompany = company ?? await _getCompany();
+    String qs = effectiveCompany != null ? '?company=${Uri.encodeComponent(effectiveCompany)}' : '';
+    final response = await http.get(Uri.parse('$baseUrl/settings$qs'))
+        .timeout(const Duration(seconds: 10));
     if (response.statusCode == 200) {
       return json.decode(response.body);
     } else {
@@ -642,10 +595,9 @@ class ApiService {
     }
   }
 
-  // Update Settings
   static Future<void> updateSettings(Map<String, dynamic> settingsData) async {
     final company = await _getCompany();
-    if (company != null) settingsData['companyName'] = company; // Settings already used companyName col
+    if (company != null) settingsData['companyName'] = company;
     final response = await http.post(
       Uri.parse('$baseUrl/admin/settings'),
       headers: {'Content-Type': 'application/json'},
@@ -656,30 +608,8 @@ class ApiService {
     }
   }
 
-  // Update Branding (Logo & Theme Color)
-  static Future<void> updateBranding({XFile? logo, String? themeColor}) async {
-    final company = await _getCompany();
-    if (company == null) throw Exception('No company associated with admin');
-
-    var request = http.MultipartRequest('POST', Uri.parse('$baseUrl/admin/branding'));
-    request.fields['company'] = company;
-    if (themeColor != null) request.fields['themeColor'] = themeColor;
-
-    if (logo != null) {
-      request.files.add(await http.MultipartFile.fromPath('logo', logo.path));
-    }
-
-    var streamedResponse = await request.send();
-    var response = await http.Response.fromStream(streamedResponse);
-
-    if (response.statusCode != 200) {
-      final error = json.decode(response.body)['error'] ?? 'Failed to update branding';
-      throw Exception(error);
-    }
-  }
-  // ============ NOTIFICATIONS METHODS ============
-
-  // Get User Notifications
+  // --- Notifications ---
+  // Bell icons, unread alerts, etc.
   static Future<List<dynamic>> getNotifications(int userId) async {
     final response = await http.get(Uri.parse('$baseUrl/notifications/$userId'));
     if (response.statusCode == 200) {
@@ -689,7 +619,6 @@ class ApiService {
     }
   }
 
-  // Mark Notification as Read
   static Future<void> markNotificationRead(int id) async {
     final response = await http.put(Uri.parse('$baseUrl/notifications/$id/read'));
     if (response.statusCode != 200) {
@@ -697,7 +626,37 @@ class ApiService {
     }
   }
 
-  // Get Attendance Report
+  // --- Holidays ---
+  // Public holidays like "New Year's Day"
+  static Future<List<dynamic>> getHolidays() async {
+    final company = await _getCompany();
+    String qs = company != null ? '?company=${Uri.encodeComponent(company)}' : '';
+    final response = await http.get(Uri.parse('$baseUrl/admin/holidays$qs'));
+    if (response.statusCode == 200) return json.decode(response.body);
+    throw Exception('Failed to load holidays');
+  }
+
+  static Future<void> addHoliday(String name, String date, {String type = 'Public', String duration = 'Full Day'}) async {
+    final company = await _getCompany();
+    final data = {
+      'name': name, 'date': date, 'type': type, 'duration': duration,
+    };
+    if (company != null) data['company'] = company;
+    
+    final response = await http.post(
+      Uri.parse('$baseUrl/admin/holidays'),
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode(data),
+    );
+    if (response.statusCode != 200) throw Exception('Failed to add holiday');
+  }
+
+  static Future<void> deleteHoliday(int id) async {
+    final response = await http.delete(Uri.parse('$baseUrl/admin/holidays/$id'));
+    if (response.statusCode != 200) throw Exception('Failed to delete holiday');
+  }
+
+  // --- Reports (The CSV/PDF stuff) ---
   static Future<List<dynamic>> getAttendanceReport({DateTime? startDate, DateTime? endDate}) async {
     String query = '';
     final company = await _getCompany();
@@ -717,137 +676,122 @@ class ApiService {
       throw Exception('Failed to load report');
     }
   }
-  // ============ SHIFT MANAGEMENT ============
 
-  static Future<void> updateShift(int id, Map<String, dynamic> data) async {
-    final response = await http.put(
-      Uri.parse('$baseUrl/admin/shifts/$id'),
-      headers: {'Content-Type': 'application/json'},
-      body: json.encode(data),
-    );
-    if (response.statusCode != 200) throw Exception('Failed to update shift');
-  }
-
-  static Future<void> deleteShift(int id) async {
-    final response = await http.delete(Uri.parse('$baseUrl/admin/shifts/$id'));
-    if (response.statusCode != 200) throw Exception('Failed to delete shift');
-  }
-
-  // ============ HOLIDAYS ============
-
-  static Future<List<dynamic>> getHolidays() async {
+  static Future<List<dynamic>> getPayrollReport({DateTime? startDate, DateTime? endDate}) async {
     final company = await _getCompany();
-    String qs = company != null ? '?company=${Uri.encodeComponent(company)}' : '';
-    final response = await http.get(Uri.parse('$baseUrl/admin/holidays$qs'));
-    if (response.statusCode == 200) return json.decode(response.body);
-    throw Exception('Failed to load holidays');
-  }
-
-  static Future<void> addHoliday(String name, String date, {String type = 'Public', String duration = 'Full Day'}) async {
-    final company = await _getCompany();
-    final data = {
-      'name': name,
-      'date': date,
-      'type': type,
-      'duration': duration,
-    };
-    if (company != null) data['company'] = company;
+    final params = <String, String>{};
+    if (startDate != null) params['startDate'] = DateFormat('yyyy-MM-dd').format(startDate);
+    if (endDate != null) params['endDate'] = DateFormat('yyyy-MM-dd').format(endDate);
+    if (company != null) params['company'] = company;
     
-    final response = await http.post(
-      Uri.parse('$baseUrl/admin/holidays'),
-      headers: {'Content-Type': 'application/json'},
-      body: json.encode(data),
-    );
-    if (response.statusCode != 200) throw Exception('Failed to add holiday');
+    final uri = Uri.parse('$baseUrl/admin/reports/payroll').replace(queryParameters: params.isNotEmpty ? params : null);
+    final response = await http.get(uri);
+    if (response.statusCode == 200) {
+      return json.decode(response.body);
+    } else {
+      throw Exception('Failed to load payroll report');
+    }
   }
 
-  static Future<void> deleteHoliday(int id) async {
-    final response = await http.delete(Uri.parse('$baseUrl/admin/holidays/$id'));
-    if (response.statusCode != 200) throw Exception('Failed to delete holiday');
+  static Future<List<dynamic>> getOvertimeReport({DateTime? startDate, DateTime? endDate}) async {
+    final params = <String, String>{};
+    final company = await _getCompany();
+    if (startDate != null) params['startDate'] = DateFormat('yyyy-MM-dd').format(startDate);
+    if (endDate != null) params['endDate'] = DateFormat('yyyy-MM-dd').format(endDate);
+    if (company != null) params['company'] = company;
+
+    final uri = Uri.parse('$baseUrl/admin/reports/overtime').replace(queryParameters: params.isNotEmpty ? params : null);
+    final response = await http.get(uri);
+    if (response.statusCode == 200) {
+      return json.decode(response.body);
+    } else {
+      throw Exception('Failed to load overtime report');
+    }
   }
 
-  // ============ LEAVE POLICIES ============
+  static Future<List<dynamic>> getSalaryHoursReport({DateTime? startDate, DateTime? endDate}) async {
+    final params = <String, String>{};
+    final company = await _getCompany();
+    if (startDate != null) params['startDate'] = DateFormat('yyyy-MM-dd').format(startDate);
+    if (endDate != null) params['endDate'] = DateFormat('yyyy-MM-dd').format(endDate);
+    if (company != null) params['company'] = company;
 
+    final uri = Uri.parse('$baseUrl/admin/reports/salary-hours').replace(queryParameters: params.isNotEmpty ? params : null);
+    final response = await http.get(uri);
+    if (response.statusCode == 200) {
+      return json.decode(response.body);
+    } else {
+      throw Exception('Failed to load salary hours report');
+    }
+  }
+
+  // --- Leave Management (Admin) ---
+  
   static Future<List<dynamic>> getLeavePolicies() async {
     final company = await _getCompany();
     String qs = company != null ? '?company=${Uri.encodeComponent(company)}' : '';
     final response = await http.get(Uri.parse('$baseUrl/admin/leave-policies$qs'));
-    if (response.statusCode == 200) return json.decode(response.body);
-    throw Exception('Failed to load leave policies');
+    if (response.statusCode == 200) {
+      return json.decode(response.body);
+    } else {
+      throw Exception('Failed to load leave policies');
+    }
   }
 
-  static Future<void> saveLeavePolicy(Map<String, dynamic> data) async {
+  static Future<void> saveLeavePolicy(Map<String, dynamic> policyData) async {
     final company = await _getCompany();
-    if (company != null) data['company'] = company;
+    if (company != null) policyData['company'] = company;
     final response = await http.post(
       Uri.parse('$baseUrl/admin/leave-policies'),
       headers: {'Content-Type': 'application/json'},
-      body: json.encode(data),
+      body: json.encode(policyData),
     );
-    if (response.statusCode != 200) throw Exception('Failed to save policy');
+    if (response.statusCode != 200) {
+      throw Exception('Failed to save leave policy');
+    }
   }
 
   static Future<void> adjustLeaveBalance(int userId, String leaveType, int totalDays) async {
     final response = await http.put(
       Uri.parse('$baseUrl/admin/leave-balance'),
       headers: {'Content-Type': 'application/json'},
-      body: json.encode({'userId': userId, 'leaveType': leaveType, 'totalDays': totalDays}),
+      body: json.encode({
+        'userId': userId,
+        'leaveType': leaveType,
+        'totalDays': totalDays,
+      }),
     );
-    if (response.statusCode != 200) throw Exception('Failed to adjust balance');
-  }
-
-  // ============ REPORTS ============
-
-  static Future<List<dynamic>> getOvertimeReport({DateTime? startDate, DateTime? endDate}) async {
-    String query = '';
-    final company = await _getCompany();
-    if (startDate != null && endDate != null) {
-      final s = '${startDate.year}-${startDate.month.toString().padLeft(2,'0')}-${startDate.day.toString().padLeft(2,'0')}';
-      final e = '${endDate.year}-${endDate.month.toString().padLeft(2,'0')}-${endDate.day.toString().padLeft(2,'0')}';
-      query = '?startDate=$s&endDate=$e';
-      if (company != null) query += '&company=${Uri.encodeComponent(company)}';
-    } else if (company != null) {
-      query = '?company=${Uri.encodeComponent(company)}';
+    if (response.statusCode != 200) {
+      throw Exception('Failed to adjust leave balance');
     }
-    final response = await http.get(Uri.parse('$baseUrl/admin/reports/overtime$query'));
-    if (response.statusCode == 200) return json.decode(response.body);
-    throw Exception('Failed to load overtime report');
   }
 
-  static Future<List<dynamic>> getSalaryHoursReport({DateTime? startDate, DateTime? endDate}) async {
-    String query = '';
+
+
+  static Future<Map<String, dynamic>> updateBranding({XFile? logo, String? themeColor}) async {
     final company = await _getCompany();
-    if (startDate != null && endDate != null) {
-      final s = '${startDate.year}-${startDate.month.toString().padLeft(2,'0')}-${startDate.day.toString().padLeft(2,'0')}';
-      final e = '${endDate.year}-${endDate.month.toString().padLeft(2,'0')}-${endDate.day.toString().padLeft(2,'0')}';
-      query = '?startDate=$s&endDate=$e';
-      if (company != null) query += '&company=${Uri.encodeComponent(company)}';
-    } else if (company != null) {
-      query = '?company=${Uri.encodeComponent(company)}';
+    if (company == null) throw Exception('Company not found');
+
+    var request = http.MultipartRequest('POST', Uri.parse('$baseUrl/admin/branding'));
+    request.fields['company'] = company;
+    if (themeColor != null) request.fields['themeColor'] = themeColor;
+    
+    if (logo != null) {
+      request.files.add(await http.MultipartFile.fromPath('logo', logo.path));
     }
-    final response = await http.get(Uri.parse('$baseUrl/admin/reports/salary-hours$query'));
-    if (response.statusCode == 200) return json.decode(response.body);
-    throw Exception('Failed to load salary hours report');
+
+    var streamedResponse = await request.send();
+    var response = await http.Response.fromStream(streamedResponse);
+
+    if (response.statusCode == 200) {
+      return json.decode(response.body);
+    } else {
+      throw Exception('Failed to update branding: ${response.body}');
+    }
   }
 
-  static Future<List<dynamic>> getPayrollReport({DateTime? startDate, DateTime? endDate}) async {
-    String query = '';
-    final company = await _getCompany();
-    if (startDate != null && endDate != null) {
-      final s = '${startDate.year}-${startDate.month.toString().padLeft(2,'0')}-${startDate.day.toString().padLeft(2,'0')}';
-      final e = '${endDate.year}-${endDate.month.toString().padLeft(2,'0')}-${endDate.day.toString().padLeft(2,'0')}';
-      query = '?startDate=$s&endDate=$e';
-      if (company != null) query += '&company=${Uri.encodeComponent(company)}';
-    } else if (company != null) {
-      query = '?company=${Uri.encodeComponent(company)}';
-    }
-    final response = await http.get(Uri.parse('$baseUrl/admin/reports/payroll$query'));
-    if (response.statusCode == 200) return json.decode(response.body);
-    throw Exception('Failed to load payroll report');
-  }
-
-  // ============ PAYSLIPS ============
-
+  // --- Payslips ---
+  // Creating and viewing salary slips
   static Future<void> createPayslip(Map<String, dynamic> data) async {
     final company = await _getCompany();
     if (company != null) data['company'] = company;

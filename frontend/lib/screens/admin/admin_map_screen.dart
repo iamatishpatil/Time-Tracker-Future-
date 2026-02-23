@@ -1,3 +1,8 @@
+// --- 9. The Location Verification Map ---
+// This is a utility screen. When an Admin clicks on an attendance record, 
+// they are brought here to see exactly where on the map that person was 
+// standing when they punched in.
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -27,6 +32,7 @@ class AdminMapScreen extends StatelessWidget {
         children: [
           FlutterMap(
             options: MapOptions(
+              // Center the map on the employee's coordinates
               initialCenter: LatLng(latitude, longitude),
               initialZoom: 16.0,
             ),
@@ -37,6 +43,7 @@ class AdminMapScreen extends StatelessWidget {
               ),
               MarkerLayer(
                 markers: [
+                  // The "Pin" on the map
                   Marker(
                     point: LatLng(latitude, longitude),
                     width: 80, height: 80,

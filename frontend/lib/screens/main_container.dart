@@ -1,3 +1,7 @@
+// --- 1. The Main Shell (Container) ---
+// This file is like a "Cabinet". It stays on the screen, but it has 4 "drawers" 
+// (Tabs) that we can open and close.
+
 import 'package:flutter/material.dart';
 import '../core/theme/pulse_colors.dart';
 import '../core/theme/pulse_text_styles.dart';
@@ -8,6 +12,8 @@ import 'edit_profile_screen.dart';
 import '../services/api_service.dart';
 import '../widgets/custom_drawer.dart';
 import '../services/pdf_service.dart';
+import '../core/widgets/pulse_app_bar.dart';
+import '../core/widgets/pulse_scaffold.dart';
 
 class MainContainer extends StatefulWidget {
   const MainContainer({super.key});
@@ -17,16 +23,18 @@ class MainContainer extends StatefulWidget {
 }
 
 class _MainContainerState extends State<MainContainer> {
-  int _selectedIndex = 0;
-  Map<String, dynamic>? _user;
-  List<dynamic> _history = [];
+  // --- The Brain of the Navigation ---
+  int _selectedIndex = 0; // Keeps track of which tab is currently open (0 to 3)
+  Map<String, dynamic>? _user; // Stores the logged-in user's info
+  List<dynamic> _history = []; // Stores the user's attendance records
 
   @override
   void initState() {
     super.initState();
-    _loadUser();
+    _loadUser(); // Load data as soon as the cabinet opens!
   }
 
+  // Fetch the user and their history from the server/vault
   Future<void> _loadUser() async {
     final user = await ApiService.getStoredUser();
     if (user != null) {
@@ -38,23 +46,27 @@ class _MainContainerState extends State<MainContainer> {
     }
   }
 
+  // If the user updates their profile, we need to refresh the info here too
   void _updateUser(Map<String, dynamic> updatedUser) {
     setState(() => _user = updatedUser);
   }
 
   @override
   Widget build(BuildContext context) {
+    // Show a spinner while we wait for the user's data to load
     if (_user == null) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
+    // --- The 4 Drawers (Screens) ---
     final List<Widget> screens = [
-      const HomeScreen(),
-      const AttendanceHistoryScreen(),
-      const LeaveScreen(),
-      EditProfileScreen(user: _user!, onUserUpdated: _updateUser),
+      const HomeScreen(), // Tab 0
+      const AttendanceHistoryScreen(), // Tab 1
+      const LeaveScreen(), // Tab 2
+      EditProfileScreen(user: _user!, onUserUpdated: _updateUser), // Tab 3
     ];
 
+    // The titles that appear at the top of the app bar
     final List<String> titles = [
       'Dashboard',
       'Attendance',
@@ -62,19 +74,18 @@ class _MainContainerState extends State<MainContainer> {
       'Profile',
     ];
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(titles[_selectedIndex]),
-        actions: [
-          if (_selectedIndex == 1 && _history.isNotEmpty)
-            IconButton(
-              icon: const Icon(Icons.picture_as_pdf_rounded, size: 20),
-              onPressed: () => PdfService.generateAttendanceReport(
-                  _user!['fullName'] ?? 'User', _history),
-            ),
-          const SizedBox(width: 8),
-        ],
-      ),
+    return PulseScaffold(
+      title: titles[_selectedIndex],
+      actions: [
+        if (_selectedIndex == 1 && _history.isNotEmpty)
+          IconButton(
+            icon: const Icon(Icons.picture_as_pdf_rounded, size: 20),
+            tooltip: 'Download Report',
+            onPressed: () => PdfService.generateAttendanceReport(
+                _user!['fullName'] ?? 'User', _history),
+          ),
+        const SizedBox(width: 8),
+      ],
       drawer: CustomDrawer(user: _user!),
       body: AnimatedSwitcher(
         duration: const Duration(milliseconds: 300),
@@ -110,16 +121,18 @@ class _MainContainerState extends State<MainContainer> {
     );
   }
 
+  // A helper function to build each button in the bottom bar
   Widget _buildNavItem(int index, IconData activeIcon, IconData inactiveIcon, String label) {
     final isSelected = _selectedIndex == index;
     return GestureDetector(
-      onTap: () => setState(() => _selectedIndex = index),
+      onTap: () => setState(() => _selectedIndex = index), // Change tab on tap
       behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? PulseColors.primary.withOpacity(0.15) : Colors.transparent,
+          // Add a subtle glow/background when selected
+          color: isSelected ? PulseColors.brandLight.withOpacity(0.5) : Colors.transparent,
           borderRadius: BorderRadius.circular(16),
         ),
         child: Row(
@@ -127,9 +140,10 @@ class _MainContainerState extends State<MainContainer> {
           children: [
             Icon(
               isSelected ? activeIcon : inactiveIcon,
-              color: isSelected ? PulseColors.primary : PulseColors.textHint,
+              color: isSelected ? PulseColors.brandPrimary : PulseColors.textHint,
               size: 22,
             ),
+            // Show the text label ONLY if this tab is selected
             if (isSelected) ...[
               const SizedBox(width: 8),
               Text(

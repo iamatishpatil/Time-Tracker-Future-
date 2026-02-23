@@ -1,3 +1,7 @@
+// --- 4. The Leave Approval Screen ---
+// This is where Admins review "Time-Off" requests. They can see the reason,
+// the dates, and then decide to Approve or Reject the request.
+
 import 'package:flutter/material.dart';
 import '../../core/theme/pulse_colors.dart';
 import '../../core/theme/pulse_text_styles.dart';
@@ -7,7 +11,8 @@ import '../../core/widgets/pulse_empty_state.dart';
 import '../../services/api_service.dart';
 
 class AdminLeavesScreen extends StatefulWidget {
-  const AdminLeavesScreen({super.key});
+  final bool isTab;
+  const AdminLeavesScreen({super.key, this.isTab = false});
 
   @override
   State<AdminLeavesScreen> createState() => _AdminLeavesScreenState();
@@ -35,9 +40,11 @@ class _AdminLeavesScreenState extends State<AdminLeavesScreen> {
     }
   }
 
+  // The function to change a "Pending" request into "Approved" or "Rejected"
   Future<void> _updateStatus(int id, String status) async {
     try {
       await ApiService.updateLeaveStatus(id, status);
+      // Refresh the list so the card changes color immediately
       _loadLeaves();
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
@@ -46,24 +53,28 @@ class _AdminLeavesScreenState extends State<AdminLeavesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final content = RefreshIndicator(
+      onRefresh: _loadLeaves,
+      child: _isLoading
+          ? Padding(padding: const EdgeInsets.all(20), child: PulseShimmer.list(count: 4, itemHeight: 130))
+          : _leaves.isEmpty
+              ? ListView(physics: const AlwaysScrollableScrollPhysics(), children: const [
+                  SizedBox(height: 80),
+                  PulseEmptyState(icon: Icons.beach_access_outlined, title: 'No Requests', subtitle: 'Pull to refresh'),
+                ])
+              : ListView.builder(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.all(14),
+                  itemCount: _leaves.length,
+                  itemBuilder: (context, index) => _buildCard(_leaves[index]),
+                ),
+    );
+
+    if (widget.isTab) return content;
+
     return Scaffold(
       appBar: AppBar(title: const Text('Leave Management')),
-      body: RefreshIndicator(
-        onRefresh: _loadLeaves,
-        child: _isLoading
-            ? Padding(padding: const EdgeInsets.all(20), child: PulseShimmer.list(count: 4, itemHeight: 130))
-            : _leaves.isEmpty
-                ? ListView(physics: const AlwaysScrollableScrollPhysics(), children: const [
-                    SizedBox(height: 80),
-                    PulseEmptyState(icon: Icons.beach_access_outlined, title: 'No Requests', subtitle: 'Pull to refresh'),
-                  ])
-                : ListView.builder(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.all(14),
-                    itemCount: _leaves.length,
-                    itemBuilder: (context, index) => _buildCard(_leaves[index]),
-                  ),
-      ),
+      body: content,
     );
   }
 
@@ -108,6 +119,7 @@ class _AdminLeavesScreenState extends State<AdminLeavesScreen> {
               const SizedBox(width: 6),
               Expanded(child: Text(leave['reason'] ?? 'No reason', style: PulseTextStyles.caption.copyWith(fontSize: 11))),
             ]),
+            // If the request hasn't been dealt with yet, show the "YES/NO" buttons
             if (status == 'Pending') ...[
               const SizedBox(height: 12),
               Row(mainAxisAlignment: MainAxisAlignment.end, children: [

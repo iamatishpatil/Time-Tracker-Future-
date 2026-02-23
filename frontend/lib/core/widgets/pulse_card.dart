@@ -35,13 +35,7 @@ class PulseCard extends StatelessWidget {
           width: 1,
         ),
         boxShadow: glowEffect
-            ? [
-                BoxShadow(
-                  color: PulseColors.primary.withOpacity(0.08),
-                  blurRadius: 20,
-                  offset: const Offset(0, 4),
-                ),
-              ]
+            ? PulseColors.brandShadow
             : null,
       ),
       child: ClipRRect(

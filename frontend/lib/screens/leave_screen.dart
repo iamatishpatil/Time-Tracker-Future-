@@ -1,3 +1,7 @@
+// --- 1. The Leave Management Screen ---
+// This is where users can see how many days off they have left and 
+// request new leaves. It's a great example of a complex Form in Flutter.
+
 import 'package:flutter/material.dart';
 import '../core/theme/pulse_colors.dart';
 import '../core/theme/pulse_text_styles.dart';
@@ -16,6 +20,7 @@ class LeaveScreen extends StatefulWidget {
 
 class _LeaveScreenState extends State<LeaveScreen> {
   final _formKey = GlobalKey<FormState>();
+  // We use these to store the dates the user picks from the calendar
   DateTime? _startDate;
   DateTime? _endDate;
   final _reasonController = TextEditingController();
@@ -38,13 +43,17 @@ class _LeaveScreenState extends State<LeaveScreen> {
     _loadData();
   }
 
+  // Fetch information about the user's leaves from the server
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
     try {
       final user = await ApiService.getStoredUser();
       if (user != null) {
+        // 1. Get how many days are Total, Used, and Left
         final balance = await ApiService.getLeaveBalance(user['id']);
+        // 2. Short list of previous requests
         final history = await ApiService.getLeaveHistory(user['id']);
+        // 3. The list of categories (Sick, Casual, etc)
         final types = await ApiService.getLeaveTypes();
 
         if (mounted) {
@@ -58,6 +67,7 @@ class _LeaveScreenState extends State<LeaveScreen> {
             }
           });
 
+          // Also get holidays so we can skip them during calculations
           final holidays = await ApiService.getHolidays();
           if (mounted) setState(() => _holidays = holidays);
         }
@@ -221,7 +231,9 @@ class _LeaveScreenState extends State<LeaveScreen> {
           ),
           const SizedBox(height: 16),
 
-          // Holiday estimation
+          // --- Holiday Logic (The Smart Part) ---
+          // This section calculates exactly how many days will be deducted
+          // by looping through the dates and skipping Sundays and Public Holidays.
           if (_startDate != null && _endDate != null) ...[
             PulseCard(
               color: PulseColors.accent.withOpacity(0.1),
@@ -235,13 +247,19 @@ class _LeaveScreenState extends State<LeaveScreen> {
 
                 while (current.isBefore(end)) {
                   final dateStr = DateFormat('yyyy-MM-dd').format(current);
+                  // Check if THIS date is in our list of holidays from the server
                   final holiday = _holidays.firstWhere((h) => h['date'] == dateStr, orElse: () => null);
+                  
+                  // Rule: Don't deduct leaves for Sundays
                   if (DateFormat('EEEE').format(current) != 'Sunday') {
                     if (holiday != null && (holiday['type'] == 'Public' && holiday['duration'] == 'Full Day')) {
+                      // Rule: Don't deduct for public holidays
                       holidayCount++;
                     } else if (holiday != null && holiday['duration'] == 'Half Day') {
+                      // Rule: Only deduct 0.5 days if it's a half-day holiday
                       days += 0.5;
                     } else {
+                      // Regular working day: deduct 1 full day
                       days += 1.0;
                     }
                   }
@@ -269,7 +287,7 @@ class _LeaveScreenState extends State<LeaveScreen> {
             controller: _reasonController,
             decoration: const InputDecoration(labelText: 'Reason for leave'),
             maxLines: 2,
-            style: PulseTextStyles.body.copyWith(color: Colors.white),
+            style: PulseTextStyles.body,
             validator: (v) => v!.isEmpty ? 'Please enter a reason' : null,
           ),
           const SizedBox(height: 16),
@@ -282,6 +300,7 @@ class _LeaveScreenState extends State<LeaveScreen> {
     );
   }
 
+  // A reusable button that opens the Calendar popup
   Widget _dateSelector(String label, DateTime? date, Function(DateTime) onSelected, {DateTime? firstDate}) {
     return GestureDetector(
       onTap: () async {
@@ -315,6 +334,7 @@ class _LeaveScreenState extends State<LeaveScreen> {
     );
   }
 
+  // The scrollable list showing previous requests (Approved, Pending, or Rejected)
   Widget _buildHistoryList() {
     if (_history.isEmpty) {
       return Center(
@@ -322,7 +342,7 @@ class _LeaveScreenState extends State<LeaveScreen> {
       );
     }
     return ListView.builder(
-      shrinkWrap: true,
+      shrinkWrap: true, // Needed because this list is inside a SingleChildScrollView
       physics: const NeverScrollableScrollPhysics(),
       itemCount: _history.length,
       itemBuilder: (context, index) {
@@ -347,6 +367,7 @@ class _LeaveScreenState extends State<LeaveScreen> {
                     ],
                   ),
                 ),
+                // Status indicator (badge)
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
@@ -358,6 +379,7 @@ class _LeaveScreenState extends State<LeaveScreen> {
                     style: PulseTextStyles.captionBold.copyWith(color: statusColor, fontSize: 11),
                   ),
                 ),
+                // Only Pending requests can be cancelled
                 if (leave['status'] == 'Pending')
                   IconButton(
                     icon: const Icon(Icons.cancel_outlined, color: PulseColors.textHint, size: 20),

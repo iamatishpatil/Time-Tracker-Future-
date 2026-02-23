@@ -1,3 +1,8 @@
+// --- 10. The Holiday Calendar ---
+// This allows the Admin to set "Special Days" for the company.
+// Public holidays prevent "Absent" marks for everyone, and Half-Days 
+// adjust the expected working hours for that day.
+
 import 'package:flutter/material.dart';
 import '../../core/theme/pulse_colors.dart';
 import '../../core/theme/pulse_text_styles.dart';
@@ -35,6 +40,7 @@ class _AdminHolidaysScreenState extends State<AdminHolidaysScreen> {
     }
   }
 
+  // Opens a pop-up to add a new holiday to the system
   Future<void> _addHoliday() async {
     final nameController = TextEditingController();
     DateTime selectedDate = DateTime.now();
@@ -49,12 +55,14 @@ class _AdminHolidaysScreenState extends State<AdminHolidaysScreen> {
           content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
             TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Holiday Name')),
             const SizedBox(height: 16),
+            // Type: "Public" (Holiday for all) vs "Optional"
             DropdownButtonFormField<String>(
               value: selectedType, decoration: const InputDecoration(labelText: 'Type'),
               items: ['Public', 'Optional', 'Indian'].map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
               onChanged: (v) => setD(() => selectedType = v!),
             ),
             const SizedBox(height: 16),
+            // Duration: Full vs Half (Half days have special logic in payroll)
             DropdownButtonFormField<String>(
               value: selectedDuration, decoration: const InputDecoration(labelText: 'Duration'),
               items: ['Full Day', 'Half Day'].map((d) => DropdownMenuItem(value: d, child: Text(d))).toList(),

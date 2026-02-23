@@ -1,9 +1,13 @@
-import 'dart:async';
+// --- 1. The Home Screen (Dashboard) ---
+// This is the first thing a user sees. It has the clock, the big "CHECK IN" 
+// button, and a mini-map to show where they are.
+
+import 'dart:async'; // Used for the "Timer" (the live clock)
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-import 'package:geolocator/geolocator.dart';
-import 'package:geocoding/geocoding.dart';
-import 'package:flutter_map/flutter_map.dart';
+import 'package:intl/intl.dart'; // Helps us turn numbers into "10:30 AM" or "Monday"
+import 'package:geolocator/geolocator.dart'; // The GPS tool
+import 'package:geocoding/geocoding.dart'; // Turns GPS coordinates into a street address
+import 'package:flutter_map/flutter_map.dart'; // The map widget
 import 'package:latlong2/latlong.dart';
 import 'package:image_picker/image_picker.dart';
 import '../core/theme/pulse_colors.dart';
@@ -11,6 +15,7 @@ import '../core/theme/pulse_text_styles.dart';
 import '../core/widgets/pulse_card.dart';
 import '../core/widgets/pulse_shimmer.dart';
 import '../services/api_service.dart';
+
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -20,23 +25,30 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMixin {
-  late String _timeString;
-  late String _dateString;
-  Map<String, dynamic>? _user;
-  bool _isLoading = true;
-  bool _isCheckedIn = false;
-  String _currentAddress = "Fetching location...";
-  LatLng _currentPosition = const LatLng(0, 0);
-  final MapController _mapController = MapController();
-  late AnimationController _animationController;
-  late Animation<double> _pulseAnimation;
+  // --- The Clock & Strings ---
+  late String _timeString; // e.g., "12:00:00 PM"
+  late String _dateString; // e.g., "Monday, July 1"
 
+  Map<String, dynamic>? _user;
+  bool _isLoading = true; // Shows a "shimmer" effect while loading
+  bool _isCheckedIn = false; // Is the user currently working?
+  
+  // --- Location Stuff ---
+  String _currentAddress = "Fetching location...";
+  LatLng _currentPosition = const LatLng(0, 0); // (0,0) is the middle of the ocean!
+  final MapController _mapController = MapController();
+
+  // --- Animations ---
+  late AnimationController _animationController;
+  late Animation<double> _pulseAnimation; // Makes the Check-In button "throb"
+
+  // --- Dashboard Stats ---
   String _todayHours = "0.0";
   String _monthHours = "0.0";
   String _attendanceRate = "0%";
   Map<String, dynamic> _leaveBalance = {'total': 0, 'used': 0, 'remaining': 0};
 
-  bool _isInsideRadius = false;
+  bool _isInsideRadius = false; // Is the user close enough to the office?
   Map<String, dynamic>? _settings;
 
   String? _todayHoliday;
@@ -46,28 +58,34 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   @override
   void initState() {
     super.initState();
+    // Setup the clock immediately
     _timeString = _formatDateTime(DateTime.now());
     _dateString = _formatDate(DateTime.now());
+    
+    // Timer.periodic runs every 1 second to update the clock numbers
     Timer.periodic(const Duration(seconds: 1), (Timer t) => _getTime());
 
+    // Setup the "throbbing" animation for the button
     _animationController = AnimationController(vsync: this, duration: const Duration(seconds: 2))..repeat(reverse: true);
     _pulseAnimation = Tween<double>(begin: 1.0, end: 1.05).animate(CurvedAnimation(parent: _animationController, curve: Curves.easeInOut));
 
-    _initializeData();
+    _initializeData(); // Fetch user info, GPS, and stats
   }
 
   @override
   void dispose() {
-    _animationController.dispose();
+    _animationController.dispose(); // Clean up memory
     super.dispose();
   }
 
+  // --- Data Loading: Getting everything ready ---
   Future<void> _initializeData() async {
-    await _loadUser();
-    await _getCurrentLocation();
-    await _loadStats();
+    await _loadUser(); // Who is logged in?
+    await _getCurrentLocation(); // Where are they?
+    await _loadStats(); // How many hours did they work this month?
   }
 
+  // Load the user from the vault and check if they are already working
   Future<void> _loadUser() async {
     final user = await ApiService.getStoredUser();
     if (mounted) setState(() => _user = user);
@@ -77,9 +95,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     }
   }
 
+  // This is the "Brain" of the dashboard. It calculates hours and attendance %.
   Future<void> _loadStats() async {
     if (_user == null) return;
     try {
+      // We fetch 3 things: Attendance History, Leave Balance, and Holidays
       final history = await ApiService.getAttendance(_user!['id']);
       final leave = await ApiService.getLeaveBalance(_user!['id']);
       final holidays = await ApiService.getHolidays();
@@ -91,6 +111,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       String? holidayType;
       List<dynamic> upcoming = [];
 
+      // Check if today is a holiday
       for (var h in holidays) {
         if (h['date'] == todayStr) {
           holidayName = h['name'];
@@ -103,7 +124,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         }
       }
       upcoming.sort((a, b) => DateTime.parse(a['date']).compareTo(DateTime.parse(b['date'])));
-      if (upcoming.length > 5) upcoming = upcoming.sublist(0, 5);
+      if (upcoming.length > 5) upcoming = upcoming.sublist(0, 5); // Just show top 5
 
       if (mounted) {
         setState(() {
@@ -113,19 +134,27 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         });
       }
 
+      // --- Math Time! ---
       double totalHours = 0;
       double todayHours = 0;
       int presentDays = 0;
+
+      // Loop through all attendance records to count hours
       for (var record in history) {
         final checkIn = DateTime.parse(record['checkInTime']);
+        
+        // Is this record from TODAY?
         if (checkIn.day == now.day && checkIn.month == now.month && checkIn.year == now.year) {
           if (record['checkOutTime'] != null) {
             final checkOut = DateTime.parse(record['checkOutTime']);
             todayHours += checkOut.difference(checkIn).inMinutes / 60.0;
           } else {
+            // Still working! Calculate hours from check-in until NOW
             todayHours += now.difference(checkIn).inMinutes / 60.0;
           }
         }
+
+        // Is this record from THIS MONTH?
         if (checkIn.month == now.month && checkIn.year == now.year) {
           presentDays++;
           if (record['checkOutTime'] != null) {
@@ -135,17 +164,20 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         }
       }
 
+      // Calculate Attendance Percentage (How many days present vs total working days)
       double totalWorkingDaysCount = 0;
       final Set<String> weekOffDays = (_user?['weekOffs'] ?? 'Sunday').split(',').map((s) => s.trim()).toSet();
 
       try {
-        final holidays = await ApiService.getHolidays();
         final daysInMonth = DateTime(now.year, now.month + 1, 0).day;
         for (int d = 1; d <= daysInMonth; d++) {
           final date = DateTime(now.year, now.month, d);
           final dayName = DateFormat('EEEE').format(date);
           final dateStr = DateFormat('yyyy-MM-dd').format(date);
+          
           final holiday = holidays.firstWhere((h) => h['date'] == dateStr, orElse: () => null);
+
+          // If it's not a weekend and not a public holiday, it's a working day!
           if (!weekOffDays.contains(dayName)) {
             if (holiday == null || holiday['type'] == 'Optional') {
               totalWorkingDaysCount += 1.0;
@@ -155,7 +187,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           }
         }
       } catch (_) {
-        totalWorkingDaysCount = 22.0;
+        totalWorkingDaysCount = 22.0; // Fallback to 22 days if calc fails
       }
 
       if (totalWorkingDaysCount == 0) totalWorkingDaysCount = 1.0;
@@ -167,7 +199,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           _monthHours = totalHours.toStringAsFixed(1);
           _attendanceRate = "${rate.toInt()}%";
           _leaveBalance = leave;
-          _isLoading = false;
+          _isLoading = false; // Hide the loading spinner/shimmer
         });
       }
     } catch (_) {
@@ -188,13 +220,17 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   String _formatDateTime(DateTime dateTime) => DateFormat('hh:mm:ss a').format(dateTime);
   String _formatDate(DateTime dateTime) => DateFormat('EEEE, MMMM d, y').format(dateTime);
 
+  // --- Location & Geofencing ---
+  // This is the "Security Guard". It checks if you are actually at work.
   Future<void> _getCurrentLocation() async {
     bool serviceEnabled;
     LocationPermission permission;
 
+    // 1. Is GPS turned on?
     serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) return;
 
+    // 2. Do we have permission to use GPS?
     permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
@@ -202,14 +238,17 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     }
     if (permission == LocationPermission.deniedForever) return;
 
+    // 3. Get the coordinates (Lat/Long)
     final position = await Geolocator.getCurrentPosition();
 
     bool isInside = false;
     try {
       _settings ??= await ApiService.getSettings();
+      // If the company doesn't require geofencing, they are "always inside"
       if (_settings != null && _settings!['geofenceEnabled'] == 0) {
         isInside = true;
       } else if (_settings != null && _settings!['officeLat'] != null) {
+        // Calculate the distance between the phone and the office
         final double officeLat = (_settings!['officeLat'] as num).toDouble();
         final double officeLong = (_settings!['officeLong'] as num).toDouble();
         final double officeRadius = (_settings!['officeRadiusMeters'] as num?)?.toDouble() ?? 100.0;
@@ -218,6 +257,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           position.latitude, position.longitude,
           officeLat, officeLong,
         );
+        // Is the distance less than the office radius (e.g., 100 meters)?
         isInside = distance <= officeRadius;
       }
     } catch (_) {}
@@ -226,10 +266,12 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       setState(() {
         _currentPosition = LatLng(position.latitude, position.longitude);
         _isInsideRadius = isInside;
+        // Move the map to show the new location
         _mapController.move(_currentPosition, 15.0);
       });
     }
 
+    // 4. Turn the coordinates into a readable address (e.g., "Main St 123")
     try {
       List<Placemark> placemarks = await placemarkFromCoordinates(position.latitude, position.longitude);
       if (placemarks.isNotEmpty && mounted) {
@@ -241,7 +283,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     } catch (_) {}
   }
 
+  // --- The Check-In Button Logic ---
   Future<void> _handleCheckIn() async {
+    // 1. Double check geofencing (Safety first!)
     if (!_isInsideRadius) {
       double distance = 0;
       if (_settings != null && _settings!['officeLat'] != null) {
@@ -260,12 +304,14 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       return;
     }
 
+    // 2. Take a Selfie! (Verification)
     final picker = ImagePicker();
     final image = await picker.pickImage(source: ImageSource.camera, preferredCameraDevice: CameraDevice.front);
-    if (image == null) return;
+    if (image == null) return; // User cancelled the camera
 
     setState(() => _isLoading = true);
     try {
+      // 3. Send everything to the server
       await ApiService.checkIn(
         _user!['id'],
         lat: _currentPosition.latitude,
@@ -277,8 +323,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
       setState(() => _isCheckedIn = true);
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✓ Checked In Successfully!')));
+      
+      // 4. Navigate to the Checkout screen automatically
       Navigator.pushNamed(context, '/checkout');
-      _loadStats();
+      _loadStats(); // Refresh the stats row
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
     } finally {
@@ -288,6 +336,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
   @override
   Widget build(BuildContext context) {
+    // If we're still loading data and don't even have a user name, show a loading animation
     if (_isLoading && _user == null) {
       return Padding(
         padding: const EdgeInsets.all(24),
@@ -298,11 +347,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Greeting Row
           Row(
             children: [
+              // Shows company logo or user's face
               CircleAvatar(
                 radius: 24,
                 backgroundColor: PulseColors.surfaceVariant,
@@ -328,6 +376,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 4),
+                    // Show the shift timing (e.g., Morning Shift)
                     if (_user?['shiftName'] != null)
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -365,7 +414,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   ],
                 ),
               ),
-              // Geofence Badge
+              // --- Geofence Badge ---
+              // Shows a green "In Office" or red "Outside" sticker
               if (_settings == null || _settings!['geofenceEnabled'] != 0)
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -398,7 +448,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           ),
           const SizedBox(height: 20),
 
-          // Holiday Banner
+          // --- 2. Holiday Banner ---
           if (_todayHoliday != null) ...[
             PulseCard(
               color: _holidayType == 'Public'
@@ -426,7 +476,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             const SizedBox(height: 16),
           ],
 
-          // Clock Card
+          // --- 3. The Digital Clock ---
           PulseCard(
             glowEffect: true,
             padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
@@ -438,7 +488,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     children: [
                       TextSpan(
                         text: _timeString.split(':')[0],
-                        style: const TextStyle(fontWeight: FontWeight.w800, color: Colors.white),
+                        style: TextStyle(fontWeight: FontWeight.w800, color: PulseColors.textPrimary),
                       ),
                       TextSpan(
                         text: ':',
@@ -485,7 +535,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           ),
           const SizedBox(height: 16),
 
-          // Stats Row
+          // --- 4. Stats Row ---
           Row(
             children: [
               Expanded(child: _statCard('Today', '$_todayHours hrs', PulseColors.primary)),
@@ -497,7 +547,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           ),
           const SizedBox(height: 16),
 
-          // Leave Balance Mini
+          // --- 5. Leave Balance ---
           PulseCard(
             padding: const EdgeInsets.all(16),
             child: Row(
@@ -534,7 +584,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           ),
           const SizedBox(height: 16),
 
-          // Upcoming Holidays
+          // --- 6. Upcoming Holidays ---
           if (_upcomingHolidays.isNotEmpty) ...[
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -603,7 +653,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             const SizedBox(height: 16),
           ],
 
-          // Map
+          // --- 7. The Mini-Map ---
           ClipRRect(
             borderRadius: BorderRadius.circular(20),
             child: SizedBox(
@@ -618,6 +668,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                         urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                         userAgentPackageName: 'com.timetracker.frontend',
                       ),
+                      // Draw the office geofence circle
                       if (_settings != null && _settings!['officeLat'] != null) ...[
                         CircleLayer(
                           circles: [
@@ -648,6 +699,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                           ],
                         ),
                       ],
+                      // Show the user's current pin
                       MarkerLayer(
                         markers: [
                           Marker(
@@ -660,6 +712,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       ),
                     ],
                   ),
+                  // The small address bar at the bottom of the map
                   Positioned(
                     bottom: 8,
                     left: 8,
@@ -693,10 +746,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           ),
           const SizedBox(height: 24),
 
-          // Check In / Checkout Button
+          // --- 8. The Big Action Button ---
           if (!_isCheckedIn)
             ScaleTransition(
-              scale: _pulseAnimation,
+              scale: _pulseAnimation, // The "throb" effect
               child: GestureDetector(
                 onTap: (_isLoading || !_isInsideRadius) ? null : _handleCheckIn,
                 child: Container(
@@ -704,6 +757,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   height: 90,
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(20),
+                    // Blue gradient if inside office, grey if outside
                     gradient: _isInsideRadius ? PulseColors.primaryGradient : null,
                     color: !_isInsideRadius ? PulseColors.surfaceVariant : null,
                     boxShadow: [
@@ -737,6 +791,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               ),
             )
           else
+            // If already checked in, show a way to go to the Checkout screen
             SizedBox(
               width: double.infinity,
               height: 56,
@@ -751,6 +806,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     );
   }
 
+  // --- Helper: The small Stat Boxes ---
   Widget _statCard(String label, String value, Color color) {
     return PulseCard(
       padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),

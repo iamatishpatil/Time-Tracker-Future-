@@ -3,6 +3,8 @@ import '../core/theme/pulse_colors.dart';
 import '../core/theme/pulse_text_styles.dart';
 import '../services/api_service.dart';
 import '../screens/edit_profile_screen.dart';
+import '../core/widgets/branded_logo.dart';
+import '../core/widgets/branded_background.dart';
 
 class AdminDrawer extends StatelessWidget {
   final Map<String, dynamic> user;
@@ -14,8 +16,9 @@ class AdminDrawer extends StatelessWidget {
   Widget build(BuildContext context) {
     return Drawer(
       backgroundColor: PulseColors.surface,
-      child: Column(
-        children: [
+      child: BrandedBackground(
+        child: Column(
+          children: [
           // Admin Profile Header
           Container(
             width: double.infinity,
@@ -25,9 +28,9 @@ class AdminDrawer extends StatelessWidget {
               right: 24,
               bottom: 24,
             ),
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [Color(0xFF1A1A2E), Color(0xFF252540)],
+                colors: [PulseColors.surface, PulseColors.primary.withOpacity(0.1)],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -35,15 +38,22 @@ class AdminDrawer extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                CircleAvatar(
-                  radius: 32,
-                  backgroundColor: PulseColors.surfaceVariant,
-                  backgroundImage: user['profilePicture'] != null
-                      ? NetworkImage(ApiService.getImageUrl(user['profilePicture']))
-                      : null,
-                  child: user['profilePicture'] == null
-                      ? Icon(Icons.admin_panel_settings, size: 28, color: PulseColors.primary)
-                      : null,
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    CircleAvatar(
+                      radius: 32,
+                      backgroundColor: PulseColors.surfaceVariant,
+                      backgroundImage: user['profilePicture'] != null
+                          ? NetworkImage(ApiService.getImageUrl(user['profilePicture']))
+                          : null,
+                      child: user['profilePicture'] == null
+                          ? Icon(Icons.admin_panel_settings, size: 28, color: PulseColors.primary)
+                          : null,
+                    ),
+                    BrandedLogo(size: 50, showText: false),
+                  ],
                 ),
                 const SizedBox(height: 16),
                 Text(user['fullName'] ?? 'Admin', style: PulseTextStyles.h3),
@@ -53,12 +63,12 @@ class AdminDrawer extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: PulseColors.accent.withOpacity(0.15),
+                    color: PulseColors.primary.withOpacity(0.15),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
                     'ADMIN',
-                    style: PulseTextStyles.captionBold.copyWith(color: PulseColors.accent),
+                    style: PulseTextStyles.captionBold.copyWith(color: PulseColors.primary),
                   ),
                 ),
               ],
@@ -117,6 +127,14 @@ class AdminDrawer extends StatelessWidget {
             },
           ),
           _DrawerTile(
+            icon: Icons.celebration_outlined,
+            title: 'Company Holidays',
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.pushNamed(context, '/admin-holidays');
+            },
+          ),
+          _DrawerTile(
             icon: Icons.settings_outlined,
             title: 'Settings',
             onTap: () {
@@ -156,7 +174,8 @@ class AdminDrawer extends StatelessWidget {
           const SizedBox(height: 16),
         ],
       ),
-    );
+    ),
+   );
   }
 }
 

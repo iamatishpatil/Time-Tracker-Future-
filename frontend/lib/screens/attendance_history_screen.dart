@@ -1,3 +1,7 @@
+// --- 1. The Attendance History Screen ---
+// This screen shows a chronological list of all your previous check-ins.
+// It's a great example of how to build a dynamic list in Flutter.
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../core/theme/pulse_colors.dart';
@@ -7,6 +11,7 @@ import '../core/widgets/pulse_shimmer.dart';
 import '../core/widgets/pulse_empty_state.dart';
 import '../services/api_service.dart';
 import '../services/pdf_service.dart';
+import '../core/widgets/pulse_scaffold.dart';
 
 class AttendanceHistoryScreen extends StatefulWidget {
   const AttendanceHistoryScreen({super.key});
@@ -27,13 +32,16 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
     _loadHistory();
   }
 
+  // Fetch the data from the server
   Future<void> _loadHistory() async {
     setState(() => _isLoading = true);
     try {
       final user = await ApiService.getStoredUser();
       if (user != null) {
         _userName = user['fullName'] ?? 'User';
+        // 1. Get the list of attendance records
         final history = await ApiService.getAttendance(user['id']);
+        // 2. Get the list of holidays (to show badges next to dates)
         final holidays = await ApiService.getHolidays();
         if (mounted) {
           setState(() {
@@ -51,9 +59,12 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return RefreshIndicator(
-      onRefresh: _loadHistory,
-      child: _isLoading
+    return PulseScaffold(
+      title: 'Attendance History',
+      useBrandedBackground: true,
+      body: RefreshIndicator(
+        onRefresh: _loadHistory,
+        child: _isLoading
           ? Padding(
               padding: const EdgeInsets.all(20),
               child: PulseShimmer.list(count: 4, itemHeight: 120),
@@ -103,6 +114,7 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
                 Expanded(
                   child: _history.isEmpty
                       ? ListView(
+                          // the AlwaysScrollable physics is what lets you "Pull to Refresh" even if the list is empty!
                           physics: const AlwaysScrollableScrollPhysics(),
                           children: const [
                             SizedBox(height: 60),
@@ -114,11 +126,13 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
                           ],
                         )
                       : ListView.builder(
+                          // ListView.builder is EFFICIENT. It only draws what's on the screen.
                           physics: const AlwaysScrollableScrollPhysics(),
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                           itemCount: _history.length,
                           itemBuilder: (context, index) {
                             final record = _history[index];
+                            // Turn the server strings into real Dart Date objects
                             final checkIn = DateTime.parse(record['checkInTime']).toLocal();
                             final checkOut = record['checkOutTime'] != null
                                 ? DateTime.parse(record['checkOutTime']).toLocal()
@@ -191,10 +205,12 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
                                     // Times row
                                     Row(
                                       children: [
+                                        // Show when they arrived
                                         Expanded(
                                           child: _timeColumn('Check In', DateFormat('hh:mm a').format(checkIn),
                                               record['checkInPhoto']),
                                         ),
+                                        // Show when they left (if they have)
                                         if (checkOut != null)
                                           Expanded(
                                             child: _timeColumn('Check Out', DateFormat('hh:mm a').format(checkOut),
@@ -228,9 +244,11 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
                 ),
               ],
             ),
+      ),
     );
   }
 
+  // A helper to build those small colored boxes like [LATE] or [ACTIVE]
   Widget _statusBadge(String text, Color color) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -245,6 +263,7 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
     );
   }
 
+  // A helper to build the time and the selfie image
   Widget _timeColumn(String label, String time, String? photoUrl) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -257,6 +276,7 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
           ClipRRect(
             borderRadius: BorderRadius.circular(10),
             child: Image.network(
+              // ApiService.getImageUrl converts the server path into a clickable URL
               ApiService.getImageUrl(photoUrl),
               height: 70,
               width: 70,

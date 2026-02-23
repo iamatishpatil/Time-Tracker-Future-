@@ -1,3 +1,7 @@
+// --- 8. The Monthly Analytics Screen ---
+// This screen doesn't just show records; it calculates totals. It looks at the
+// whole month and tells the Admin how many days each person was Present or Late.
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme/pulse_colors.dart';
@@ -31,7 +35,15 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
     setState(() => _isLoading = true);
     try {
       final employees = await ApiService.getAllUsers();
-      final attendance = await ApiService.getAllAttendance();
+      
+      // Optimize: Only fetch attendance for the selected month from the server
+      final start = DateTime(_selectedMonth.year, _selectedMonth.month, 1);
+      final lastDay = DateTime(_selectedMonth.year, _selectedMonth.month + 1, 0);
+      final attendance = await ApiService.getAllAttendance(
+        startDate: start,
+        endDate: lastDay,
+      );
+      
       final holidays = await ApiService.getHolidays();
       if (mounted) setState(() { _employees = employees; _attendance = attendance; _holidays = holidays; _isLoading = false; });
     } catch (e) {
@@ -39,14 +51,19 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
     }
   }
 
+  // --- The Brains: Stats Calculation ---
+  // This loops through every attendance record for a specific user and 
+  // matches it against the selected month and the holiday calendar.
   Map<String, dynamic> _calculateMonthlyStats(String userId) {
     int present = 0, late = 0, halfDays = 0, holidaysCount = 0;
 
+    // 1. Count scheduled public holidays in this month
     for (var h in _holidays) {
       final hDate = DateTime.parse(h['date']);
       if (hDate.year == _selectedMonth.year && hDate.month == _selectedMonth.month && h['type'] == 'Public') holidaysCount++;
     }
 
+    // 2. Count actual "Punch-ins" for the user
     for (var record in _attendance) {
       if (record['userId'].toString() != userId.toString()) continue;
       final date = DateTime.parse(record['checkInTime']);
@@ -54,6 +71,7 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
         present++;
         if (record['status'] == 'Late') late++;
         final dateStr = DateFormat('yyyy-MM-dd').format(date);
+        // Check if they worked on a half-day holiday
         final holiday = _holidays.firstWhere((h) => h['date'] == dateStr, orElse: () => null);
         if (holiday != null && holiday['duration'] == 'Half Day') halfDays++;
       }
@@ -110,6 +128,7 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
                               IconButton(
                                 icon: Icon(Icons.picture_as_pdf, color: PulseColors.error, size: 20),
                                 onPressed: () {
+                                  // Generate a professional PDF "Timesheet" for this specific employee
                                   final userAttendance = _attendance.where((r) {
                                     final d = DateTime.parse(r['checkInTime']);
                                     return r['userId'].toString() == emp['id'].toString() &&

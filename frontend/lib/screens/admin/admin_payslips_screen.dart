@@ -1,3 +1,7 @@
+// --- 6. The Payslip Manager ---
+// This screen allows Admins to officially "Publish" a salary record for an employee.
+// Once generated here, the employee will see it in their "My Payslips" screen.
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme/pulse_colors.dart';
@@ -93,6 +97,8 @@ class _AdminPayslipsScreenState extends State<AdminPayslipsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // --- FEATURE GATE ---
+    // If the Boss turned off Payroll in settings, we block access to this screen entirely.
     if (!_isPayrollEnabled) {
       return Scaffold(
         appBar: AppBar(title: const Text('Admin Payslips')),
@@ -195,6 +201,7 @@ class _AdminPayslipsScreenState extends State<AdminPayslipsScreen> {
   }
 }
 
+// This is the "Pop-up" form to create a new payslip
 class _AddPayslipSheet extends StatefulWidget {
   const _AddPayslipSheet();
 
@@ -275,6 +282,7 @@ class _AddPayslipSheetState extends State<_AddPayslipSheet> {
     }
   }
 
+  // Calculate and Save the payslip
   Future<void> _submit() async {
     if (_selectedUserId == null) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Select an employee')));
@@ -283,6 +291,7 @@ class _AddPayslipSheetState extends State<_AddPayslipSheet> {
 
     final allowances = double.tryParse(_allowancesCtrl.text) ?? 0.0;
     final deductions = double.tryParse(_deductionsCtrl.text) ?? 0.0;
+    // Formula: Basic + Extra - Taxes/Penalties
     final netSalary = (_basicSalary ?? 0) + allowances - deductions;
 
     setState(() => _isSubmitting = true);

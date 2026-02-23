@@ -1,7 +1,11 @@
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+// --- 1. Imports Section ---
+// We bring in external libraries and our own files here.
+import 'package:flutter/material.dart'; // Core Flutter UI library
+import 'package:flutter/services.dart'; // Helps talk to the phone system (status bar, etc.)
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/theme/pulse_theme.dart';
-import 'core/theme/pulse_colors.dart';
+import 'screens/splash_screen.dart';
+import 'screens/admin/admin_settings_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/register_screen.dart';
 import 'screens/checkout_screen.dart';
@@ -19,72 +23,55 @@ import 'screens/user_holidays_screen.dart';
 import 'screens/user_shifts_screen.dart';
 import 'screens/user_payslips_screen.dart';
 import 'screens/admin/admin_payslips_screen.dart';
-import 'services/api_service.dart';
+import 'screens/admin/admin_container.dart';
+import 'screens/admin/admin_holidays_screen.dart';
 
+// --- 2. The Main Function ---
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.light,
-      systemNavigationBarColor: Color(0xFF1A1A2E),
-      systemNavigationBarIconBrightness: Brightness.light,
+      statusBarIconBrightness: Brightness.dark,
+      systemNavigationBarColor: Colors.white,
+      systemNavigationBarIconBrightness: Brightness.dark,
     ),
   );
 
-  // Attempt to fetch dynamic theme before rendering
-  try {
-    final settings = await ApiService.getSettings();
-    if (settings['themeColor'] != null && settings['themeColor'].toString().isNotEmpty) {
-      String hexColor = settings['themeColor'];
-      hexColor = hexColor.toUpperCase().replaceAll("#", "");
-      if (hexColor.length == 6) hexColor = "FF$hexColor";
-      PulseColors.setCompanyBrandColor(Color(int.parse(hexColor, radix: 16)));
-    }
-  } catch (e) {
-    debugPrint("Failed to load dynamic theme on startup: $e");
-  }
-
-  runApp(const TimeTrackerApp());
+  // We wrap the entire app in ProviderScope for Riverpod state management
+  runApp(
+    const ProviderScope(
+      child: TimeTrackerApp(),
+    ),
+  );
 }
 
-class TimeTrackerApp extends StatelessWidget {
+// --- 3. The Root App Widget ---
+class TimeTrackerApp extends ConsumerWidget {
   const TimeTrackerApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Time Tracker',
-      theme: PulseTheme.dark(),
+      theme: PulseTheme.light(),
+      
+      // Default to Slash Screen for branding and session initialization
+      home: const SplashScreen(),
+
       routes: {
         '/login': (context) => const LoginScreen(),
         '/register': (context) => const RegisterScreen(),
         '/home': (context) => const MainContainer(),
         '/history': (context) => const AttendanceHistoryScreen(),
         '/leave': (context) => const LeaveScreen(),
-        '/admin': (context) => AdminDashboardScreen(),
+        '/admin': (context) => const AdminContainer(),
         '/admin-attendance': (context) => AdminAttendanceScreen(),
         '/admin-employees': (context) => AdminEmployeesScreen(),
         '/admin-leaves': (context) => AdminLeavesScreen(),
-        '/edit-profile': (context) {
-          return FutureBuilder(
-            future: ApiService.getStoredUser(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Scaffold(
-                  body: Center(child: CircularProgressIndicator()),
-                );
-              }
-              if (snapshot.hasData && snapshot.data != null) {
-                return MainContainer();
-              }
-              return const Scaffold(
-                body: Center(child: Text('Unable to load user data')),
-              );
-            },
-          );
-        },
+        '/edit-profile': (context) => MainContainer(), // Updated for simplicity
         '/change-password': (context) => ChangePasswordScreen(),
         '/notifications': (context) => NotificationScreen(),
         '/checkout': (context) => const CheckoutScreen(),
@@ -93,23 +80,9 @@ class TimeTrackerApp extends StatelessWidget {
         '/user-payslips': (context) => const UserPayslipsScreen(),
         '/admin-reports': (context) => const AdminReportsScreen(),
         '/admin-payslips': (context) => const AdminPayslipsScreen(),
+        '/admin-settings': (context) => const AdminSettingsScreen(),
+        '/admin-holidays': (context) => const AdminHolidaysScreen(),
       },
-      home: FutureBuilder(
-        future: ApiService.getStoredUser(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Scaffold(body: Center(child: CircularProgressIndicator()));
-          }
-          if (snapshot.hasData && snapshot.data != null) {
-            final user = snapshot.data as Map<String, dynamic>;
-            if (user['role'] == 'Admin') {
-              return AdminDashboardScreen();
-            }
-            return MainContainer();
-          }
-          return LoginScreen();
-        },
-      ),
     );
   }
 }

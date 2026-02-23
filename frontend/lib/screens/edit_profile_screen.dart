@@ -1,3 +1,7 @@
+// --- 1. The Edit Profile Screen ---
+// This is where users can keep their info (Name, Email, Skills) up to date.
+// It uses "Multipart" data to send both text and images to the server.
+
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:geolocator/geolocator.dart';
@@ -9,7 +13,9 @@ import '../core/widgets/pulse_button.dart';
 import '../services/api_service.dart';
 
 class EditProfileScreen extends StatefulWidget {
+  // We pass the current user data so the boxes are already filled when it opens
   final Map<String, dynamic> user;
+  // This callback notifies MainContainer that the name or photo has changed
   final Function(Map<String, dynamic>) onUserUpdated;
 
   const EditProfileScreen({super.key, required this.user, required this.onUserUpdated});
@@ -75,6 +81,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     super.dispose();
   }
 
+  // Opens a popup to choose between taking a new photo or picking from gallery
   Future<void> _pickImage() async {
     final ImagePicker picker = ImagePicker();
     final ImageSource? source = await showModalBottomSheet<ImageSource>(
@@ -116,6 +123,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     }
   }
 
+  // Refreshes the address field using the phone's current GPS coordinates
   Future<void> _fetchCurrentAddress() async {
     setState(() => _isLoading = true);
     try {
@@ -149,6 +157,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     }
   }
 
+  // Sends the new data to the server
   Future<void> _saveProfile() async {
     if (_formKey.currentState!.validate() && _currentUser != null) {
       setState(() => _isLoading = true);
@@ -163,8 +172,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           'technologies': _technologiesController.text,
           'address': _addressController.text,
         };
+        // updateUser returns the fresh data from the server
         final updatedUser = await ApiService.updateUser(_currentUser!['id'], fields, image: _imageFile);
+        
+        // This line is VERY important: it tells the Parent (MainContainer) that the data changed
         widget.onUserUpdated(updatedUser);
+        
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✓ Profile updated!')));
           if (Navigator.of(context).canPop()) Navigator.pop(context);
@@ -314,7 +327,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       padding: const EdgeInsets.only(bottom: 16),
       child: TextFormField(
         controller: controller,
-        style: PulseTextStyles.body.copyWith(color: Colors.white),
+        style: PulseTextStyles.body,
         maxLines: maxLines,
         decoration: InputDecoration(
           labelText: label,

@@ -1,10 +1,14 @@
+// --- 12. The PDF Print Station ---
+// This service doesn't show any UI. Instead, it takes raw data and 
+// "draws" it onto a PDF document that can be shared or printed.
+
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:intl/intl.dart';
 
-
 class PdfService {
+  // Generates a simple table of attendance for one employee
   static Future<void> generateAttendanceReport(String userName, List<dynamic> history, {List<dynamic> holidays = const []}) async {
     final pdf = pw.Document();
     final holidayDates = holidays.isNotEmpty ? Set<String>.from(holidays.map((h) => h['date'])) : <String>{};
@@ -26,6 +30,7 @@ class PdfService {
           pw.SizedBox(height: 10),
           pw.Text('Employee: $userName', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
           pw.SizedBox(height: 20),
+          // Every piece of data is mapped to a row in a PDF table
           pw.TableHelper.fromTextArray(
             headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9),
             cellStyle: const pw.TextStyle(fontSize: 8),
@@ -57,6 +62,7 @@ class PdfService {
       ),
     );
 
+    // This opens the system print dialog automatically
     await Printing.layoutPdf(onLayout: (PdfPageFormat format) async => pdf.save());
   }
 
@@ -99,12 +105,13 @@ class PdfService {
     await Printing.layoutPdf(onLayout: (format) async => pdf.save());
   }
 
+  // Generates a wide-format report of absolute salary numbers for the whole company
   static Future<void> generatePayrollReport(List<dynamic> payroll) async {
     final pdf = pw.Document();
 
     pdf.addPage(
       pw.MultiPage(
-        pageFormat: PdfPageFormat.a4.landscape,
+        pageFormat: PdfPageFormat.a4.landscape, // Wide layout for many columns
         margin: const pw.EdgeInsets.all(32),
         build: (context) => [
           pw.Header(
@@ -128,6 +135,7 @@ class PdfService {
             ]).toList(),
           ),
           pw.SizedBox(height: 30),
+          // Total sum calculation at the bottom of the table
           pw.Row(
             mainAxisAlignment: pw.MainAxisAlignment.end,
             children: [
@@ -142,6 +150,7 @@ class PdfService {
     await Printing.layoutPdf(onLayout: (format) async => pdf.save());
   }
 
+  // The Masterpiece: Generating a professional, high-fidelity payslip
   static Future<void> generateIndividualPayslip(Map<String, dynamic> payslip, Map<String, dynamic> user, Map<String, dynamic> company) async {
     final pdf = pw.Document();
     
@@ -161,7 +170,7 @@ class PdfService {
         build: (context) => pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
-            // Header
+            // Company Branding Section
             pw.Row(
               mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
               children: [
@@ -209,11 +218,10 @@ class PdfService {
 
             pw.SizedBox(height: 30),
 
-            // Salary Structure Table
+            // Earnings vs Deductions Split Table
             pw.Table(
               border: pw.TableBorder.all(color: PdfColors.grey300),
               children: [
-                // Table Header
                 pw.TableRow(
                   decoration: const pw.BoxDecoration(color: PdfColors.deepPurple),
                   children: [
@@ -223,7 +231,6 @@ class PdfService {
                     pw.Padding(padding: const pw.EdgeInsets.all(8), child: pw.Text('Amount (₹)', style: pw.TextStyle(color: PdfColors.white, fontWeight: pw.FontWeight.bold))),
                   ]
                 ),
-                // Data Row
                 pw.TableRow(
                   children: [
                     pw.Padding(padding: const pw.EdgeInsets.all(8), child: pw.Text('Basic Salary\n\nAllowances/Bonus')),
@@ -232,7 +239,6 @@ class PdfService {
                     pw.Padding(padding: const pw.EdgeInsets.all(8), child: pw.Text('${deductions.toStringAsFixed(2)}')),
                   ]
                 ),
-                // Total Row
                 pw.TableRow(
                   decoration: const pw.BoxDecoration(color: PdfColors.grey100),
                   children: [
@@ -247,7 +253,7 @@ class PdfService {
 
             pw.SizedBox(height: 30),
 
-            // Net Payable
+            // The BIG Net Payable Card
             pw.Container(
               padding: const pw.EdgeInsets.all(16),
               decoration: pw.BoxDecoration(
@@ -277,7 +283,7 @@ class PdfService {
       ),
     );
 
-    // Prompt user to print/save the file
+    // Give it a professional filename and send to the system printer
     await Printing.layoutPdf(
       onLayout: (PdfPageFormat format) async => pdf.save(),
       name: 'Payslip_${user['fullName']}_$monthYear.pdf'

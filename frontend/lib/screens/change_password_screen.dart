@@ -81,7 +81,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
               TextFormField(
                 controller: _oldPasswordController,
                 obscureText: !_showOld,
-                style: PulseTextStyles.body.copyWith(color: Colors.white),
+                style: PulseTextStyles.body,
                 decoration: InputDecoration(
                   labelText: 'Current Password',
                   prefixIcon: const Icon(Icons.lock_outline),
@@ -96,7 +96,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
               TextFormField(
                 controller: _newPasswordController,
                 obscureText: !_showNew,
-                style: PulseTextStyles.body.copyWith(color: Colors.white),
+                style: PulseTextStyles.body,
                 decoration: InputDecoration(
                   labelText: 'New Password',
                   prefixIcon: const Icon(Icons.lock_rounded),
@@ -111,7 +111,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
               TextFormField(
                 controller: _confirmPasswordController,
                 obscureText: !_showConfirm,
-                style: PulseTextStyles.body.copyWith(color: Colors.white),
+                style: PulseTextStyles.body,
                 decoration: InputDecoration(
                   labelText: 'Confirm New Password',
                   prefixIcon: const Icon(Icons.lock_rounded),

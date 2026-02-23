@@ -1,3 +1,7 @@
+// --- 3. The Attendance Monitor ---
+// This screen allows the Admin to see exactly who is in the office, who is late,
+// and who hasn't shown up yet. It also supports exporting data for payroll.
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme/pulse_colors.dart';
@@ -10,7 +14,8 @@ import '../../services/pdf_service.dart';
 import '../../services/csv_service.dart';
 
 class AdminAttendanceScreen extends StatefulWidget {
-  const AdminAttendanceScreen({super.key});
+  final bool isTab;
+  const AdminAttendanceScreen({super.key, this.isTab = false});
 
   @override
   State<AdminAttendanceScreen> createState() => _AdminAttendanceScreenState();
@@ -20,6 +25,7 @@ class _AdminAttendanceScreenState extends State<AdminAttendanceScreen> {
   List<dynamic> _attendance = [];
   List<dynamic> _filteredAttendance = [];
   List<dynamic> _allEmployees = [];
+  List<dynamic> _holidays = [];
   bool _isLoading = true;
   DateTime _selectedDate = DateTime.now();
   final TextEditingController _searchController = TextEditingController();
@@ -32,15 +38,25 @@ class _AdminAttendanceScreenState extends State<AdminAttendanceScreen> {
 
   Future<void> _loadInitialData() async {
     await _loadAttendance();
+    _loadHolidays();
     try {
       final employees = await ApiService.getAllUsers();
       if (mounted) setState(() => _allEmployees = employees);
     } catch (_) {}
   }
 
+  Future<void> _loadHolidays() async {
+    try {
+      final holidays = await ApiService.getHolidays();
+      if (mounted) setState(() => _holidays = holidays);
+    } catch (_) {}
+  }
+
+  // Fetch attendance for the selected date
   Future<void> _loadAttendance() async {
     setState(() => _isLoading = true);
     try {
+      // We pass the same date as both start and end to get records for a SINGLE day
       final data = await ApiService.getAllAttendance(startDate: _selectedDate, endDate: _selectedDate);
       if (mounted) setState(() { _attendance = data; _applyFilter(); });
     } catch (e) {
@@ -50,6 +66,7 @@ class _AdminAttendanceScreenState extends State<AdminAttendanceScreen> {
     }
   }
 
+  // Locally search the fetched list by name or department (Instant UI update)
   void _applyFilter() {
     final query = _searchController.text.toLowerCase();
     setState(() {
@@ -74,13 +91,100 @@ class _AdminAttendanceScreenState extends State<AdminAttendanceScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final content = RefreshIndicator(
+      onRefresh: _loadAttendance,
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 14, 14, 0),
+            child: TextField(
+              controller: _searchController,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(hintText: 'Search employee or department…', prefixIcon: Icon(Icons.search)),
+              onChanged: (_) => _applyFilter(),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              children: [
+                // Holiday Banner (if selected date is a holiday)
+                Builder(builder: (ctx) {
+                  final dateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
+                  final holiday = _holidays.firstWhere((h) => h['date'] == dateStr, orElse: () => null);
+                  if (holiday == null) return const SizedBox.shrink();
+                  
+                  final isPublic = holiday['type'] == 'Public';
+                  final color = isPublic ? PulseColors.success : PulseColors.accent;
+                  
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 14),
+                    child: PulseCard(
+                      color: color.withOpacity(0.1),
+                      borderColor: color.withOpacity(0.3),
+                      padding: const EdgeInsets.all(12),
+                      child: Row(
+                        children: [
+                          const Text('🎉', style: TextStyle(fontSize: 18)),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              '${DateFormat('MMM d').format(_selectedDate)} is ${holiday['name']}',
+                              style: PulseTextStyles.bodyBold.copyWith(color: color, fontSize: 13),
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(color: color.withOpacity(0.2), borderRadius: BorderRadius.circular(6)),
+                            child: Text(holiday['type'].toString().toUpperCase(), style: PulseTextStyles.captionBold.copyWith(color: color, fontSize: 8)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(DateFormat('EEE, MMM d, yyyy').format(_selectedDate), style: PulseTextStyles.bodyBold.copyWith(color: PulseColors.primary)),
+                    Text('${_filteredAttendance.length} records', style: PulseTextStyles.caption),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: _isLoading
+                ? Padding(padding: const EdgeInsets.symmetric(horizontal: 14), child: PulseShimmer.list(count: 4, itemHeight: 120))
+                : _filteredAttendance.isEmpty
+                    ? ListView(physics: const AlwaysScrollableScrollPhysics(), children: const [
+                        SizedBox(height: 60),
+                        PulseEmptyState(icon: Icons.history_toggle_off, title: 'No Records', subtitle: 'No attendance for this date'),
+                      ])
+                    : ListView.builder(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                        itemCount: _filteredAttendance.length,
+                        itemBuilder: (context, index) => _buildCard(_filteredAttendance[index]),
+                      ),
+          ),
+        ],
+      ),
+    );
+
+    if (widget.isTab) return content;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Attendance'),
         actions: [
+          // Filter by Date
           IconButton(icon: const Icon(Icons.calendar_today), onPressed: () => _selectDate(context)),
+          // Add attendance manually (forgotten check-ins)
           IconButton(icon: const Icon(Icons.add_task), onPressed: _showManualEntryDialog, tooltip: 'Manual Entry'),
+          // Export PDF report
           IconButton(icon: const Icon(Icons.picture_as_pdf), onPressed: () => PdfService.generateAdminAttendanceReport(_filteredAttendance), tooltip: 'PDF'),
+          // Export CSV (Excel) for Payroll
           IconButton(
             icon: const Icon(Icons.download), tooltip: 'CSV',
             onPressed: () {
@@ -99,47 +203,7 @@ class _AdminAttendanceScreenState extends State<AdminAttendanceScreen> {
           ),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: _loadAttendance,
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(14, 14, 14, 0),
-              child: TextField(
-                controller: _searchController,
-                style: PulseTextStyles.body.copyWith(color: Colors.white),
-                decoration: const InputDecoration(hintText: 'Search employee or department…', prefixIcon: Icon(Icons.search)),
-                onChanged: (_) => _applyFilter(),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(14),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(DateFormat('EEE, MMM d, yyyy').format(_selectedDate), style: PulseTextStyles.bodyBold.copyWith(color: PulseColors.primary)),
-                  Text('${_filteredAttendance.length} records', style: PulseTextStyles.caption),
-                ],
-              ),
-            ),
-            Expanded(
-              child: _isLoading
-                  ? Padding(padding: const EdgeInsets.symmetric(horizontal: 14), child: PulseShimmer.list(count: 4, itemHeight: 120))
-                  : _filteredAttendance.isEmpty
-                      ? ListView(physics: const AlwaysScrollableScrollPhysics(), children: const [
-                          SizedBox(height: 60),
-                          PulseEmptyState(icon: Icons.history_toggle_off, title: 'No Records', subtitle: 'No attendance for this date'),
-                        ])
-                      : ListView.builder(
-                          physics: const AlwaysScrollableScrollPhysics(),
-                          padding: const EdgeInsets.symmetric(horizontal: 14),
-                          itemCount: _filteredAttendance.length,
-                          itemBuilder: (context, index) => _buildCard(_filteredAttendance[index]),
-                        ),
-            ),
-          ],
-        ),
-      ),
+      body: content,
     );
   }
 
@@ -207,6 +271,7 @@ class _AdminAttendanceScreenState extends State<AdminAttendanceScreen> {
     ]);
   }
 
+  // Opens a form to add a completely new attendance record (Manual Override)
   Future<void> _showManualEntryDialog() async {
     int? selectedEmployeeId;
     String status = 'Present';
@@ -218,6 +283,7 @@ class _AdminAttendanceScreenState extends State<AdminAttendanceScreen> {
         builder: (context, setDialogState) => AlertDialog(
           title: const Text('Add Manual Attendance'),
           content: Column(mainAxisSize: MainAxisSize.min, children: [
+            // List of all employees to choose from
             DropdownButtonFormField<int>(
               decoration: const InputDecoration(labelText: 'Select Employee'),
               items: _allEmployees.map((e) => DropdownMenuItem<int>(value: e['id'], child: Text(e['fullName']))).toList(),
@@ -235,6 +301,7 @@ class _AdminAttendanceScreenState extends State<AdminAttendanceScreen> {
               onChanged: (val) => setDialogState(() => status = val!),
             ),
             const SizedBox(height: 16),
+            // Pick exactly when they were "supposed" to check in
             ListTile(
               title: const Text('Date & Time'),
               subtitle: Text(DateFormat('yyyy-MM-dd HH:mm').format(selectedTime)),
@@ -272,6 +339,7 @@ class _AdminAttendanceScreenState extends State<AdminAttendanceScreen> {
     );
   }
 
+  // Fixes an existing record (e.g., if a user checked out too late by mistake)
   Future<void> _editAttendanceRecord(Map<String, dynamic> record) async {
     String status = record['status'] ?? 'Present';
     DateTime checkIn = DateTime.parse(record['checkInTime']);
@@ -293,6 +361,7 @@ class _AdminAttendanceScreenState extends State<AdminAttendanceScreen> {
               onChanged: (v) => setD(() => status = v!),
             ),
             const SizedBox(height: 16),
+            // Edit In-time
             ListTile(
               title: const Text('Check In Time'), subtitle: Text(DateFormat('hh:mm a').format(checkIn)),
               trailing: const Icon(Icons.access_time),
@@ -301,6 +370,7 @@ class _AdminAttendanceScreenState extends State<AdminAttendanceScreen> {
                 if (t != null) setD(() => checkIn = DateTime(checkIn.year, checkIn.month, checkIn.day, t.hour, t.minute));
               },
             ),
+            // Edit Out-time
             ListTile(
               title: const Text('Check Out Time'), subtitle: Text(checkOut != null ? DateFormat('hh:mm a').format(checkOut!) : 'Not checked out'),
               trailing: const Icon(Icons.access_time),

@@ -1,3 +1,7 @@
+// --- 11. The Employee Onboarding Form ---
+// This is the "Data Entry" screen for the Admin. It collects everything 
+// needed for a new staff member: from their phone number to their salary.
+
 import 'package:flutter/material.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
@@ -83,6 +87,7 @@ class _EmployeeFormScreenState extends State<EmployeeFormScreen> {
     if (image != null) setState(() => _imageFile = image);
   }
 
+  // The function to Create or Update the employee in the database
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -94,6 +99,7 @@ class _EmployeeFormScreenState extends State<EmployeeFormScreen> {
 
     setState(() => _isLoading = true);
     try {
+      // Prepare the "Envelope" of data to send to the server
       final Map<String, dynamic> data = {
         'fullName': _nameController.text,
         'email': _emailController.text,
@@ -107,10 +113,12 @@ class _EmployeeFormScreenState extends State<EmployeeFormScreen> {
       };
 
       if (widget.employee == null) {
+        // NEW EMPLOYEE Logic: Requires a password
         if (_passwordController.text.isEmpty) throw Exception('Password is required for new employees');
         data['password'] = _passwordController.text;
         await ApiService.createUser(data, image: _imageFile);
       } else {
+        // EDIT EMPLOYEE Logic: Updates only what changed
         if (_passwordController.text.isNotEmpty) data['password'] = _passwordController.text;
         await ApiService.updateUser(widget.employee!['id'], data, image: _imageFile);
       }

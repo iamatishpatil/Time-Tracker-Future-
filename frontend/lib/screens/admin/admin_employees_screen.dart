@@ -1,3 +1,7 @@
+// --- 2. The Employees Directory ---
+// This is the "Phonebook" of the company. Admins can see every staff member,
+// search for them, and turn their access ON or OFF.
+
 import 'package:flutter/material.dart';
 import '../../core/theme/pulse_colors.dart';
 import '../../core/theme/pulse_text_styles.dart';
@@ -8,7 +12,8 @@ import '../../services/api_service.dart';
 import 'employee_form_screen.dart';
 
 class AdminEmployeesScreen extends StatefulWidget {
-  const AdminEmployeesScreen({super.key});
+  final bool isTab;
+  const AdminEmployeesScreen({super.key, this.isTab = false});
 
   @override
   State<AdminEmployeesScreen> createState() => _AdminEmployeesScreenState();
@@ -24,6 +29,7 @@ class _AdminEmployeesScreenState extends State<AdminEmployeesScreen> {
     _loadEmployees();
   }
 
+  // Fetch the full list of humans from the database
   Future<void> _loadEmployees() async {
     setState(() => _isLoading = true);
     try {
@@ -38,6 +44,41 @@ class _AdminEmployeesScreenState extends State<AdminEmployeesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final content = RefreshIndicator(
+      onRefresh: _loadEmployees,
+      child: _isLoading
+          ? Padding(padding: const EdgeInsets.all(20), child: PulseShimmer.list(count: 5, itemHeight: 110))
+          : _employees.isEmpty
+              ? ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  children: const [
+                    SizedBox(height: 80),
+                    PulseEmptyState(icon: Icons.people_outline, title: 'No Employees', subtitle: 'Tap + to add one'),
+                  ],
+                )
+              : ListView.builder(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.all(14),
+                  itemCount: _employees.length,
+                  itemBuilder: (context, index) => _buildCard(_employees[index]),
+                ),
+    );
+
+    if (widget.isTab) {
+      return Scaffold(
+        backgroundColor: Colors.transparent,
+        body: content,
+        floatingActionButton: FloatingActionButton(
+          onPressed: () async {
+            final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => EmployeeFormScreen()));
+            if (result == true) _loadEmployees();
+          },
+          backgroundColor: PulseColors.primary,
+          child: const Icon(Icons.person_add, color: Colors.white),
+        ),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Employees'),
@@ -51,25 +92,7 @@ class _AdminEmployeesScreenState extends State<AdminEmployeesScreen> {
           ),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: _loadEmployees,
-        child: _isLoading
-            ? Padding(padding: const EdgeInsets.all(20), child: PulseShimmer.list(count: 5, itemHeight: 110))
-            : _employees.isEmpty
-                ? ListView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    children: const [
-                      SizedBox(height: 80),
-                      PulseEmptyState(icon: Icons.people_outline, title: 'No Employees', subtitle: 'Tap + to add one'),
-                    ],
-                  )
-                : ListView.builder(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.all(14),
-                    itemCount: _employees.length,
-                    itemBuilder: (context, index) => _buildCard(_employees[index]),
-                  ),
-      ),
+      body: content,
     );
   }
 
@@ -125,17 +148,23 @@ class _AdminEmployeesScreenState extends State<AdminEmployeesScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
+                // --- Status Switch ---
+                // This lets the Admin "fire" or "deactivate" a user without 
+                // deleting their historical records.
                 Row(mainAxisSize: MainAxisSize.min, children: [
                   Text(isActive ? 'Active' : 'Inactive',
                       style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: isActive ? PulseColors.success : PulseColors.error)),
                   Switch(
                     value: isActive,
                     onChanged: (val) async {
+                      // 1. Update the UI immediately for a "fast" feel
                       setState(() => employee['isActive'] = val ? 1 : 0);
                       try {
+                        // 2. Tell the server to disable the account
                         await ApiService.toggleEmployeeActive(employee['id'], val);
                         if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(val ? '✅ Activated' : '⛔ Deactivated'), duration: const Duration(seconds: 2)));
                       } catch (e) {
+                        // 3. If it failed, flip the switch back!
                         setState(() => employee['isActive'] = val ? 0 : 1);
                         if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
                       }
