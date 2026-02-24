@@ -4,7 +4,6 @@ import 'package:flutter_animate/flutter_animate.dart';
 import '../core/providers/branding_provider.dart';
 import '../core/theme/pulse_colors.dart';
 import '../core/widgets/pulse_scaffold.dart';
-import '../core/widgets/branded_logo.dart';
 import '../services/api_service.dart';
 import 'admin/admin_container.dart';
 import 'main_container.dart';
@@ -24,24 +23,20 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
   }
 
   Future<void> _initializeApp() async {
-    // 1. Fetch Branding (with safety timeout)
     try {
       await ref.read(brandingProvider.notifier).fetchBranding().timeout(const Duration(seconds: 5));
     } catch (e) {
       debugPrint("Branding initialization failed: $e");
     }
     
-    // 2. Check Session
     final user = await ApiService.getStoredUser();
     
-    // 3. If user is found, re-fetch branding with THEIR company to be sure
     if (user != null && user['company'] != null) {
       try {
         await ref.read(brandingProvider.notifier).fetchBranding(company: user['company']);
       } catch (_) {}
     }
     
-    // 4. Small delay for effect
     await Future.delayed(const Duration(seconds: 2));
 
     if (!mounted) return;
@@ -62,6 +57,9 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final branding = ref.watch(brandingProvider);
+    final logoUrl = branding.logoUrl;
+
     return PulseScaffold(
       showLogoInBar: false,
       useBrandedBackground: true, 
@@ -70,17 +68,66 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // --- 1. The Dynamic Logo & Name ---
-            BrandedLogo(size: 100)
+            // --- Company Logo ---
+            Container(
+              width: 120,
+              height: 120,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white,
+                border: Border.all(color: PulseColors.primary.withOpacity(0.4), width: 2),
+                boxShadow: [
+                  BoxShadow(
+                    color: PulseColors.primary.withOpacity(0.3),
+                    blurRadius: 20,
+                    spreadRadius: 2,
+                  ),
+                ],
+              ),
+              child: ClipOval(
+                child: logoUrl != null && logoUrl.isNotEmpty
+                    ? Image.network(
+                        ApiService.getImageUrl(logoUrl),
+                        fit: BoxFit.cover,
+                        width: 120,
+                        height: 120,
+                        errorBuilder: (context, error, stackTrace) => Image.asset(
+                          'assets/icon.png',
+                          fit: BoxFit.cover,
+                          width: 120,
+                          height: 120,
+                        ),
+                      )
+                    : Image.asset(
+                        'assets/icon.png',
+                        fit: BoxFit.cover,
+                        width: 120,
+                        height: 120,
+                      ),
+              ),
+            )
                 .animate()
                 .fadeIn(duration: 800.ms)
                 .scale(begin: const Offset(0.8, 0.8), curve: Curves.elasticOut),
             
-            const SizedBox(height: 12),
+            const SizedBox(height: 24),
             
-            // --- 2. The Bespoke Tagline ---
+            // --- TIME TRACKER Text ---
             Text(
-              'Company Bespoke Suite',
+              'TIME TRACKER',
+              style: TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 3,
+                color: PulseColors.textPrimary,
+              ),
+            ).animate().fadeIn(delay: 400.ms, duration: 600.ms),
+            
+            const SizedBox(height: 8),
+            
+            // --- Tagline ---
+            Text(
+              'Manage Time Effortlessly',
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
@@ -89,7 +136,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
               ),
             ).animate().fadeIn(delay: 800.ms),
             
-            const SizedBox(height: 100), 
+            const SizedBox(height: 80), 
             
             const SizedBox(
               width: 40,

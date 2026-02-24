@@ -163,7 +163,7 @@ class _LeaveScreenState extends State<LeaveScreen> {
             // Balance Cards
             Row(
               children: [
-                _balanceCard('Total', _balance['total'].toString(), PulseColors.accent),
+                _balanceCard('Accrued', _balance['total'].toString(), PulseColors.accent),
                 const SizedBox(width: 8),
                 _balanceCard('Used', _balance['used'].toString(), PulseColors.error),
                 const SizedBox(width: 8),

@@ -293,19 +293,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       ),
                     ),
 
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
-                      child: TextFormField(
-                        initialValue: _currentUser?['weekOffs'] ?? 'Sunday',
-                        readOnly: true,
-                        enabled: false,
-                        style: PulseTextStyles.body.copyWith(color: PulseColors.textHint),
-                        decoration: const InputDecoration(
-                          labelText: 'Week Offs (read-only)',
-                          prefixIcon: Icon(Icons.calendar_today_outlined),
-                        ),
-                      ),
-                    ),
+
 
                     const SizedBox(height: 16),
                     PulseButton(

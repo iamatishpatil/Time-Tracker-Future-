@@ -1,7 +1,5 @@
-// --- 1. Imports Section ---
-// We bring in external libraries and our own files here.
-import 'package:flutter/material.dart'; // Core Flutter UI library
-import 'package:flutter/services.dart'; // Helps talk to the phone system (status bar, etc.)
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/theme/pulse_theme.dart';
 import 'screens/splash_screen.dart';
@@ -26,7 +24,6 @@ import 'screens/admin/admin_payslips_screen.dart';
 import 'screens/admin/admin_container.dart';
 import 'screens/admin/admin_holidays_screen.dart';
 
-// --- 2. The Main Function ---
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
@@ -39,7 +36,6 @@ void main() async {
     ),
   );
 
-  // We wrap the entire app in ProviderScope for Riverpod state management
   runApp(
     const ProviderScope(
       child: TimeTrackerApp(),
@@ -47,9 +43,31 @@ void main() async {
   );
 }
 
-// --- 3. The Root App Widget ---
 class TimeTrackerApp extends ConsumerWidget {
   const TimeTrackerApp({super.key});
+
+  static final Map<String, WidgetBuilder> _routes = {
+    '/login': (context) => const LoginScreen(),
+    '/register': (context) => const RegisterScreen(),
+    '/home': (context) => const MainContainer(),
+    '/history': (context) => const AttendanceHistoryScreen(),
+    '/leave': (context) => const LeaveScreen(),
+    '/admin': (context) => const AdminContainer(),
+    '/admin-attendance': (context) => AdminAttendanceScreen(),
+    '/admin-employees': (context) => AdminEmployeesScreen(),
+    '/admin-leaves': (context) => AdminLeavesScreen(),
+    '/edit-profile': (context) => MainContainer(),
+    '/change-password': (context) => ChangePasswordScreen(),
+    '/notifications': (context) => NotificationScreen(),
+    '/checkout': (context) => const CheckoutScreen(),
+    '/user-holidays': (context) => const UserHolidaysScreen(),
+    '/user-shifts': (context) => UserShiftsScreen(),
+    '/user-payslips': (context) => const UserPayslipsScreen(),
+    '/admin-reports': (context) => const AdminReportsScreen(),
+    '/admin-payslips': (context) => const AdminPayslipsScreen(),
+    '/admin-settings': (context) => const AdminSettingsScreen(),
+    '/admin-holidays': (context) => const AdminHolidaysScreen(),
+  };
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -57,32 +75,34 @@ class TimeTrackerApp extends ConsumerWidget {
       debugShowCheckedModeBanner: false,
       title: 'Time Tracker',
       theme: PulseTheme.light(),
-      
-      // Default to Slash Screen for branding and session initialization
       home: const SplashScreen(),
-
-      routes: {
-        '/login': (context) => const LoginScreen(),
-        '/register': (context) => const RegisterScreen(),
-        '/home': (context) => const MainContainer(),
-        '/history': (context) => const AttendanceHistoryScreen(),
-        '/leave': (context) => const LeaveScreen(),
-        '/admin': (context) => const AdminContainer(),
-        '/admin-attendance': (context) => AdminAttendanceScreen(),
-        '/admin-employees': (context) => AdminEmployeesScreen(),
-        '/admin-leaves': (context) => AdminLeavesScreen(),
-        '/edit-profile': (context) => MainContainer(), // Updated for simplicity
-        '/change-password': (context) => ChangePasswordScreen(),
-        '/notifications': (context) => NotificationScreen(),
-        '/checkout': (context) => const CheckoutScreen(),
-        '/user-holidays': (context) => const UserHolidaysScreen(),
-        '/user-shifts': (context) => UserShiftsScreen(),
-        '/user-payslips': (context) => const UserPayslipsScreen(),
-        '/admin-reports': (context) => const AdminReportsScreen(),
-        '/admin-payslips': (context) => const AdminPayslipsScreen(),
-        '/admin-settings': (context) => const AdminSettingsScreen(),
-        '/admin-holidays': (context) => const AdminHolidaysScreen(),
+      onGenerateRoute: (settings) {
+        final builder = _routes[settings.name];
+        if (builder != null) {
+          return PageRouteBuilder(
+            settings: settings,
+            pageBuilder: (context, animation, secondaryAnimation) =>
+                builder(context),
+            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+              final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
+              return FadeTransition(
+                opacity: curved,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0.03, 0),
+                    end: Offset.zero,
+                  ).animate(curved),
+                  child: child,
+                ),
+              );
+            },
+            transitionDuration: const Duration(milliseconds: 300),
+            reverseTransitionDuration: const Duration(milliseconds: 250),
+          );
+        }
+        return null;
       },
     );
   }
 }
+

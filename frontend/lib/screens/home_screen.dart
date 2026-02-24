@@ -568,9 +568,14 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       Text('Leave Balance', style: PulseTextStyles.captionBold),
                       const SizedBox(height: 2),
                       Text(
-                        '${_leaveBalance['remaining']} remaining of ${_leaveBalance['total']}',
+                        '${_leaveBalance['remaining']} remaining of ${_leaveBalance['total']} accrued',
                         style: PulseTextStyles.body,
                       ),
+                      if (_leaveBalance['totalYearly'] != null)
+                        Text(
+                          '${_leaveBalance['totalYearly']}/year',
+                          style: PulseTextStyles.caption.copyWith(fontSize: 11),
+                        ),
                     ],
                   ),
                 ),

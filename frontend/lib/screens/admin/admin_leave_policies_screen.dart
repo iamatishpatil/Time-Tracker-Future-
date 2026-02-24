@@ -147,7 +147,7 @@ class _AdminLeavePoliciesScreenState extends State<AdminLeavePoliciesScreen> {
                       const SizedBox(width: 12),
                       Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                         Text(p['leaveType'], style: PulseTextStyles.bodyBold),
-                        Text('${p['daysPerYear']} days/year  •  ${isPaid ? 'Paid' : 'Unpaid'}', style: PulseTextStyles.caption),
+                        Text('${p['daysPerYear']} days/year  •  ${(p['daysPerYear'] / 12).toStringAsFixed(1)}/mo  •  ${isPaid ? 'Paid' : 'Unpaid'}', style: PulseTextStyles.caption),
                       ])),
                       IconButton(icon: const Icon(Icons.edit, color: PulseColors.accent, size: 20), onPressed: () => _editPolicy(p)),
                     ]),

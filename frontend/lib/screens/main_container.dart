@@ -97,15 +97,27 @@ class _MainContainerState extends State<MainContainer> {
         ),
       ),
       bottomNavigationBar: Container(
-        decoration: const BoxDecoration(
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+        decoration: BoxDecoration(
           color: PulseColors.surface,
-          border: Border(
-            top: BorderSide(color: PulseColors.border, width: 1),
-          ),
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.08),
+              blurRadius: 20,
+              spreadRadius: 0,
+              offset: const Offset(0, 4),
+            ),
+            BoxShadow(
+              color: PulseColors.primary.withOpacity(0.04),
+              blurRadius: 8,
+              spreadRadius: 0,
+            ),
+          ],
         ),
         child: SafeArea(
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [

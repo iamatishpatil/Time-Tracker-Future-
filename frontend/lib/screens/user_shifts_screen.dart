@@ -15,19 +15,21 @@ class UserShiftsScreen extends StatefulWidget {
 
 class _UserShiftsScreenState extends State<UserShiftsScreen> {
   List<dynamic> _shifts = [];
+  Map<String, dynamic>? _user;
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _loadShifts();
+    _loadData();
   }
 
-  Future<void> _loadShifts() async {
+  Future<void> _loadData() async {
     setState(() => _isLoading = true);
     try {
       final shifts = await ApiService.getShifts();
-      if (mounted) setState(() => _shifts = shifts);
+      final user = await ApiService.getStoredUser();
+      if (mounted) setState(() { _shifts = shifts; _user = user; });
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -40,24 +42,62 @@ class _UserShiftsScreenState extends State<UserShiftsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final weekOffs = (_user?['weekOffs'] ?? 'Sunday').toString().split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+
     return Scaffold(
       appBar: AppBar(title: const Text('Company Shifts')),
       body: _isLoading
           ? Padding(
               padding: const EdgeInsets.all(20),
               child: PulseShimmer.list(count: 3, itemHeight: 90))
-          : _shifts.isEmpty
-              ? const Center(
-                  child: PulseEmptyState(
-                      icon: Icons.schedule,
-                      title: 'No Shifts Available',
-                      subtitle: 'Contact your administrator for assigned shifts.'))
-              : ListView.builder(
-                  padding: const EdgeInsets.all(14),
-                  itemCount: _shifts.length,
-                  itemBuilder: (context, index) {
-                    final shift = _shifts[index];
-                    return Padding(
+          : RefreshIndicator(
+              onRefresh: _loadData,
+              child: ListView(
+                padding: const EdgeInsets.all(14),
+                children: [
+                  // Your Week Offs Card
+                  PulseCard(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.weekend, color: PulseColors.warning, size: 20),
+                            const SizedBox(width: 8),
+                            Text('Your Week Offs', style: PulseTextStyles.bodyBold),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: weekOffs.map((day) => Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: PulseColors.warning.withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: PulseColors.warning.withOpacity(0.3)),
+                            ),
+                            child: Text(day, style: PulseTextStyles.captionBold.copyWith(color: PulseColors.warning)),
+                          )).toList(),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Shifts Header
+                  Text('All Shifts', style: PulseTextStyles.h3),
+                  const SizedBox(height: 10),
+
+                  if (_shifts.isEmpty)
+                    const PulseEmptyState(
+                        icon: Icons.schedule,
+                        title: 'No Shifts Available',
+                        subtitle: 'Contact your administrator for assigned shifts.')
+                  else
+                    ..._shifts.map((shift) => Padding(
                       padding: const EdgeInsets.only(bottom: 10),
                       child: PulseCard(
                         padding: const EdgeInsets.all(14),
@@ -94,9 +134,11 @@ class _UserShiftsScreenState extends State<UserShiftsScreen> {
                           ],
                         ),
                       ),
-                    );
-                  },
-                ),
+                    )),
+                ],
+              ),
+            ),
     );
   }
 }
+

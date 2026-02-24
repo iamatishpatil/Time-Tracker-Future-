@@ -1205,17 +1205,13 @@ app.get('/api/leaves/types', (req, res) => {
   });
 });
 
-app.get('/api/leaves/:userId', (req, res) => {
-  db.all('SELECT * FROM leaves WHERE userId = ? ORDER BY createdAt DESC', [req.params.userId], (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json(rows);
-  });
-});
-
+// IMPORTANT: This route MUST be above /api/leaves/:userId to prevent 'balance' matching as a userId
 app.get('/api/leaves/balance/:userId', (req, res) => {
-  // Fetch holidays and user week-offs once
+  const currentMonth = new Date().getMonth() + 1; // 1-12
+
   db.get('SELECT weekOffs, company FROM users WHERE id = ?', [req.params.userId], (errUser, user) => {
     if (errUser) return res.status(500).json({ error: errUser.message });
+    if (!user) return res.status(404).json({ error: 'User not found' });
     const weekOffs = (user?.weekOffs || 'Sunday').split(',').map(s => s.trim());
     const company = user?.company;
 
@@ -1255,14 +1251,13 @@ app.get('/api/leaves/balance/:userId', (req, res) => {
               } else if (!holidayMap[dateStr]) {
                 count += 1.0;
               }
-              // Full Day holidays are ignored (count += 0)
             }
             current.setDate(current.getDate() + 1);
           }
           byType[t] += count;
         });
 
-        // Get dynamic leave types
+        // Get leave policies
         let lpQuery = 'SELECT * FROM leave_policies';
         let lpParams = [];
         if (company) { lpQuery += ' WHERE company = ?'; lpParams.push(company); }
@@ -1279,26 +1274,44 @@ app.get('/api/leaves/balance/:userId', (req, res) => {
             
             const result = leaveTypes.map(t => {
               const policy = policies?.find(p => p.leaveType === t);
-              const totalAllowed = overrides[t] || (policy ? policy.daysPerYear : 10);
+              const daysPerYear = overrides[t] || (policy ? policy.daysPerYear : 10);
+              const monthlyRate = daysPerYear / 12;
+              // Monthly accrual: leaves accrue proportionally each month
+              const accrued = Math.floor(monthlyRate * currentMonth);
+              const used = byType[t] || 0;
+              const remaining = Math.max(0, accrued - used);
               return {
                 leaveType: t,
-                total: totalAllowed,
-                used: byType[t] || 0,
-                remaining: totalAllowed - (byType[t] || 0),
+                daysPerYear: daysPerYear,
+                monthlyRate: parseFloat(monthlyRate.toFixed(2)),
+                accrued: accrued,
+                total: accrued,
+                used: used,
+                remaining: remaining,
               };
             });
+            const totalAccrued = result.reduce((a, b) => a + b.accrued, 0);
             const totalUsed = Object.values(byType).reduce((a, b) => a + b, 0);
-            const totalOverall = result.reduce((a, b) => a + b.total, 0);
+            const totalYearly = result.reduce((a, b) => a + b.daysPerYear, 0);
             res.json({ 
-              total: totalOverall, 
+              total: totalAccrued, 
               used: totalUsed, 
-              remaining: totalOverall - totalUsed, 
+              remaining: Math.max(0, totalAccrued - totalUsed),
+              totalYearly: totalYearly,
+              currentMonth: currentMonth,
               byType: result 
             });
           });
         });
       });
     });
+  });
+});
+
+app.get('/api/leaves/:userId', (req, res) => {
+  db.all('SELECT * FROM leaves WHERE userId = ? ORDER BY createdAt DESC', [req.params.userId], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
   });
 });
 

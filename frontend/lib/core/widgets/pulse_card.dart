@@ -31,12 +31,32 @@ class PulseCard extends StatelessWidget {
         color: color ?? PulseColors.surface,
         borderRadius: BorderRadius.circular(borderRadius),
         border: Border.all(
-          color: borderColor ?? PulseColors.border,
-          width: 1,
+          color: borderColor ?? PulseColors.border.withOpacity(0.6),
+          width: 0.5,
         ),
         boxShadow: glowEffect
-            ? PulseColors.brandShadow
-            : null,
+            ? [
+                ...PulseColors.brandShadow,
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.04),
+                  blurRadius: 10,
+                  offset: const Offset(0, 2),
+                ),
+              ]
+            : [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.04),
+                  blurRadius: 10,
+                  spreadRadius: 0,
+                  offset: const Offset(0, 2),
+                ),
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.02),
+                  blurRadius: 4,
+                  spreadRadius: 0,
+                  offset: const Offset(0, 1),
+                ),
+              ],
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(borderRadius),
@@ -46,8 +66,8 @@ class PulseCard extends StatelessWidget {
               ? InkWell(
                   onTap: onTap,
                   borderRadius: BorderRadius.circular(borderRadius),
-                  splashColor: PulseColors.primary.withOpacity(0.1),
-                  highlightColor: PulseColors.primary.withOpacity(0.05),
+                  splashColor: PulseColors.primary.withOpacity(0.08),
+                  highlightColor: PulseColors.primary.withOpacity(0.04),
                   child: Padding(
                     padding: padding ?? const EdgeInsets.all(16),
                     child: child,
@@ -64,3 +84,4 @@ class PulseCard extends StatelessWidget {
     return card;
   }
 }
+

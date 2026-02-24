@@ -280,20 +280,16 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                   Builder(
                     builder: (context) {
                       final actions = [
-                        {'label': 'Employees', 'icon': Icons.person_add, 'color': PulseColors.primary, 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => AdminEmployeesScreen()))},
-                        {'label': 'Attendance', 'icon': Icons.history, 'color': PulseColors.accent, 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => AdminAttendanceScreen()))},
-                        {'label': 'Leaves', 'icon': Icons.beach_access, 'color': PulseColors.warning, 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => AdminLeavesScreen()))},
                         {'label': 'Holidays', 'icon': Icons.celebration, 'color': Colors.orange, 'onTap': () => Navigator.pushNamed(context, '/admin-holidays')},
                         if (_settings?['payrollEnabled'] != 0)
                           {'label': 'Payroll', 'icon': Icons.payments, 'color': PulseColors.success, 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => AdminPayrollScreen()))},
                         {'label': 'Reports', 'icon': Icons.assessment, 'color': const Color(0xFF26A69A), 'onTap': () => Navigator.pushNamed(context, '/admin-reports')},
                         {'label': 'Shifts', 'icon': Icons.schedule, 'color': const Color(0xFFE91E63), 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => AdminShiftsScreen()))},
-                        {'label': 'Settings', 'icon': Icons.settings, 'color': PulseColors.textHint, 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => AdminSettingsScreen()))},
                       ];
 
                       return GridView.builder(
                         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 3,
+                          crossAxisCount: 4,
                           crossAxisSpacing: 10,
                           mainAxisSpacing: 10,
                         ),
@@ -451,15 +447,15 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
   Widget _action(String title, IconData icon, Color color, int index, VoidCallback onTap) {
     return PulseCard(
       onTap: onTap,
-      padding: const EdgeInsets.all(10),
+      padding: const EdgeInsets.all(8),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Container(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
               gradient: PulseColors.brandGradient,
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(12),
               boxShadow: [
                 BoxShadow(
                   color: color.withOpacity(0.15),
@@ -468,13 +464,15 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                 ),
               ],
             ),
-            child: Icon(icon, color: Colors.white, size: 24),
+            child: Icon(icon, color: Colors.white, size: 20),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 6),
           Text(
             title,
             textAlign: TextAlign.center,
-            style: PulseTextStyles.captionBold.copyWith(fontSize: 11, letterSpacing: 0.2),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: PulseTextStyles.captionBold.copyWith(fontSize: 10, letterSpacing: 0.2),
           ),
         ],
       ),

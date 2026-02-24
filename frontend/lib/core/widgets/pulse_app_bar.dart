@@ -25,9 +25,9 @@ class PulseAppBar extends StatelessWidget implements PreferredSizeWidget {
         children: [
           if (showLogo) ...[
             BrandedLogo(size: 32, showText: false),
-            const SizedBox(width: 12),
+            const SizedBox(width: 10),
           ],
-          Text(title, style: PulseTextStyles.h3),
+          Text(title, style: PulseTextStyles.h3.copyWith(fontSize: 17)),
         ],
       ),
       actions: actions,
@@ -38,16 +38,8 @@ class PulseAppBar extends StatelessWidget implements PreferredSizeWidget {
       bottom: PreferredSize(
         preferredSize: const Size.fromHeight(1),
         child: Container(
-          height: 1,
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                Colors.transparent,
-                PulseColors.primary.withOpacity(0.3),
-                Colors.transparent,
-              ],
-            ),
-          ),
+          height: 0.5,
+          color: PulseColors.border.withOpacity(0.4),
         ),
       ),
     );
@@ -56,3 +48,4 @@ class PulseAppBar extends StatelessWidget implements PreferredSizeWidget {
   @override
   Size get preferredSize => const Size.fromHeight(kToolbarHeight);
 }
+

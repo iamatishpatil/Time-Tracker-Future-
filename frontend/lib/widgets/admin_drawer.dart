@@ -195,17 +195,46 @@ class _DrawerTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = isDestructive ? PulseColors.error : PulseColors.textSecondary;
-    return ListTile(
-      leading: Icon(icon, color: color, size: 22),
-      title: Text(
-        title,
-        style: PulseTextStyles.body.copyWith(
-          color: isDestructive ? PulseColors.error : PulseColors.textPrimary,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          splashColor: PulseColors.primary.withOpacity(0.06),
+          highlightColor: PulseColors.primary.withOpacity(0.03),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: (isDestructive ? PulseColors.error : PulseColors.primary).withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(icon, color: color, size: 18),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: PulseTextStyles.body.copyWith(
+                      color: isDestructive ? PulseColors.error : PulseColors.textPrimary,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                if (!isDestructive)
+                  Icon(Icons.chevron_right_rounded, color: PulseColors.textHint.withOpacity(0.5), size: 18),
+              ],
+            ),
+          ),
         ),
       ),
-      onTap: onTap,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 2),
     );
   }
 }
+
