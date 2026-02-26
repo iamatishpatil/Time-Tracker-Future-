@@ -48,7 +48,14 @@ class _AdminLeavePoliciesScreenState extends State<AdminLeavePoliciesScreen> {
           content: Column(mainAxisSize: MainAxisSize.min, children: [
             TextField(controller: daysController, decoration: const InputDecoration(labelText: 'Days Per Year'), keyboardType: TextInputType.number),
             const SizedBox(height: 12),
-            SwitchListTile(title: const Text('Paid Leave'), value: isPaid, onChanged: (v) => setD(() => isPaid = v), activeColor: PulseColors.success),
+            SwitchListTile(
+              title: Text('Paid Leave', style: PulseTextStyles.bodyBold),
+              subtitle: Text(isPaid ? 'Salary is not deducted' : 'Salary is deducted', style: PulseTextStyles.caption),
+              value: isPaid,
+              onChanged: (v) => setD(() => isPaid = v),
+              activeColor: PulseColors.success,
+              contentPadding: EdgeInsets.zero,
+            ),
           ]),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),

@@ -33,8 +33,9 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   final _passwordController = TextEditingController();
 
   String _completePhoneNumber = '';
-  bool _isLoading = false; // Tracks if we are currently talking to the server
-  bool _obscurePassword = true; // Tracks if the password should be hidden (dots)
+  bool _isLoading = false; 
+  bool _obscurePassword = true; 
+  bool _isAdminSelected = false; 
   
   // Biometric authentication (Fingerprint/Face ID)
   final LocalAuthentication auth = LocalAuthentication();
@@ -85,18 +86,18 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
 
     if (authenticated && mounted) {
       final prefs = await SharedPreferences.getInstance();
-      final mobile = prefs.getString('saved_mobile');
-      final password = prefs.getString('saved_password');
+      final mobile = prefs.getString(_isAdminSelected ? 'saved_admin_mobile' : 'saved_mobile');
+      final password = prefs.getString(_isAdminSelected ? 'saved_admin_password' : 'saved_password');
 
       if (mobile != null && password != null) {
         setState(() {
           _completePhoneNumber = mobile;
           _passwordController.text = password;
         });
-        _login(); // Automatically login if fingerprint matches saved data
+        _login(); 
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('No saved credentials. Login manually first.')));
+            SnackBar(content: Text('No saved ${_isAdminSelected ? "admin " : ""}credentials. Login manually first.')));
       }
     }
   }
@@ -123,18 +124,30 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
         );
 
         if (mounted) {
-          // 3. Save the credentials locally so biometrics work next time
           final prefs = await SharedPreferences.getInstance();
-          await prefs.setString('saved_mobile', _completePhoneNumber);
-          await prefs.setString('saved_password', _passwordController.text);
+          await prefs.setString(_isAdminSelected ? 'saved_admin_mobile' : 'saved_mobile', _completePhoneNumber);
+          await prefs.setString(_isAdminSelected ? 'saved_admin_password' : 'saved_password', _passwordController.text);
 
           final user = response['user'];
-          // 4. Decide where to go next based on user role (Admin or User)
-          if (user['role'] == 'Admin') {
-            Navigator.pushReplacement(
-                context, MaterialPageRoute(builder: (context) => const AdminContainer()));
+          if (_isAdminSelected) {
+            if (user['role'] == 'Admin') {
+              Navigator.pushReplacement(
+                  context, MaterialPageRoute(builder: (context) => const AdminContainer()));
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Access Denied: You are not an Admin')),
+              );
+            }
           } else {
-            Navigator.pushReplacementNamed(context, '/home');
+            if (user['role'] == 'Admin') {
+              // Even if employee mode is selected, if they are admin, let them in?
+              // Or redirect to admin? The user said "toggle for employee and admin".
+              // Usually, admins can log in as admins.
+              Navigator.pushReplacement(
+                  context, MaterialPageRoute(builder: (context) => const AdminContainer()));
+            } else {
+              Navigator.pushReplacementNamed(context, '/home');
+            }
           }
         }
       } catch (e) {
@@ -169,7 +182,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                     const SizedBox(height: 24),
                     Text('Time Tracker', style: PulseTextStyles.h1),
                     const SizedBox(height: 8),
-                    Text('Track your work, effortlessly', style: PulseTextStyles.body),
+                    Text(_isAdminSelected ? 'Manage your organization securely' : 'Track your work, effortlessly', style: PulseTextStyles.body),
                     const SizedBox(height: 40),
 
                     // --- The Main Login Card ---
@@ -185,9 +198,60 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Welcome Back', style: PulseTextStyles.h2),
+                            Text(_isAdminSelected ? 'Admin Portal' : 'Welcome Back', style: PulseTextStyles.h2),
                             const SizedBox(height: 4),
-                            Text('Sign in to continue', style: PulseTextStyles.caption),
+                            Text(_isAdminSelected ? 'Sign in to access admin privileges' : 'Sign in to continue', style: PulseTextStyles.caption),
+                            const SizedBox(height: 32),
+
+                            // Role Toggle
+                            Container(
+                              height: 45,
+                              decoration: BoxDecoration(
+                                color: PulseColors.surfaceVariant,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: PulseColors.border),
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: GestureDetector(
+                                      onTap: () => setState(() => _isAdminSelected = false),
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          color: !_isAdminSelected ? PulseColors.primary : Colors.transparent,
+                                          borderRadius: BorderRadius.circular(10),
+                                        ),
+                                        alignment: Alignment.center,
+                                        child: Text(
+                                          'Employee',
+                                          style: PulseTextStyles.captionBold.copyWith(
+                                            color: !_isAdminSelected ? Colors.white : PulseColors.textHint,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  Expanded(
+                                    child: GestureDetector(
+                                      onTap: () => setState(() => _isAdminSelected = true),
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          color: _isAdminSelected ? PulseColors.primary : Colors.transparent,
+                                          borderRadius: BorderRadius.circular(10),
+                                        ),
+                                        alignment: Alignment.center,
+                                        child: Text(
+                                          'Admin',
+                                          style: PulseTextStyles.captionBold.copyWith(
+                                            color: _isAdminSelected ? Colors.white : PulseColors.textHint,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                             const SizedBox(height: 28),
 
                             // Phone Input Field
@@ -250,7 +314,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
 
                             // The Sign In Button
                             PulseButton(
-                              text: 'Sign In',
+                              text: _isAdminSelected ? 'Admin Login' : 'Sign In',
                               onPressed: _isLoading ? null : _login,
                               isLoading: _isLoading,
                             ),
@@ -290,9 +354,9 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Text("Don't have an account? ", style: PulseTextStyles.body),
+                        Text(_isAdminSelected ? "Register your company? " : "Don't have an account? ", style: PulseTextStyles.body),
                         GestureDetector(
-                          onTap: () => Navigator.pushNamed(context, '/register'),
+                          onTap: () => Navigator.pushNamed(context, _isAdminSelected ? '/admin-register' : '/register'),
                           child: Text('Sign Up',
                               style: PulseTextStyles.bodyBold.copyWith(color: PulseColors.primary)),
                         ),

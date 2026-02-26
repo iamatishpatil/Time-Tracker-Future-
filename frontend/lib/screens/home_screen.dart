@@ -305,9 +305,14 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     }
 
     // 2. Take a Selfie! (Verification)
-    final picker = ImagePicker();
-    final image = await picker.pickImage(source: ImageSource.camera, preferredCameraDevice: CameraDevice.front);
-    if (image == null) return; // User cancelled the camera
+    XFile? image;
+    _settings = await ApiService.getSettings();
+    
+    if (_settings != null && _settings!['cameraAuthEnabled'] != 0) {
+      final picker = ImagePicker();
+      image = await picker.pickImage(source: ImageSource.camera, preferredCameraDevice: CameraDevice.front);
+      if (image == null) return; // User cancelled the camera
+    }
 
     setState(() => _isLoading = true);
     try {

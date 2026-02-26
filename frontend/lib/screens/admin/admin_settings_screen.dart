@@ -36,6 +36,7 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
   double _radius = 100.0;
   bool _geofenceEnabled = true;
   bool _payrollEnabled = true;
+  bool _cameraAuthEnabled = true;
   bool _isLoading = true;
   final MapController _mapController = MapController();
 
@@ -72,6 +73,7 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
             _radius = (settings['officeRadiusMeters'] as num?)?.toDouble() ?? 100.0;
              _geofenceEnabled = settings['geofenceEnabled'] != 0;
              _payrollEnabled = settings['payrollEnabled'] != 0;
+             _cameraAuthEnabled = settings['cameraAuthEnabled'] != 0;
             if (settings['workingDays'] != null) {
               try {
                 final wd = settings['workingDays'];
@@ -118,24 +120,27 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
     } catch (e) {}
   }
 
-  Future<void> _saveSettings() async {
-    setState(() => _isLoading = true);
+  Future<void> _saveSettings({bool silent = false}) async {
+    if (!silent) setState(() => _isLoading = true);
     try {
       await ApiService.updateSettings({
-        'companyName': _nameController.text,
+        'companyName': _nameController.text.trim(),
         'officeLat': _officeLocation.latitude,
         'officeLong': _officeLocation.longitude,
         'officeRadiusMeters': _radius,
         'geofenceEnabled': _geofenceEnabled ? 1 : 0,
         'payrollEnabled': _payrollEnabled ? 1 : 0,
+        'cameraAuthEnabled': _cameraAuthEnabled ? 1 : 0,
         'workingDays': _workingDays.toList(),
         'weekendDays': _weekendDays.toList(),
       });
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Settings Saved!')));
+      if (!silent && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Settings Saved!')));
+      }
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (!silent && mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -376,10 +381,13 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
                     SwitchListTile(
                       title: Text('Enable Geofencing restriction', style: PulseTextStyles.bodyBold),
                       subtitle: Text('Users must be within radius to punch in', style: PulseTextStyles.caption),
-                      activeColor: PulseColors.primary,
+                      activeColor: PulseColors.success,
                       contentPadding: EdgeInsets.zero,
                       value: _geofenceEnabled,
-                      onChanged: (val) => setState(() => _geofenceEnabled = val),
+                      onChanged: (val) {
+                        setState(() => _geofenceEnabled = val);
+                        _saveSettings(silent: true);
+                      },
                     ),
                     if (_geofenceEnabled) ...[
                       const SizedBox(height: 12),
@@ -399,7 +407,23 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
                       activeColor: PulseColors.success,
                       contentPadding: EdgeInsets.zero,
                       value: _payrollEnabled,
-                      onChanged: (val) => setState(() => _payrollEnabled = val),
+                      onChanged: (val) {
+                        setState(() => _payrollEnabled = val);
+                        _saveSettings(silent: true);
+                      },
+                    ),
+                    const Divider(height: 32),
+                    // CAMERA AUTH: Enable/Disable selfie Requirement
+                    SwitchListTile(
+                      title: Text('Camera Authentication', style: PulseTextStyles.bodyBold),
+                      subtitle: Text('Require a selfie for check-in and check-out', style: PulseTextStyles.caption),
+                      activeColor: PulseColors.success,
+                      contentPadding: EdgeInsets.zero,
+                      value: _cameraAuthEnabled,
+                      onChanged: (val) {
+                        setState(() => _cameraAuthEnabled = val);
+                        _saveSettings(silent: true);
+                      },
                     ),
                   ]),
                 ),

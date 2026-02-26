@@ -44,55 +44,99 @@ class _AdminEmployeesScreenState extends State<AdminEmployeesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final content = RefreshIndicator(
-      onRefresh: _loadEmployees,
-      child: _isLoading
-          ? Padding(padding: const EdgeInsets.all(20), child: PulseShimmer.list(count: 5, itemHeight: 110))
-          : _employees.isEmpty
-              ? ListView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  children: const [
-                    SizedBox(height: 80),
-                    PulseEmptyState(icon: Icons.people_outline, title: 'No Employees', subtitle: 'Tap + to add one'),
-                  ],
-                )
-              : ListView.builder(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.all(14),
-                  itemCount: _employees.length,
-                  itemBuilder: (context, index) => _buildCard(_employees[index]),
-                ),
-    );
-
-    if (widget.isTab) {
-      return Scaffold(
-        backgroundColor: Colors.transparent,
-        body: content,
-        floatingActionButton: FloatingActionButton(
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        appBar: widget.isTab ? null : AppBar(
+          title: const Text('Employees'),
+          bottom: TabBar(
+            tabs: const [
+              Tab(text: 'Directory'),
+              Tab(text: 'Approvals'),
+            ],
+            labelStyle: PulseTextStyles.captionBold,
+            unselectedLabelStyle: PulseTextStyles.caption,
+            indicator: UnderlineTabIndicator(
+              borderSide: BorderSide(width: 3.5, color: PulseColors.primary),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(3)),
+              insets: const EdgeInsets.symmetric(horizontal: 48),
+            ),
+            splashBorderRadius: BorderRadius.circular(12),
+          ),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.person_add),
+              onPressed: () async {
+                final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => EmployeeFormScreen()));
+                if (result == true) _loadEmployees();
+              },
+            ),
+          ],
+        ),
+        body: Column(
+          children: [
+            if (widget.isTab)
+              TabBar(
+                tabs: const [
+                  Tab(text: 'Directory'),
+                  Tab(text: 'Approvals'),
+                ],
+                labelColor: PulseColors.primary,
+                unselectedLabelColor: PulseColors.textHint,
+                labelStyle: PulseTextStyles.captionBold,
+                unselectedLabelStyle: PulseTextStyles.caption,
+                indicatorColor: PulseColors.primary,
+              ),
+            Expanded(
+              child: TabBarView(
+                children: [
+                  _buildEmployeeList(approvedOnly: true),
+                  _buildEmployeeList(approvedOnly: false),
+                ],
+              ),
+            ),
+          ],
+        ),
+        floatingActionButton: widget.isTab ? FloatingActionButton(
           onPressed: () async {
             final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => EmployeeFormScreen()));
             if (result == true) _loadEmployees();
           },
           backgroundColor: PulseColors.primary,
           child: const Icon(Icons.person_add, color: Colors.white),
-        ),
-      );
-    }
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Employees'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.person_add),
-            onPressed: () async {
-              final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => EmployeeFormScreen()));
-              if (result == true) _loadEmployees();
-            },
-          ),
-        ],
+        ) : null,
       ),
-      body: content,
+    );
+  }
+
+  Widget _buildEmployeeList({required bool approvedOnly}) {
+    final filtered = _employees.where((e) {
+      final bool approved = e['isApproved'] != 0 && e['isApproved'] != false;
+      return approvedOnly ? approved : !approved;
+    }).toList();
+
+    return RefreshIndicator(
+      onRefresh: _loadEmployees,
+      child: _isLoading
+          ? Padding(padding: const EdgeInsets.all(20), child: PulseShimmer.list(count: 5, itemHeight: 110))
+          : filtered.isEmpty
+              ? ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  children: [
+                    const SizedBox(height: 80),
+                    PulseEmptyState(
+                      icon: approvedOnly ? Icons.people_outline : Icons.how_to_reg_outlined, 
+                      title: approvedOnly ? 'No Employees' : 'No Pending Approvals', 
+                      subtitle: approvedOnly ? 'Staff members will appear here.' : 'New registrations will show up here for you to review.',
+                    ),
+                  ],
+                )
+              : ListView.builder(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.all(14),
+                  itemCount: filtered.length,
+                  itemBuilder: (context, index) => _buildCard(filtered[index]),
+                ),
     );
   }
 
@@ -120,7 +164,21 @@ class _AdminEmployeesScreenState extends State<AdminEmployeesScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(employee['fullName'] ?? 'User', style: PulseTextStyles.bodyBold, overflow: TextOverflow.ellipsis),
+                      Row(
+                        children: [
+                          Expanded(child: Text(employee['fullName'] ?? 'User', style: PulseTextStyles.bodyBold, overflow: TextOverflow.ellipsis)),
+                          if (employee['isApproved'] == 0)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: PulseColors.warning.withOpacity(0.08),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(color: PulseColors.warning.withOpacity(0.3), width: 1),
+                              ),
+                              child: Text('PENDING', style: PulseTextStyles.chip.copyWith(color: PulseColors.warning)),
+                            ),
+                        ],
+                      ),
                       const SizedBox(height: 2),
                       Text('${employee['role'] ?? 'Employee'} • ${employee['shiftName'] ?? 'No Shift'}',
                           style: PulseTextStyles.caption, overflow: TextOverflow.ellipsis),
@@ -144,35 +202,97 @@ class _AdminEmployeesScreenState extends State<AdminEmployeesScreen> {
             ),
             const SizedBox(height: 8),
             Divider(height: 1, color: PulseColors.border),
-            const SizedBox(height: 4),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                // --- Status Switch ---
-                // This lets the Admin "fire" or "deactivate" a user without 
-                // deleting their historical records.
-                Row(mainAxisSize: MainAxisSize.min, children: [
-                  Text(isActive ? 'Active' : 'Inactive',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: isActive ? PulseColors.success : PulseColors.error)),
-                  Switch(
-                    value: isActive,
-                    onChanged: (val) async {
-                      // 1. Update the UI immediately for a "fast" feel
-                      setState(() => employee['isActive'] = val ? 1 : 0);
-                      try {
-                        // 2. Tell the server to disable the account
-                        await ApiService.toggleEmployeeActive(employee['id'], val);
-                        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(val ? '✅ Activated' : '⛔ Deactivated'), duration: const Duration(seconds: 2)));
-                      } catch (e) {
-                        // 3. If it failed, flip the switch back!
-                        setState(() => employee['isActive'] = val ? 0 : 1);
-                        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
-                      }
-                    },
-                    activeColor: PulseColors.success,
-                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                // --- Conditional Actions based on Approval Status ---
+                if (employee['isApproved'] == 0)
+                  // Approval Buttons for Pending Users
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextButton(
+                        onPressed: () async {
+                          final String? reason = await _showRejectionDialog(employee);
+                          if (reason != null) {
+                            try {
+                              await ApiService.toggleUserApproval(employee['id'], false, reason: reason);
+                              _loadEmployees();
+                              if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('⛔ User Rejected')));
+                            } catch (e) {
+                              if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+                            }
+                          }
+                        },
+                        style: TextButton.styleFrom(foregroundColor: PulseColors.error),
+                        child: Text('Reject', style: PulseTextStyles.captionBold.copyWith(color: PulseColors.error)),
+                      ),
+                      const SizedBox(width: 8),
+                      ElevatedButton(
+                        onPressed: () async {
+                          try {
+                            await ApiService.toggleUserApproval(employee['id'], true);
+                            _loadEmployees();
+                            if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ User Approved')));
+                          } catch (e) {
+                            if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: PulseColors.success,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          minimumSize: const Size(80, 32),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        child: Text('Approve', style: PulseTextStyles.captionBold.copyWith(color: Colors.white)),
+                      ),
+                    ],
+                  )
+                else
+                  // Status Switch for Approved Users
+                  Row(
+                    mainAxisSize: MainAxisSize.min, 
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: isActive ? PulseColors.success.withOpacity(0.08) : PulseColors.error.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: (isActive ? PulseColors.success : PulseColors.error).withOpacity(0.3),
+                            width: 1,
+                          ),
+                        ),
+                        child: Text(
+                          isActive ? 'ACTIVE' : 'INACTIVE',
+                          style: PulseTextStyles.chip.copyWith(
+                            color: isActive ? PulseColors.success : PulseColors.error,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Transform.scale(
+                        scale: 0.8,
+                        child: Switch(
+                          value: isActive,
+                          onChanged: (val) async {
+                            setState(() => employee['isActive'] = val ? 1 : 0);
+                            try {
+                              await ApiService.toggleEmployeeActive(employee['id'], val);
+                              if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(val ? '✅ Activated' : '⛔ Deactivated'), duration: const Duration(seconds: 2)));
+                            } catch (e) {
+                              setState(() => employee['isActive'] = val ? 0 : 1);
+                              if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+                            }
+                          },
+                          activeColor: PulseColors.success,
+                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                      ),
+                    ],
                   ),
-                ]),
                 Row(mainAxisSize: MainAxisSize.min, children: [
                   IconButton(
                     icon: const Icon(Icons.edit_outlined, color: PulseColors.accent, size: 20),
@@ -199,18 +319,63 @@ class _AdminEmployeesScreenState extends State<AdminEmployeesScreen> {
     );
   }
 
-  Future<void> _confirmDelete(Map<String, dynamic> employee) async {
+  Future<String?> _showRejectionDialog(Map<String, dynamic> employee) async {
+    final TextEditingController reasonController = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Reject Registration'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Enter reason for rejecting ${employee['fullName']}:', style: PulseTextStyles.caption),
+            const SizedBox(height: 12),
+            TextField(
+              controller: reasonController,
+              decoration: InputDecoration(
+                hintText: 'e.g. Invalid document, Outside hiring zone',
+                hintStyle: PulseTextStyles.caption.copyWith(color: PulseColors.textHint),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: PulseColors.error)),
+              ),
+              maxLines: 3,
+              style: PulseTextStyles.body,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('CANCEL')),
+          ElevatedButton(
+            onPressed: () {
+              if (reasonController.text.trim().isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter a reason')));
+                return;
+              }
+              Navigator.pop(context, reasonController.text.trim());
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: PulseColors.error, foregroundColor: Colors.white),
+            child: const Text('REJECT'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _confirmDelete(Map<String, dynamic> employee, {bool isReject = false}) async {
     final bool? confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete Employee'),
-        content: Text('Delete ${employee['fullName']}? This cannot be undone.'),
+        title: Text(isReject ? 'Reject User' : 'Delete Employee'),
+        content: Text(isReject 
+            ? 'Reject and remove registration for ${employee['fullName']}?' 
+            : 'Delete ${employee['fullName']}? This cannot be undone.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('CANCEL')),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
             style: TextButton.styleFrom(foregroundColor: PulseColors.error),
-            child: const Text('DELETE'),
+            child: Text(isReject ? 'REJECT' : 'DELETE'),
           ),
         ],
       ),

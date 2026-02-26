@@ -159,13 +159,18 @@ class _CheckoutScreenState extends State<CheckoutScreen> with SingleTickerProvid
     setState(() => _isLoading = true);
 
     // 2. Take a Goodbye Selfie!
-    final ImagePicker picker = ImagePicker();
-    final XFile? photo = await picker.pickImage(source: ImageSource.camera, preferredCameraDevice: CameraDevice.front);
+    XFile? photo;
+    final settings = await ApiService.getSettings();
+    
+    if (settings != null && settings['cameraAuthEnabled'] != 0) {
+      final ImagePicker picker = ImagePicker();
+      photo = await picker.pickImage(source: ImageSource.camera, preferredCameraDevice: CameraDevice.front);
 
-    if (photo == null && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Selfie required for check-out'), backgroundColor: PulseColors.error));
-      setState(() => _isLoading = false);
-      return;
+      if (photo == null && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Selfie required for check-out'), backgroundColor: PulseColors.error));
+        setState(() => _isLoading = false);
+        return;
+      }
     }
 
     try {

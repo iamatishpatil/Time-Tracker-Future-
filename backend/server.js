@@ -87,6 +87,8 @@ db.serialize(() => {
     salary REAL DEFAULT 0,
     shiftId INTEGER,
     isActive INTEGER DEFAULT 1,
+    isApproved INTEGER DEFAULT 0,
+    rejectionReason TEXT,
     weekOffs TEXT DEFAULT 'Sunday',
     createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
@@ -253,7 +255,8 @@ db.serialize(() => {
     workingDays TEXT DEFAULT '["Mon","Tue","Wed","Thu","Fri"]',
     weekendDays TEXT DEFAULT '["Sat","Sun"]',
     companyLogo TEXT,
-    themeColor TEXT
+    themeColor TEXT,
+    cameraAuthEnabled INTEGER DEFAULT 1
   )`);
 
   db.run(`ALTER TABLE users ADD COLUMN shiftId INTEGER`, (err) => {
@@ -272,6 +275,19 @@ db.serialize(() => {
   db.run(`UPDATE users SET isActive = 1 WHERE isActive IS NULL`, (err) => {
     if (!err) console.log('Backfilled NULL isActive values to 1');
   });
+  db.run(`ALTER TABLE users ADD COLUMN isApproved INTEGER DEFAULT 0`, (err) => {
+    if (!err) {
+      console.log('Added isApproved column to users');
+      // Backfill existing users as approved
+      db.run(`UPDATE users SET isApproved = 1 WHERE isApproved IS NULL`);
+    }
+  });
+  db.run(`ALTER TABLE users ADD COLUMN rejectionReason TEXT`, (err) => {
+    if (!err) console.log('Added rejectionReason column to users');
+  });
+  db.run(`ALTER TABLE leaves ADD COLUMN rejectionReason TEXT`, (err) => {
+    if (!err) console.log('Added rejectionReason column to leaves');
+  });
   db.run(`ALTER TABLE shifts ADD COLUMN latePenaltyPerMin REAL DEFAULT 0`, (err) => {});
   db.run(`ALTER TABLE shifts ADD COLUMN company TEXT`, (err) => {});
   db.run(`ALTER TABLE holidays ADD COLUMN company TEXT`, (err) => {});
@@ -283,12 +299,18 @@ db.serialize(() => {
   db.run(`ALTER TABLE settings ADD COLUMN payrollEnabled INTEGER DEFAULT 1`, (err) => {});
   db.run(`ALTER TABLE settings ADD COLUMN companyLogo TEXT`, (err) => {});
   db.run(`ALTER TABLE settings ADD COLUMN themeColor TEXT`, (err) => {});
+  db.run(`ALTER TABLE settings ADD COLUMN cameraAuthEnabled INTEGER DEFAULT 1`, (err) => {});
   
   // Ensure 'status' and 'overtimeHours' exist in attendance
   db.run(`ALTER TABLE attendance ADD COLUMN status TEXT`, (err) => {});
   db.run(`ALTER TABLE attendance ADD COLUMN overtimeHours REAL DEFAULT 0`, (err) => {});
   db.run(`ALTER TABLE attendance ADD COLUMN isManual INTEGER DEFAULT 0`, (err) => {});
   db.run(`ALTER TABLE attendance ADD COLUMN editedBy INTEGER`, (err) => {});
+  db.run(`ALTER TABLE attendance ADD COLUMN minutesLate INTEGER DEFAULT 0`, (err) => {});
+  db.run(`ALTER TABLE attendance ADD COLUMN minutesOvertime INTEGER DEFAULT 0`, (err) => {});
+  db.run(`ALTER TABLE attendance ADD COLUMN earlyLeaveMinutes INTEGER DEFAULT 0`, (err) => {});
+  db.run(`ALTER TABLE attendance ADD COLUMN shiftId INTEGER`, (err) => {});
+  db.run(`ALTER TABLE attendance ADD COLUMN penalty REAL DEFAULT 0`, (err) => {});
 });
 
 // Helper for users with shift info
@@ -301,6 +323,95 @@ const getUserWithShift = (id) => {
       if (err) reject(err);
       else resolve(row);
     });
+  });
+};
+
+// Helper to auto-provision a new company with default features
+const provisionCompany = (companyIdRaw) => {
+  const companyId = companyIdRaw ? companyIdRaw.trim() : null;
+  console.log(`[BOOTSTRAP] Provisioning company ID: "${companyId}"`);
+  if (!companyId) return Promise.resolve();
+  
+  return new Promise((resolve, reject) => {
+    // 1. Provision Settings (Geofence OFF by default for better onboarding, Professional Blue theme)
+    db.get('SELECT id FROM settings WHERE company = ? OR companyName = ?', [companyId, companyId], (err, row) => {
+      if (err) {
+        console.error('[BOOTSTRAP] Settings check error:', err);
+        return reject(err);
+      }
+      if (!row) {
+        console.log(`[BOOTSTRAP] Creating premium default settings for ID: ${companyId}`);
+        // We set both "company" (ID) and "companyName" (Display Name) to the ID initially
+        db.run(`INSERT INTO settings (company, companyName, geofenceEnabled, payrollEnabled, cameraAuthEnabled, officeRadiusMeters, workingDays, weekendDays, themeColor) 
+                VALUES (?, ?, 0, 1, 1, 200, '["Mon","Tue","Wed","Thu","Fri"]', '["Sat","Sun"]', '#2196F3')`, [companyId, companyId], (err) => {
+          if (err) console.error('[BOOTSTRAP] Settings insert error:', err);
+          provisionNext();
+        });
+      } else {
+        console.log(`[BOOTSTRAP] Settings already exist for ID: ${companyId}`);
+        provisionNext();
+      }
+    });
+
+    function provisionNext() {
+      // 2. Provision Default Shifts (Multiple shifts for a premium feel)
+      db.all('SELECT id FROM shifts WHERE company = ?', [companyId], (err, rows) => {
+        if (err) console.error('[BOOTSTRAP] Shift check error:', err);
+        if (!err && (!rows || rows.length === 0)) {
+          console.log(`[BOOTSTRAP] Creating default shift suite for ${companyId}`);
+          const defaultShifts = [
+            ['General Shift', '09:00', '18:00', 15, 1.0, 0],
+            ['Evening Shift', '14:00', '22:00', 15, 1.0, 0],
+            ['Night Shift', '22:00', '06:00', 15, 1.2, 0]
+          ];
+          
+          let completed = 0;
+          defaultShifts.forEach(s => {
+            db.run(`INSERT INTO shifts (name, startTime, endTime, gracePeriodMins, overtimeRate, latePenaltyPerMin, company) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?)`, [...s, companyId], (err) => {
+              completed++;
+              if (completed === defaultShifts.length) provisionLeaves();
+            });
+          });
+        } else {
+          console.log(`[BOOTSTRAP] Shifts already exist or error checking for ${companyId}`);
+          provisionLeaves();
+        }
+      });
+    }
+
+    function provisionLeaves() {
+      // 3. Provision Default Leave Policies
+      db.all('SELECT id FROM leave_policies WHERE company = ? LIMIT 1', [companyId], (err, rows) => {
+        if (err || (rows && rows.length > 0)) {
+          if (!err) console.log(`[BOOTSTRAP] Leave policies already exist for ${companyId}`);
+          return resolve();
+        }
+
+        console.log(`[BOOTSTRAP] Creating default leave policies for ${companyId}`);
+        const defaults = [
+          ['Sick Leave', 12, 1], ['Casual Leave', 10, 1], ['Earned Leave', 18, 1],
+          ['Maternity Leave', 182, 1], ['Paternity Leave', 15, 1], ['Bereavement Leave', 5, 1],
+          ['Comp-off', 0, 1], ['Marriage Leave', 5, 1], ['LWP', 365, 0], ['Sabbatical', 365, 0]
+        ];
+
+        const placeholders = defaults.map(() => '(?, ?, ?, ?)').join(', ');
+        const flatValues = [];
+        defaults.forEach(d => {
+          flatValues.push(...d, companyId);
+        });
+
+        db.run(`INSERT INTO leave_policies (leaveType, daysPerYear, isPaid, company) VALUES ${placeholders}`, flatValues, function(err) {
+          if (err) {
+            console.error('[BOOTSTRAP] Leave insert error:', err);
+          } else {
+            console.log(`[BOOTSTRAP] Successfully inserted ${this.changes} leave policies for ${companyId}`);
+          }
+          console.log(`[BOOTSTRAP] Finished provisioning for ${companyId}`);
+          resolve();
+        });
+      });
+    }
   });
 };
 
@@ -415,16 +526,30 @@ app.post('/api/register', upload.single('profilePicture'), async (req, res) => {
 
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
-    db.run(`INSERT INTO users (fullName, email, mobileNumber, gender, password, role, company, department, experience, technologies, address, latitude, longitude, profilePicture, shiftId, isActive, weekOffs) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [fullName, email, mobileNumber, gender, hashedPassword, role || 'User', company, department, experience, technologies, address, latitude, longitude, profilePicture, shiftId, isActive !== undefined ? isActive : 1, 'Sunday'],
-      function(err) {
+    // Admins are auto-approved, standard users are not
+    const approvalStatus = (role === 'Admin') ? 1 : 0;
+    
+    db.run(`INSERT INTO users (fullName, email, mobileNumber, gender, password, role, company, department, experience, technologies, address, latitude, longitude, profilePicture, shiftId, isActive, isApproved, weekOffs) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [fullName, email, mobileNumber, gender, hashedPassword, role || 'User', company, department, experience, technologies, address, latitude, longitude, profilePicture, shiftId, isActive !== undefined ? isActive : 1, approvalStatus, 'Sunday'],
+      async function(err) {
         if (err) {
           if (err.message.includes('UNIQUE constraint failed')) {
             return res.status(400).json({ error: 'Mobile number or email already exists' });
           }
           return res.status(500).json({ error: err.message });
         }
+        
+        // If registering as Admin, provision default features for the company
+        if (role === 'Admin' && company) {
+          await provisionCompany(company).catch(e => console.error('Bootstrap error:', e));
+          
+          // Welcome Notification for Admin
+          const welcomeTitle = "Welcome to Pulse Hub! 🚀";
+          const welcomeMsg = `Congratulations ${fullName}! Your organization "${company}" is now live. We've pre-configured your shifts and leave policies. Head over to Settings to finalize your office location.`;
+          createNotification(this.lastID, welcomeTitle, welcomeMsg);
+        }
+
         res.json({ message: 'User registered', id: this.lastID });
       });
   } catch (err) {
@@ -460,6 +585,11 @@ app.post('/api/login', async (req, res) => {
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    // Admins never need approval — only regular employees do
+    if (user.role !== 'Admin' && user.isApproved === 0) {
+      return res.status(403).json({ error: 'Your account is pending admin approval. Please wait for the initial approval.' });
     }
     
     res.json({ message: 'Login successful', user: user });
@@ -696,96 +826,51 @@ app.get('/api/attendance/:userId', (req, res) => {
 
 // Quick toggle for employee active status (uses JSON, not multipart)
 app.patch('/api/admin/users/:id/active', (req, res) => {
-  const { isActive } = req.body;
-  if (isActive === undefined) return res.status(400).json({ error: 'isActive is required' });
-  db.run('UPDATE users SET isActive = ? WHERE id = ?', [isActive, req.params.id], function(err) {
+  const { isActive, company } = req.body;
+  if (isActive === undefined || !company) return res.status(400).json({ error: 'isActive and company are required' });
+  
+  db.run('UPDATE users SET isActive = ? WHERE id = ? AND company = ?', [isActive, req.params.id, company], (err) => {
     if (err) return res.status(500).json({ error: err.message });
-    if (this.changes === 0) return res.status(404).json({ error: 'User not found' });
-    res.json({ message: isActive === 1 || isActive === '1' ? 'Account activated' : 'Account deactivated' });
+    res.json({ message: 'Status updated' });
+  });
+});
+
+app.patch('/api/admin/users/:id/approve', (req, res) => {
+  const { isApproved, company, rejectionReason } = req.body;
+  if (isApproved === undefined || !company) return res.status(400).json({ error: 'isApproved and company are required' });
+
+  db.run('UPDATE users SET isApproved = ?, rejectionReason = ? WHERE id = ? AND company = ?', [isApproved, rejectionReason || null, req.params.id, company], (err) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ message: 'Approval status updated' });
   });
 });
 
 app.get('/api/admin/stats', (req, res) => {
   const company = req.query.company;
+  if (!company) return res.status(400).json({ error: 'Company parameter is required' });
+
   const stats = {};
-  const now = new Date();
-  const today = now.toISOString().split('T')[0];
-  const dayName = now.toLocaleDateString('en-US', { weekday: 'long' });
-  
-  let uQuery = 'SELECT COUNT(*) as count FROM users WHERE role = "User"';
-  let uParams = [];
-  if (company) {
-    uQuery += ' AND company = ?';
-    uParams = [company];
-  }
-  db.get(uQuery, uParams, (err, row) => {
+  const today = new Date().toISOString().split('T')[0];
+
+  const uQuery = 'SELECT COUNT(*) as count FROM users WHERE role = "User" AND company = ?';
+  db.get(uQuery, [company], (err, row) => {
     if (err) return res.status(500).json({ error: err.message });
     stats.totalEmployees = row ? row.count : 0;
-    
-      let attQuery = `SELECT a.userId FROM attendance a JOIN users u ON a.userId = u.id WHERE a.checkInTime LIKE ?`;
-      let attParams = [`${today}%`];
-      if (company) {
-        attQuery += ' AND u.company = ?';
-        attParams.push(company);
-      }
-      db.all(attQuery, attParams, (err, attendanceRows) => {
+
+    const attQuery = `SELECT COUNT(DISTINCT a.userId) as count FROM attendance a JOIN users u ON a.userId = u.id WHERE a.checkInTime LIKE ? AND u.company = ?`;
+    db.get(attQuery, [`${today}%`, company], (err, row) => {
       if (err) return res.status(500).json({ error: err.message });
-      
-      const presentUserIds = new Set(attendanceRows.map(a => a.userId));
-      stats.presentToday = presentUserIds.size;
+      stats.presentToday = row ? row.count : 0;
+      stats.absentToday = Math.max(0, stats.totalEmployees - stats.presentToday);
 
-      let hQuery = 'SELECT name FROM holidays WHERE date = ? AND (duration = "Full Day" OR duration IS NULL)';
-      let hParams = [today];
-      if (company) { hQuery += ' AND (company = ? OR company IS NULL)'; hParams.push(company); }
-      else { hQuery += ' AND company IS NULL'; }
-
-      // Check for Holiday
-      db.get(hQuery, hParams, (err, holiday) => {
+      const lvQuery = `SELECT COUNT(DISTINCT l.userId) as count FROM leaves l JOIN users u ON l.userId = u.id 
+                      WHERE l.status = 'Approved' AND u.company = ? 
+                      AND date(?) BETWEEN date(l.startDate) AND date(l.endDate)`;
+      db.get(lvQuery, [company, today], (err, row) => {
         if (err) return res.status(500).json({ error: err.message });
-        
-        if (holiday) {
-          stats.absentToday = 0;
-          proceedToFinalStats();
-        } else {
-          let uaQuery = 'SELECT id, weekOffs FROM users WHERE role = "User"';
-          let uaParams = [];
-          if (company) { uaQuery += ' AND company = ?'; uaParams.push(company); }
-          db.all(uaQuery, uaParams, (err, users) => {
-            if (err) return res.status(500).json({ error: err.message });
-            
-            let absentCount = 0;
-            users.forEach(u => {
-              if (!presentUserIds.has(u.id)) {
-                const offs = (u.weekOffs || 'Sunday').split(',').map(s => s.trim());
-                if (!offs.includes(dayName)) {
-                  absentCount++;
-                }
-              }
-            });
-            stats.absentToday = absentCount;
-            proceedToFinalStats();
-          });
-        }
+        stats.onLeaveToday = row ? row.count : 0;
+        res.json(stats);
       });
-
-      function proceedToFinalStats() {
-        let laQuery = `SELECT COUNT(*) as count FROM attendance a JOIN users u ON a.userId = u.id WHERE a.checkInTime LIKE ? AND a.status = "Late"`;
-        let laParams = [`${today}%`];
-        if (company) { laQuery += ' AND u.company = ?'; laParams.push(company); }
-        db.get(laQuery, laParams, (err, row) => {
-          stats.lateToday = row ? row.count : 0;
-          
-          let lvQuery = `SELECT COUNT(DISTINCT l.userId) as count FROM leaves l JOIN users u ON l.userId = u.id 
-                  WHERE l.status = 'Approved' 
-                  AND date(?) BETWEEN date(l.startDate) AND date(l.endDate)`;
-          let lvParams = [today];
-          if (company) { lvQuery += ' AND u.company = ?'; lvParams.push(company); }
-          db.get(lvQuery, lvParams, (err, row) => {
-            stats.onLeaveToday = row ? row.count : 0;
-            res.json(stats);
-          });
-        });
-      }
     });
   });
 });
@@ -793,29 +878,35 @@ app.get('/api/admin/stats', (req, res) => {
 
 app.get('/api/admin/users', (req, res) => {
   const company = req.query.company;
-  let query = `SELECT u.id, u.fullName, u.email, u.mobileNumber, u.role, u.profilePicture, u.weekOffs, u.company, s.name as shiftName 
+  if (!company) return res.status(400).json({ error: 'Company parameter is required' });
+
+  const query = `SELECT u.id, u.fullName, u.email, u.mobileNumber, u.role, u.profilePicture, u.weekOffs, u.company, s.name as shiftName 
           FROM users u 
-          LEFT JOIN shifts s ON u.shiftId = s.id`;
-  let params = [];
-  if (company) {
-    query += ' WHERE u.company = ?';
-    params.push(company);
-  }
-  db.all(query, params, (err, rows) => {
+          LEFT JOIN shifts s ON u.shiftId = s.id
+          WHERE u.company = ?`;
+  db.all(query, [company], (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows);
   });
 });
 
 app.delete('/api/admin/users/:id', (req, res) => {
-  db.serialize(() => {
-    db.run('DELETE FROM attendance WHERE userId = ?', [req.params.id]);
-    db.run('DELETE FROM leaves WHERE userId = ?', [req.params.id]);
-    db.run('DELETE FROM leave_balances WHERE userId = ?', [req.params.id]);
-    db.run('DELETE FROM notifications WHERE userId = ?', [req.params.id]);
-    db.run('DELETE FROM users WHERE id = ?', [req.params.id], function(err) {
-      if (err) return res.status(500).json({ error: err.message });
-      res.json({ message: 'Employee and all associated data deleted successfully' });
+  const { company } = req.body; // In a real app, this would come from a verified token
+  if (!company) return res.status(400).json({ error: 'Company Name is required' });
+
+  db.get('SELECT id FROM users WHERE id = ? AND company = ?', [req.params.id, company], (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!row) return res.status(403).json({ error: 'Access denied: User not found in your company' });
+
+    db.serialize(() => {
+      db.run('DELETE FROM attendance WHERE userId = ?', [req.params.id]);
+      db.run('DELETE FROM leaves WHERE userId = ?', [req.params.id]);
+      db.run('DELETE FROM leave_balances WHERE userId = ?', [req.params.id]);
+      db.run('DELETE FROM notifications WHERE userId = ?', [req.params.id]);
+      db.run('DELETE FROM users WHERE id = ? AND company = ?', [req.params.id, company], function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ message: 'Employee and all associated data deleted successfully' });
+      });
     });
   });
 });
@@ -842,23 +933,16 @@ app.post('/api/admin/users', upload.single('profilePicture'), async (req, res) =
 
 app.get('/api/admin/attendance', (req, res) => {
   const { userId, startDate, endDate, department, company } = req.query;
+  if (!company) return res.status(400).json({ error: 'Company parameter is required' });
+
   let query = `
     SELECT a.*, u.fullName, u.profilePicture, u.department, s.name as shiftName 
     FROM attendance a 
     JOIN users u ON a.userId = u.id 
     LEFT JOIN shifts s ON u.shiftId = s.id 
-    WHERE 1=1
+    WHERE u.company = ?
   `;
-  const params = [];
-
-  if (userId) {
-    query += ' AND a.userId = ?';
-    params.push(userId);
-  }
-  if (company) {
-    query += ' AND u.company = ?';
-    params.push(company);
-  }
+  const params = [company];
   if (startDate && endDate) {
     query += ' AND date(a.checkInTime) BETWEEN date(?) AND date(?)';
     params.push(startDate, endDate);
@@ -869,6 +953,11 @@ app.get('/api/admin/attendance', (req, res) => {
   }
   
   query += ' ORDER BY a.checkInTime DESC';
+  
+  if (req.query.limit) {
+    query += ' LIMIT ?';
+    params.push(parseInt(req.query.limit));
+  }
   
   db.all(query, params, (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
@@ -891,16 +980,23 @@ app.post('/api/admin/attendance', (req, res) => {
 
 // Edit an attendance record (Admin)
 app.put('/api/admin/attendance/:id', (req, res) => {
-  const { checkInTime, checkOutTime, status, overtimeHours, adminId } = req.body;
-  db.run(
-    `UPDATE attendance SET checkInTime = ?, checkOutTime = ?, status = ?, overtimeHours = ?, editedBy = ? WHERE id = ?`,
-    [checkInTime, checkOutTime || null, status, overtimeHours || 0, adminId, req.params.id],
-    function(err) {
-      if (err) return res.status(500).json({ error: err.message });
-      if (this.changes === 0) return res.status(404).json({ error: 'Record not found' });
-      res.json({ message: 'Attendance updated' });
-    }
-  );
+  const { checkInTime, checkOutTime, status, overtimeHours, adminId, company } = req.body;
+  if (!company) return res.status(400).json({ error: 'Company is required' });
+
+  // Verify ownership via user join
+  db.get(`SELECT a.id FROM attendance a JOIN users u ON a.userId = u.id WHERE a.id = ? AND u.company = ?`, [req.params.id, company], (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!row) return res.status(403).json({ error: 'Access denied: Record not found in your company' });
+
+    db.run(
+      `UPDATE attendance SET checkInTime = ?, checkOutTime = ?, status = ?, overtimeHours = ?, editedBy = ? WHERE id = ?`,
+      [checkInTime, checkOutTime || null, status, overtimeHours || 0, adminId, req.params.id],
+      function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ message: 'Attendance updated' });
+      }
+    );
+  });
 });
 
 // Manual attendance entry (Admin)
@@ -912,14 +1008,10 @@ app.get('/api/admin/absent', (req, res) => {
   const today = now.toISOString().split('T')[0];
   const dayName = now.toLocaleDateString('en-US', { weekday: 'long' });
 
-  let holQuery = 'SELECT name FROM holidays WHERE date = ? AND (duration = "Full Day" OR duration IS NULL)';
-  let holParams = [today];
-  if (company) {
-    holQuery += ' AND (company = ? OR company IS NULL)';
-    holParams.push(company);
-  } else {
-    holQuery += ' AND company IS NULL';
-  }
+  if (!company) return res.status(400).json({ error: 'Company parameter is required' });
+
+  let holQuery = 'SELECT name FROM holidays WHERE date = ? AND (company = ? OR company IS NULL)';
+  let holParams = [today, company];
 
   // First check if today is a public holiday
   db.get(holQuery, holParams, (err, holiday) => {
@@ -957,17 +1049,23 @@ app.get('/api/admin/absent', (req, res) => {
 
 // --- Shifts Management ---
 
-app.get('/api/admin/shifts', (req, res) => {
+app.get('/api/admin/shifts', async (req, res) => {
   const company = req.query.company;
-  let query = 'SELECT * FROM shifts';
-  let params = [];
-  if (company) {
-    query += ' WHERE company = ?';
-    params.push(company);
-  }
-  db.all(query, params, (err, rows) => {
+  if (!company) return res.status(400).json({ error: 'Company parameter is required' });
+
+  db.all('SELECT * FROM shifts WHERE company = ?', [company], async (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
-    res.json(rows);
+    
+    // Lazy Bootstrap: If empty, provision defaults
+    if (!rows || rows.length === 0) {
+      await provisionCompany(company).catch(e => console.error('Bootstrap error:', e));
+      db.all('SELECT * FROM shifts WHERE company = ?', [company], (err, newRows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(newRows);
+      });
+    } else {
+      res.json(rows);
+    }
   });
 });
 
@@ -987,8 +1085,12 @@ app.put('/api/admin/shifts/:id', (req, res) => {
 });
 
 app.delete('/api/admin/shifts/:id', (req, res) => {
-  db.run('DELETE FROM shifts WHERE id = ?', [req.params.id], function(err) {
+  const { company } = req.body;
+  if (!company) return res.status(400).json({ error: 'Company is required' });
+
+  db.run('DELETE FROM shifts WHERE id = ? AND company = ?', [req.params.id, company], function(err) {
     if (err) return res.status(500).json({ error: err.message });
+    if (this.changes === 0) return res.status(404).json({ error: 'Shift not found or access denied' });
     res.json({ message: 'Shift deleted' });
   });
 });
@@ -1005,43 +1107,75 @@ app.post('/api/admin/shifts', (req, res) => {
 
 // --- Company Settings ---
 
-app.get('/api/settings', (req, res) => {
+app.get('/api/settings', async (req, res) => {
   const company = req.query.company;
-  let query = 'SELECT * FROM settings ORDER BY id DESC LIMIT 1';
-  let params = [];
-  if (company) {
-    query = 'SELECT * FROM settings WHERE companyName = ? ORDER BY id DESC LIMIT 1';
-    params = [company];
-  }
-  db.get(query, params, (err, row) => {
+  if (!company) return res.status(400).json({ error: 'Company parameter is required' });
+
+  // Look up by "company" column first (the ID)
+  db.get('SELECT * FROM settings WHERE company = ? OR companyName = ? ORDER BY id DESC LIMIT 1', [company, company], async (err, row) => {
     if (err) return res.status(500).json({ error: err.message });
-    res.json(row || {});
+    
+    if (!row) {
+      await provisionCompany(company).catch(e => console.error('Bootstrap error:', e));
+      // Try again after provisioning
+      db.get('SELECT * FROM settings WHERE company = ? ORDER BY id DESC LIMIT 1', [company], (err, newRow) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(newRow || {});
+      });
+    } else {
+      res.json(row);
+    }
   });
 });
 
 app.post('/api/admin/settings', (req, res) => {
-  const { companyName, officeLat, officeLong, officeRadiusMeters, workingDays, weekendDays, geofenceEnabled, payrollEnabled } = req.body;
+  const { company, companyName, officeLat, officeLong, officeRadiusMeters, workingDays, weekendDays, geofenceEnabled, payrollEnabled, cameraAuthEnabled } = req.body;
+  
+  if (!company) {
+    console.log('[Settings] Error: No company ID provided');
+    return res.status(400).json({ error: 'Company ID is required' });
+  }
+
   const wDays = workingDays ? JSON.stringify(workingDays) : '["Mon","Tue","Wed","Thu","Fri"]';
   const wkDays = weekendDays ? JSON.stringify(weekendDays) : '["Sat","Sun"]';
   const geoEnabled = geofenceEnabled !== undefined ? geofenceEnabled : 1;
   const payEnabled = payrollEnabled !== undefined ? payrollEnabled : 1;
+  const camEnabled = cameraAuthEnabled !== undefined ? (cameraAuthEnabled ? 1 : 0) : 1;
 
-  db.get('SELECT * FROM settings WHERE companyName = ? ORDER BY id DESC LIMIT 1', [companyName], (err, row) => {
-    if (err) return res.status(500).json({ error: err.message });
+  console.log(`[Settings] Updating for company: ${company}, camEnabled: ${camEnabled}`);
+
+  // ROBUST LOOKUP: Check by 'company' ID first, then by 'companyName' fallback
+  db.get('SELECT * FROM settings WHERE company = ? OR companyName = ? ORDER BY id DESC LIMIT 1', [company, company], (err, row) => {
+    if (err) {
+      console.error('[Settings] Lookup Error:', err);
+      return res.status(500).json({ error: err.message });
+    }
     
     if (row) {
-      db.run('UPDATE settings SET officeLat = ?, officeLong = ?, officeRadiusMeters = ?, workingDays = ?, weekendDays = ?, geofenceEnabled = ?, payrollEnabled = ? WHERE id = ?',
-        [officeLat, officeLong, officeRadiusMeters, wDays, wkDays, geoEnabled, payEnabled, row.id], function(err) {
-          if (err) return res.status(500).json({ error: err.message });
+      console.log(`[Settings] Found existing row id: ${row.id}. Updating...`);
+      // Row exists - perform an UPDATE
+      db.run('UPDATE settings SET company = ?, companyName = ?, officeLat = ?, officeLong = ?, officeRadiusMeters = ?, workingDays = ?, weekendDays = ?, geofenceEnabled = ?, payrollEnabled = ?, cameraAuthEnabled = ? WHERE id = ?',
+        [company, companyName, officeLat, officeLong, officeRadiusMeters, wDays, wkDays, geoEnabled, payEnabled, camEnabled, row.id], function(err) {
+          if (err) {
+            console.error('[Settings] Update Error:', err);
+            return res.status(500).json({ error: err.message });
+          }
+          console.log(`[Settings] Success! Rows affected: ${this.changes}, New cameraAuthEnabled: ${camEnabled}`);
           res.json({ message: 'Settings updated' });
       });
     } else {
+      console.log('[Settings] No row found. Creating new...');
+      // New row - perform an INSERT
       db.run(
-        `INSERT INTO settings (companyName, officeLat, officeLong, officeRadiusMeters, workingDays, weekendDays, geofenceEnabled, payrollEnabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [companyName, officeLat, officeLong, officeRadiusMeters, wDays, wkDays, geoEnabled, payEnabled],
+        `INSERT INTO settings (company, companyName, officeLat, officeLong, officeRadiusMeters, workingDays, weekendDays, geofenceEnabled, payrollEnabled, cameraAuthEnabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [company, companyName, officeLat, officeLong, officeRadiusMeters, wDays, wkDays, geoEnabled, payEnabled, camEnabled],
         function(err) {
-          if (err) return res.status(500).json({ error: err.message });
-          res.json({ message: 'Settings updated' });
+          if (err) {
+            console.error('[Settings] Create Error:', err);
+            return res.status(500).json({ error: err.message });
+          }
+          console.log(`[Settings] Success! Created row with id: ${this.lastID}`);
+          res.json({ message: 'Settings created' });
         });
     }
   });
@@ -1079,12 +1213,10 @@ app.post('/api/admin/branding', upload.single('logo'), (req, res) => {
 // --- Holidays ---
 app.get('/api/admin/holidays', (req, res) => {
   const company = req.query.company;
-  let query = 'SELECT * FROM holidays';
-  let params = [];
-  if (company) {
-    query += ' WHERE (company = ? OR company IS NULL)';
-    params.push(company);
-  }
+  if (!company) return res.status(400).json({ error: 'Company parameter is required' });
+  // Show holidays for the specific company AND global indian holidays (NULL company)
+  let query = 'SELECT * FROM holidays WHERE (company = ? OR company IS NULL)';
+  let params = [company];
   query += ' ORDER BY date ASC';
   db.all(query, params, (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
@@ -1103,39 +1235,34 @@ app.post('/api/admin/holidays', (req, res) => {
 });
 
 app.delete('/api/admin/holidays/:id', (req, res) => {
-  db.run('DELETE FROM holidays WHERE id = ?', [req.params.id], function(err) {
+  const { company } = req.body;
+  if (!company) return res.status(400).json({ error: 'Company is required' });
+
+  db.run('DELETE FROM holidays WHERE id = ? AND company = ?', [req.params.id, company], function(err) {
     if (err) return res.status(500).json({ error: err.message });
+    if (this.changes === 0) return res.status(404).json({ error: 'Holiday not found or access denied' });
     res.json({ message: 'Holiday deleted' });
   });
 });
 
 // --- Leave Policies ---
-app.get('/api/admin/leave-policies', (req, res) => {
+app.get('/api/admin/leave-policies', async (req, res) => {
   const company = req.query.company;
-  let query = 'SELECT * FROM leave_policies';
-  let params = [];
-  if (company) {
-    query += ' WHERE company = ?';
-    params.push(company);
-  }
-  db.all(query, params, (err, rows) => {
+  if (!company) return res.status(400).json({ error: 'Company parameter is required' });
+
+  db.all('SELECT * FROM leave_policies WHERE company = ?', [company], async (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
-    // Return defaults if empty
+    
+    // Lazy Bootstrap: If empty, provision defaults
     if (!rows || rows.length === 0) {
-      return res.json([
-        { leaveType: 'Sick Leave', daysPerYear: 12, isPaid: 1 },
-        { leaveType: 'Casual Leave', daysPerYear: 10, isPaid: 1 },
-        { leaveType: 'Earned Leave (Privilege)', daysPerYear: 18, isPaid: 1 },
-        { leaveType: 'Maternity Leave', daysPerYear: 182, isPaid: 1 },
-        { leaveType: 'Paternity Leave', daysPerYear: 15, isPaid: 1 },
-        { leaveType: 'Bereavement Leave', daysPerYear: 5, isPaid: 1 },
-        { leaveType: 'Compensatory Off (Comp-off)', daysPerYear: 0, isPaid: 1 },
-        { leaveType: 'Marriage Leave', daysPerYear: 5, isPaid: 1 },
-        { leaveType: 'Leave Without Pay (LWP)', daysPerYear: 365, isPaid: 0 },
-        { leaveType: 'Sabbatical Leave', daysPerYear: 365, isPaid: 0 },
-      ]);
+      await provisionCompany(company).catch(e => console.error('Bootstrap error:', e));
+      db.all('SELECT * FROM leave_policies WHERE company = ?', [company], (err, newRows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(newRows);
+      });
+    } else {
+      res.json(rows);
     }
-    res.json(rows);
   });
 });
 
@@ -1334,14 +1461,12 @@ app.put('/api/leaves/:id/cancel', (req, res) => {
 // Admin Leave Management
 app.get('/api/admin/leaves', (req, res) => {
   const company = req.query.company;
+  if (!company) return res.status(400).json({ error: 'Company parameter is required' });
   let query = `SELECT l.*, u.fullName 
           FROM leaves l 
-          JOIN users u ON l.userId = u.id`;
-  let params = [];
-  if (company) {
-    query += ' WHERE u.company = ?';
-    params.push(company);
-  }
+          JOIN users u ON l.userId = u.id
+          WHERE u.company = ?`;
+  let params = [company];
   query += ' ORDER BY l.createdAt DESC';
   db.all(query, params, (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
@@ -1374,15 +1499,12 @@ app.put('/api/admin/leaves/:id', (req, res) => {
 // Overtime Report
 app.get('/api/admin/reports/overtime', (req, res) => {
   const { startDate, endDate, company } = req.query;
+  if (!company) return res.status(400).json({ error: 'Company parameter is required' });
   let query = `SELECT a.userId, u.fullName, SUM(a.overtimeHours) as totalOvertimeHours, COUNT(*) as overtimeDays
                FROM attendance a
                JOIN users u ON a.userId = u.id
-               WHERE a.overtimeHours > 0`;
-  const params = [];
-  if (company) {
-    query += ` AND u.company = ?`;
-    params.push(company);
-  }
+               WHERE a.overtimeHours > 0 AND u.company = ?`;
+  const params = [company];
   if (startDate && endDate) {
     query += ` AND a.checkInTime BETWEEN ? AND ?`;
     params.push(startDate + 'T00:00:00', endDate + 'T23:59:59');
@@ -1397,6 +1519,7 @@ app.get('/api/admin/reports/overtime', (req, res) => {
 // Salary Hours Report
 app.get('/api/admin/reports/salary-hours', (req, res) => {
   const { startDate, endDate, company } = req.query;
+  if (!company) return res.status(400).json({ error: 'Company parameter is required' });
   let query = `SELECT a.userId, u.fullName, u.salary,
                SUM(CASE WHEN a.checkOutTime IS NOT NULL
                  THEN (julianday(a.checkOutTime) - julianday(a.checkInTime)) * 24
@@ -1405,12 +1528,8 @@ app.get('/api/admin/reports/salary-hours', (req, res) => {
                COUNT(CASE WHEN a.status = 'Late' THEN 1 END) as lateDays
                FROM attendance a
                JOIN users u ON a.userId = u.id
-               WHERE 1=1`;
-  const params = [];
-  if (company) {
-    query += ` AND u.company = ?`;
-    params.push(company);
-  }
+               WHERE u.company = ?`;
+  const params = [company];
   if (startDate && endDate) {
     query += ` AND a.checkInTime BETWEEN ? AND ?`;
     params.push(startDate + 'T00:00:00', endDate + 'T23:59:59');
@@ -1425,6 +1544,7 @@ app.get('/api/admin/reports/salary-hours', (req, res) => {
 // Payroll Report
 app.get('/api/admin/reports/payroll', (req, res) => {
   const { startDate, endDate, company } = req.query;
+  if (!company) return res.status(400).json({ error: 'Company parameter is required' });
   let query = `SELECT a.userId, u.fullName, u.salary, u.weekOffs,
                s.overtimeRate, s.latePenaltyPerMin, s.gracePeriodMins,
                SUM(CASE WHEN a.checkOutTime IS NOT NULL
@@ -1436,12 +1556,8 @@ app.get('/api/admin/reports/payroll', (req, res) => {
                FROM attendance a
                JOIN users u ON a.userId = u.id
                LEFT JOIN shifts s ON u.shiftId = s.id
-               WHERE 1=1`;
-  const params = [];
-  if (company) {
-    query += ` AND u.company = ?`;
-    params.push(company);
-  }
+               WHERE u.company = ?`;
+  const params = [company];
   if (startDate && endDate) {
     query += ` AND a.checkInTime BETWEEN ? AND ?`;
     params.push(startDate + 'T00:00:00', endDate + 'T23:59:59');
@@ -1505,18 +1621,14 @@ app.get('/api/admin/reports/payroll', (req, res) => {
 });
 
 app.get('/api/admin/reports/attendance', (req, res) => {
-  const { startDate, endDate, company } = req.query;
+  const { company, startDate, endDate } = req.query;
+  if (!company) return res.status(400).json({ error: 'Company parameter is required' });
   let query = `SELECT a.*, u.fullName, u.id as employeeId, s.name as shiftName
                FROM attendance a 
                JOIN users u ON a.userId = u.id
                LEFT JOIN shifts s ON u.shiftId = s.id
-               WHERE 1=1`;
-  
-  const params = [];
-  if (company) {
-    query += ` AND u.company = ?`;
-    params.push(company);
-  }
+               WHERE u.company = ?`;
+  const params = [company];
   if (startDate && endDate) {
     query += ` AND a.checkInTime BETWEEN ? AND ?`;
     params.push(startDate + 'T00:00:00', endDate + 'T23:59:59');
@@ -1554,14 +1666,12 @@ app.post('/api/admin/payslips', (req, res) => {
 // Admin: Get all Payslips for Company
 app.get('/api/admin/payslips', (req, res) => {
   const company = req.query.company;
+  if (!company) return res.status(400).json({ error: 'Company parameter is required' });
   let query = `SELECT p.*, u.fullName, u.email 
                FROM payslips p
-               JOIN users u ON p.userId = u.id`;
-  let params = [];
-  if (company) {
-    query += ` WHERE p.company = ?`;
-    params.push(company);
-  }
+               JOIN users u ON p.userId = u.id
+               WHERE p.company = ?`;
+  let params = [company];
   query += ` ORDER BY p.year DESC, p.month DESC`;
 
   db.all(query, params, (err, rows) => {
@@ -1572,8 +1682,12 @@ app.get('/api/admin/payslips', (req, res) => {
 
 // Admin: Delete a Payslip
 app.delete('/api/admin/payslips/:id', (req, res) => {
-  db.run('DELETE FROM payslips WHERE id = ?', [req.params.id], function(err) {
+  const { company } = req.body;
+  if (!company) return res.status(400).json({ error: 'Company is required' });
+
+  db.run('DELETE FROM payslips WHERE id = ? AND company = ?', [req.params.id, company], function(err) {
     if (err) return res.status(500).json({ error: err.message });
+    if (this.changes === 0) return res.status(404).json({ error: 'Payslip not found or access denied' });
     res.json({ message: 'Payslip deleted' });
   });
 });
@@ -1592,10 +1706,21 @@ app.get('/api/payslips/:userId', (req, res) => {
 
 // Check-out Reminders (Scan for active check-ins)
 app.post('/api/admin/notifications/reminders', (req, res) => {
-  db.all(`SELECT a.*, u.id as userId, u.fullName 
-          FROM attendance a
-          JOIN users u ON a.userId = u.id
-          WHERE a.checkOutTime IS NULL`, (err, rows) => {
+  const { company } = req.body;
+  if (!company) return res.status(400).json({ error: 'Company is required' });
+  
+  let query = `SELECT a.*, u.id as userId, u.fullName 
+               FROM attendance a
+               JOIN users u ON a.userId = u.id
+               WHERE a.checkOutTime IS NULL`;
+  let params = [];
+  
+  if (company) {
+    query += ' AND u.company = ?';
+    params.push(company);
+  }
+
+  db.all(query, params, (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     
     rows.forEach(row => {

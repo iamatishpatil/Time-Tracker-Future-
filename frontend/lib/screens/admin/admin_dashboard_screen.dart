@@ -3,6 +3,7 @@
 // of the whole company's attendance for the day.
 
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme/pulse_colors.dart';
 import '../../core/theme/pulse_text_styles.dart';
@@ -11,7 +12,6 @@ import '../../core/widgets/pulse_shimmer.dart';
 
 import '../../core/widgets/pulse_scaffold.dart';
 import '../../core/widgets/branded_logo.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import '../../services/api_service.dart';
 import '../../widgets/admin_drawer.dart';
 import 'admin_attendance_screen.dart';
@@ -66,13 +66,18 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
         await ref.read(brandingProvider.notifier).fetchBranding(company: user['company']);
       }
 
-      // 1. Get the 4 main numbers (Present, Late, etc.)
-      final stats = await ApiService.getAdminStats();
-      // 2. Get EVERY check-in for the "Recent Activity" list
-      final attendance = await ApiService.getAllAttendance();
-      // 3. Get company settings (Logo, Payroll toggle)
-      final settings = await ApiService.getSettings();
-      final holidays = await ApiService.getHolidays();
+      // Fetch all data in parallel for better performance and to avoid sequential bottlenecks
+      final results = await Future.wait([
+        ApiService.getAdminStats(),
+        ApiService.getAllAttendance(limit: 5), // Fetch only what's needed for the recent list
+        ApiService.getSettings(),
+        ApiService.getHolidays(),
+      ]);
+
+      final stats = results[0] as Map<String, dynamic>;
+      final recent = results[1] as List<dynamic>;
+      final settings = results[2] as Map<String, dynamic>;
+      final holidays = results[3] as List<dynamic>;
 
       final now = DateTime.now();
       final todayStr = DateFormat('yyyy-MM-dd').format(now);
@@ -97,10 +102,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
       upcoming.sort((a, b) => DateTime.parse(a['date']).compareTo(DateTime.parse(b['date'])));
       if (upcoming.length > 5) upcoming = upcoming.sublist(0, 5);
 
-      // Sort activity by time so the newest check-in is at the top
-      List<dynamic> recent = List.from(attendance);
-      recent.sort((a, b) => DateTime.parse(b['checkInTime']).compareTo(DateTime.parse(a['checkInTime'])));
-      if (recent.length > 5) recent = recent.sublist(0, 5);
+      // Note: Backend already sorts by checkInTime DESC, so we don't need expensive client-side sorting anymore.
 
       if (mounted) {
         setState(() {

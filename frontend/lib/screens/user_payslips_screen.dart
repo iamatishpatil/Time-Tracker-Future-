@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:intl/intl.dart';
 import '../core/theme/pulse_colors.dart';
 import '../core/theme/pulse_text_styles.dart';
@@ -6,7 +7,6 @@ import '../core/widgets/pulse_card.dart';
 import '../core/widgets/pulse_shimmer.dart';
 import '../services/api_service.dart';
 import '../services/pdf_service.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 
 class UserPayslipsScreen extends StatefulWidget {
   const UserPayslipsScreen({super.key});

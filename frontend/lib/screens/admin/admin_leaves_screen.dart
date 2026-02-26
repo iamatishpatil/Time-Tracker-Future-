@@ -41,14 +41,60 @@ class _AdminLeavesScreenState extends State<AdminLeavesScreen> {
   }
 
   // The function to change a "Pending" request into "Approved" or "Rejected"
-  Future<void> _updateStatus(int id, String status) async {
+  Future<void> _updateStatus(int id, String status, {String? reason}) async {
     try {
-      await ApiService.updateLeaveStatus(id, status);
+      await ApiService.updateLeaveStatus(id, status, rejectionReason: reason);
       // Refresh the list so the card changes color immediately
       _loadLeaves();
+      if (mounted && status == 'Rejected') {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('⛔ Request Rejected')));
+      }
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
     }
+  }
+
+  Future<String?> _showRejectionDialog(Map<String, dynamic> leave) async {
+    final TextEditingController reasonController = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Reject Leave Request'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Enter reason for rejecting ${leave['fullName']}\'s request:', style: PulseTextStyles.caption),
+            const SizedBox(height: 12),
+            TextField(
+              controller: reasonController,
+              decoration: InputDecoration(
+                hintText: 'e.g. Incomplete project, Staff shortage',
+                hintStyle: PulseTextStyles.caption.copyWith(color: PulseColors.textHint),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: PulseColors.error)),
+              ),
+              maxLines: 3,
+              style: PulseTextStyles.body,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('CANCEL')),
+          ElevatedButton(
+            onPressed: () {
+              if (reasonController.text.trim().isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter a reason')));
+                return;
+              }
+              Navigator.pop(context, reasonController.text.trim());
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: PulseColors.error, foregroundColor: Colors.white),
+            child: const Text('REJECT'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -100,9 +146,13 @@ class _AdminLeavesScreenState extends State<AdminLeavesScreen> {
                 Text(leave['leaveType'] ?? 'Leave', style: PulseTextStyles.caption),
               ])),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(10)),
-                child: Text(status, style: PulseTextStyles.captionBold.copyWith(color: color, fontSize: 10)),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: color.withOpacity(0.3), width: 1),
+                ),
+                child: Text(status.toUpperCase(), style: PulseTextStyles.chip.copyWith(color: color)),
               ),
             ]),
             const SizedBox(height: 10),
@@ -124,8 +174,14 @@ class _AdminLeavesScreenState extends State<AdminLeavesScreen> {
               const SizedBox(height: 12),
               Row(mainAxisAlignment: MainAxisAlignment.end, children: [
                 TextButton(
-                  onPressed: () => _updateStatus(leave['id'], 'Rejected'),
-                  child: Text('REJECT', style: PulseTextStyles.captionBold.copyWith(color: PulseColors.error)),
+                  onPressed: () async {
+                    final String? reason = await _showRejectionDialog(leave);
+                    if (reason != null) {
+                      _updateStatus(leave['id'], 'Rejected', reason: reason);
+                    }
+                  },
+                  style: TextButton.styleFrom(foregroundColor: PulseColors.error),
+                  child: Text('Reject', style: PulseTextStyles.captionBold.copyWith(color: PulseColors.error)),
                 ),
                 const SizedBox(width: 8),
                 ElevatedButton(
@@ -133,10 +189,12 @@ class _AdminLeavesScreenState extends State<AdminLeavesScreen> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: PulseColors.success,
                     foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    minimumSize: const Size(80, 34),
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    minimumSize: const Size(80, 36),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
-                  child: const Text('APPROVE'),
+                  child: Text('Approve', style: PulseTextStyles.captionBold.copyWith(color: Colors.white)),
                 ),
               ]),
             ],

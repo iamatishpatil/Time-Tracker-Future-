@@ -60,7 +60,7 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
   @override
   Widget build(BuildContext context) {
     return PulseScaffold(
-      title: 'Attendance History',
+
       useBrandedBackground: true,
       body: RefreshIndicator(
         onRefresh: _loadHistory,

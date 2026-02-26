@@ -5,20 +5,20 @@ import 'pulse_colors.dart';
 class PulseTextStyles {
   PulseTextStyles._();
 
-  static TextStyle get h1 => GoogleFonts.inter(
-    fontSize: 28,
+  static TextStyle get h1 => GoogleFonts.outfit(
+    fontSize: 32,
     fontWeight: FontWeight.w700,
+    color: PulseColors.textPrimary,
+    letterSpacing: -1.0,
+    height: 1.1,
+  );
+
+  static TextStyle get h2 => GoogleFonts.outfit(
+    fontSize: 24,
+    fontWeight: FontWeight.w600,
     color: PulseColors.textPrimary,
     letterSpacing: -0.5,
     height: 1.2,
-  );
-
-  static TextStyle get h2 => GoogleFonts.inter(
-    fontSize: 22,
-    fontWeight: FontWeight.w600,
-    color: PulseColors.textPrimary,
-    letterSpacing: -0.3,
-    height: 1.3,
   );
 
   static TextStyle get h3 => GoogleFonts.inter(
@@ -75,5 +75,17 @@ class PulseTextStyles {
     fontWeight: FontWeight.w700,
     color: PulseColors.textPrimary,
     letterSpacing: 2,
+  );
+
+  static TextStyle get chip => GoogleFonts.inter(
+    fontSize: 10,
+    fontWeight: FontWeight.w700,
+    letterSpacing: 0.5,
+  );
+
+  static TextStyle get badge => GoogleFonts.inter(
+    fontSize: 11,
+    fontWeight: FontWeight.bold,
+    color: Colors.white,
   );
 }

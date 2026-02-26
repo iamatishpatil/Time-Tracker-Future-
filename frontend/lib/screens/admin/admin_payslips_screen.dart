@@ -3,6 +3,7 @@
 // Once generated here, the employee will see it in their "My Payslips" screen.
 
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme/pulse_colors.dart';
 import '../../core/theme/pulse_text_styles.dart';
@@ -10,7 +11,6 @@ import '../../core/widgets/pulse_card.dart';
 import '../../core/widgets/pulse_shimmer.dart';
 import '../../core/widgets/pulse_button.dart';
 import '../../services/api_service.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 
 class AdminPayslipsScreen extends StatefulWidget {
   const AdminPayslipsScreen({super.key});

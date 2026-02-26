@@ -20,11 +20,11 @@ class PulseColors {
   }) {
     _brandPrimary = primary;
     _brandVibrant = vibrant ?? primary;
-    _brandMuted = muted ?? Color.lerp(primary, Colors.grey, 0.4) ?? primary;
-    // We increase the 'white' lerp for light colors to 0.85 for a subtle surface tint
-    _brandLight = light ?? Color.lerp(primary, Colors.white, 0.85) ?? primary;
-    // We increase the 'black' lerp for dark colors to 0.6 for professional depth
-    _brandDark = dark ?? Color.lerp(primary, Colors.black, 0.6) ?? primary;
+    _brandMuted = muted ?? Color.lerp(primary, Colors.grey.shade400, 0.4) ?? primary;
+    // Premium Light: A very subtle tint for surfaces, avoiding pure white
+    _brandLight = light ?? Color.lerp(primary, Colors.white, 0.94) ?? primary;
+    // Professional Dark: Deep, rich tones for contrast
+    _brandDark = dark ?? Color.lerp(primary, Colors.black, 0.7) ?? primary;
   }
 
   // Compatibility alias for single color injection
@@ -81,25 +81,44 @@ class PulseColors {
     end: Alignment.bottomRight,
   );
 
-  static LinearGradient get brandSurfaceGradient => LinearGradient(
-    colors: [surface, _brandLight.withOpacity(0.05)],
-    begin: Alignment.topCenter,
-    end: Alignment.bottomCenter,
+  static LinearGradient get glassGradient => LinearGradient(
+    colors: [
+      Colors.white.withOpacity(0.15),
+      Colors.white.withOpacity(0.05),
+    ],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
   );
+
+  // Soft Layered Shadow (Modern Premium Style)
+  static List<BoxShadow> get premiumShadow => [
+    BoxShadow(
+      color: Colors.black.withOpacity(0.03),
+      blurRadius: 4,
+      offset: const Offset(0, 2),
+    ),
+    BoxShadow(
+      color: _brandPrimary.withOpacity(0.08),
+      blurRadius: 20,
+      offset: const Offset(0, 10),
+      spreadRadius: -5,
+    ),
+  ];
 
   static List<BoxShadow> get brandShadow => [
     BoxShadow(
-      color: _brandPrimary.withOpacity(0.12),
-      blurRadius: 20,
-      offset: const Offset(0, 8),
+      color: _brandPrimary.withOpacity(0.15),
+      blurRadius: 24,
+      offset: const Offset(0, 12),
+      spreadRadius: -4,
     ),
   ];
 
   static List<BoxShadow> get brandGlow => [
     BoxShadow(
-      color: _brandVibrant.withOpacity(0.2),
-      blurRadius: 30,
-      spreadRadius: -5,
+      color: _brandPrimary.withOpacity(0.25),
+      blurRadius: 20,
+      spreadRadius: 2,
     ),
   ];
 

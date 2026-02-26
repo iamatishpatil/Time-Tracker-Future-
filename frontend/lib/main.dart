@@ -23,6 +23,8 @@ import 'screens/user_payslips_screen.dart';
 import 'screens/admin/admin_payslips_screen.dart';
 import 'screens/admin/admin_container.dart';
 import 'screens/admin/admin_holidays_screen.dart';
+import 'screens/admin/admin_login_screen.dart';
+import 'screens/admin/admin_register_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -67,6 +69,8 @@ class TimeTrackerApp extends ConsumerWidget {
     '/admin-payslips': (context) => const AdminPayslipsScreen(),
     '/admin-settings': (context) => const AdminSettingsScreen(),
     '/admin-holidays': (context) => const AdminHolidaysScreen(),
+    '/admin-login': (context) => const AdminLoginScreen(),
+    '/admin-register': (context) => const AdminRegisterScreen(),
   };
 
   @override

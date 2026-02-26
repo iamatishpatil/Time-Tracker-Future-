@@ -87,7 +87,7 @@ class _PulseButtonState extends State<PulseButton>
             color: _isFilled
                 ? (isDisabled ? PulseColors.surfaceVariant : null)
                 : Colors.transparent,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(20),
             border: !_isFilled
                 ? Border.all(
                     color: widget.variant == PulseButtonVariant.outline
@@ -97,56 +97,72 @@ class _PulseButtonState extends State<PulseButton>
                   )
                 : null,
             boxShadow: _isFilled && !isDisabled
-                ? [
-                    BoxShadow(
-                      color: PulseColors.brandPrimary.withOpacity(0.35),
-                      blurRadius: 16,
-                      offset: const Offset(0, 6),
-                    ),
-                  ]
+                ? PulseColors.brandShadow
                 : null,
           ),
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: isDisabled ? null : widget.onPressed,
-              borderRadius: BorderRadius.circular(16),
-              child: Center(
-                child: widget.isLoading
-                    ? const SizedBox(
-                        width: 22,
-                        height: 22,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2.5,
-                          color: Colors.white,
-                        ),
-                      )
-                    : Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (widget.icon != null) ...[
-                            Icon(
-                              widget.icon,
-                              size: 20,
-                              color: _isFilled
-                                  ? Colors.white
-                                  : PulseColors.primary,
-                            ),
-                            const SizedBox(width: 8),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: Stack(
+              children: [
+                if (_isFilled && !isDisabled)
+                  Positioned.fill(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.white.withOpacity(0.2),
+                            Colors.transparent,
                           ],
-                          Text(
-                            widget.text,
-                            style: PulseTextStyles.button.copyWith(
-                              color: _isFilled
-                                  ? (isDisabled
-                                      ? PulseColors.textHint
-                                      : Colors.white)
-                                  : PulseColors.primary,
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
-              ),
+                    ),
+                  ),
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: isDisabled ? null : widget.onPressed,
+                    borderRadius: BorderRadius.circular(20),
+                    child: Center(
+                      child: widget.isLoading
+                          ? const SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.5,
+                                color: Colors.white,
+                              ),
+                            )
+                          : Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (widget.icon != null) ...[
+                                  Icon(
+                                    widget.icon,
+                                    size: 20,
+                                    color: _isFilled
+                                        ? Colors.white
+                                        : PulseColors.primary,
+                                  ),
+                                  const SizedBox(width: 8),
+                                ],
+                                Text(
+                                  widget.text,
+                                  style: PulseTextStyles.button.copyWith(
+                                    color: _isFilled
+                                        ? (isDisabled
+                                            ? PulseColors.textHint
+                                            : Colors.white)
+                                        : PulseColors.primary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),

@@ -12,7 +12,7 @@ class ApiService {
   // --- The Server Address ---
   // Every server has an address (IP). We use this to tell Flutter where to send data.
   static String get baseUrl {
-    return 'http://192.168.4.21:3000/api';
+    return 'http://192.168.1.43:3000/api';
   }
 
   // Helper to get full URLs for images stored on the server
@@ -375,7 +375,11 @@ class ApiService {
   // Get a list of the types of leave allowed by the company
   static Future<List<String>> getLeaveTypes() async {
     final company = await _getCompany();
-    String qs = company != null ? '?company=${Uri.encodeComponent(company)}' : '';
+    if (company == null) {
+      print('[ApiService] WARNING: getLeaveTypes called without company context');
+      return ['Sick Leave', 'Casual Leave', 'Earned Leave'];
+    }
+    String qs = '?company=${Uri.encodeComponent(company)}';
     final response = await http.get(Uri.parse('$baseUrl/leaves/types$qs'));
     if (response.statusCode == 200) {
       List<dynamic> data = json.decode(response.body);
@@ -392,7 +396,8 @@ class ApiService {
   // Get counts for the dashboard (e.g., Total Employees: 50, Present: 40)
   static Future<Map<String, dynamic>> getAdminStats() async {
     final company = await _getCompany();
-    String qs = company != null ? '?company=${Uri.encodeComponent(company)}' : '';
+    if (company == null) throw Exception('Company context missing. Please login again.');
+    String qs = '?company=${Uri.encodeComponent(company)}';
     final response = await http.get(Uri.parse('$baseUrl/admin/stats$qs'));
     if (response.statusCode == 200) {
       return json.decode(response.body);
@@ -427,12 +432,13 @@ class ApiService {
 
   // --- Admin: Advanced Attendance & User Management ---
   // Get all records, but with options to filter by date, user, or department
-  static Future<List<dynamic>> getAllAttendance({int? userId, DateTime? startDate, DateTime? endDate, String? department}) async {
+  static Future<List<dynamic>> getAllAttendance({int? userId, DateTime? startDate, DateTime? endDate, String? department, int? limit}) async {
     final params = <String, String>{};
     if (userId != null) params['userId'] = userId.toString();
     if (startDate != null) params['startDate'] = DateFormat('yyyy-MM-dd').format(startDate);
     if (endDate != null) params['endDate'] = DateFormat('yyyy-MM-dd').format(endDate);
     if (department != null) params['department'] = department;
+    if (limit != null) params['limit'] = limit.toString();
     
     final company = await _getCompany();
     if (company != null) params['company'] = company;
@@ -448,6 +454,8 @@ class ApiService {
 
   // Admin can change an employee's check-in/out time if they made a mistake
   static Future<void> updateAttendance(int id, Map<String, dynamic> data) async {
+    final company = await _getCompany();
+    data['company'] = company;
     final response = await http.put(
       Uri.parse('$baseUrl/admin/attendance/$id'),
       headers: {'Content-Type': 'application/json'},
@@ -461,6 +469,8 @@ class ApiService {
 
   // Admin can manually add an attendance entry for someone
   static Future<void> createManualAttendance(Map<String, dynamic> data) async {
+    final company = await _getCompany();
+    data['company'] = company; // Although the backend might use userId to find company, passing it explicitly is safer
     final response = await http.post(
       Uri.parse('$baseUrl/admin/attendance'),
       headers: {'Content-Type': 'application/json'},
@@ -486,10 +496,15 @@ class ApiService {
 
   // Approve or Reject a leave request
   static Future<void> updateLeaveStatus(int id, String status, {String? rejectionReason}) async {
+    final company = await _getCompany();
     final response = await http.put(
       Uri.parse('$baseUrl/admin/leaves/$id'),
       headers: {'Content-Type': 'application/json'},
-      body: json.encode({'status': status, 'rejectionReason': rejectionReason}),
+      body: json.encode({
+        'status': status, 
+        'rejectionReason': rejectionReason,
+        'company': company,
+      }),
     );
     if (response.statusCode != 200) {
       throw Exception('Failed to update leave status');
@@ -520,24 +535,48 @@ class ApiService {
     }
   }
 
-  // Permanently remove a user from the system
-  static Future<void> deleteUser(int id) async {
-    final response = await http.delete(Uri.parse('$baseUrl/admin/users/$id'));
+  static Future<void> toggleUserApproval(int id, bool isApproved, {String? reason}) async {
+    final company = await _getCompany();
+    final response = await http.patch(
+      Uri.parse('$baseUrl/admin/users/$id/approve'),
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode({
+        'isApproved': isApproved ? 1 : 0,
+        'company': company,
+        'rejectionReason': reason,
+      }),
+    );
     if (response.statusCode != 200) {
-      throw Exception('Failed to delete user');
+      final error = json.decode(response.body)['error'] ?? 'Failed to update approval status';
+      throw Exception(error);
     }
   }
 
-  // Temporarily disable an employee's access
   static Future<void> toggleEmployeeActive(int id, bool isActive) async {
+    final company = await _getCompany();
     final response = await http.patch(
       Uri.parse('$baseUrl/admin/users/$id/active'),
       headers: {'Content-Type': 'application/json'},
-      body: json.encode({'isActive': isActive ? 1 : 0}),
+      body: json.encode({
+        'isActive': isActive ? 1 : 0,
+        'company': company,
+      }),
     );
     if (response.statusCode != 200) {
       final error = json.decode(response.body)['error'] ?? 'Failed to update status';
       throw Exception(error);
+    }
+  }
+
+  static Future<void> deleteUser(int id) async {
+    final company = await _getCompany();
+    final response = await http.delete(
+      Uri.parse('$baseUrl/admin/users/$id'),
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode({'company': company}),
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Failed to delete user');
     }
   }
 
@@ -568,6 +607,8 @@ class ApiService {
   }
 
   static Future<void> updateShift(int id, Map<String, dynamic> data) async {
+    final company = await _getCompany();
+    data['company'] = company;
     final response = await http.put(
       Uri.parse('$baseUrl/admin/shifts/$id'),
       headers: {'Content-Type': 'application/json'},
@@ -577,7 +618,12 @@ class ApiService {
   }
 
   static Future<void> deleteShift(int id) async {
-    final response = await http.delete(Uri.parse('$baseUrl/admin/shifts/$id'));
+    final company = await _getCompany();
+    final response = await http.delete(
+      Uri.parse('$baseUrl/admin/shifts/$id'),
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode({'company': company}),
+    );
     if (response.statusCode != 200) throw Exception('Failed to delete shift');
   }
 
@@ -596,8 +642,8 @@ class ApiService {
   }
 
   static Future<void> updateSettings(Map<String, dynamic> settingsData) async {
-    final company = await _getCompany();
-    if (company != null) settingsData['companyName'] = company;
+    final companyId = await _getCompany();
+    if (companyId != null) settingsData['company'] = companyId;
     final response = await http.post(
       Uri.parse('$baseUrl/admin/settings'),
       headers: {'Content-Type': 'application/json'},
@@ -630,7 +676,11 @@ class ApiService {
   // Public holidays like "New Year's Day"
   static Future<List<dynamic>> getHolidays() async {
     final company = await _getCompany();
-    String qs = company != null ? '?company=${Uri.encodeComponent(company)}' : '';
+    if (company == null) {
+       print('[ApiService] WARNING: getHolidays called without company context');
+       return [];
+    }
+    String qs = '?company=${Uri.encodeComponent(company)}';
     final response = await http.get(Uri.parse('$baseUrl/admin/holidays$qs'));
     if (response.statusCode == 200) return json.decode(response.body);
     throw Exception('Failed to load holidays');
@@ -652,7 +702,12 @@ class ApiService {
   }
 
   static Future<void> deleteHoliday(int id) async {
-    final response = await http.delete(Uri.parse('$baseUrl/admin/holidays/$id'));
+    final company = await _getCompany();
+    final response = await http.delete(
+      Uri.parse('$baseUrl/admin/holidays/$id'),
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode({'company': company}),
+    );
     if (response.statusCode != 200) throw Exception('Failed to delete holiday');
   }
 
@@ -752,6 +807,7 @@ class ApiService {
   }
 
   static Future<void> adjustLeaveBalance(int userId, String leaveType, int totalDays) async {
+    final company = await _getCompany();
     final response = await http.put(
       Uri.parse('$baseUrl/admin/leave-balance'),
       headers: {'Content-Type': 'application/json'},
@@ -759,6 +815,7 @@ class ApiService {
         'userId': userId,
         'leaveType': leaveType,
         'totalDays': totalDays,
+        'company': company,
       }),
     );
     if (response.statusCode != 200) {
@@ -820,7 +877,12 @@ class ApiService {
   }
 
   static Future<void> deletePayslip(int id) async {
-    final response = await http.delete(Uri.parse('$baseUrl/admin/payslips/$id'));
+    final company = await _getCompany();
+    final response = await http.delete(
+      Uri.parse('$baseUrl/admin/payslips/$id'),
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode({'company': company}),
+    );
     if (response.statusCode != 200) throw Exception('Failed to delete payslip');
   }
 }
