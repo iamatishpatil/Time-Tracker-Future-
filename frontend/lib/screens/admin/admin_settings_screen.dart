@@ -133,7 +133,14 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
         'cameraAuthEnabled': _cameraAuthEnabled ? 1 : 0,
         'workingDays': _workingDays.toList(),
         'weekendDays': _weekendDays.toList(),
+        'themeColor': _currentThemeColor,
       });
+      
+      // Update local branding provider to reflect changes immediately
+      if (_currentThemeColor != null) {
+        final color = Color(int.parse(_currentThemeColor!.replaceAll('#', 'FF'), radix: 16));
+        await ref.read(brandingProvider.notifier).updateBranding(_currentLogoUrl, color, companyName: _nameController.text.trim());
+      }
       if (!silent && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Settings Saved!')));
       }
@@ -170,10 +177,15 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
       
       // Real-time branding update via provider (now asynchronous for full extraction)
       await ref.read(brandingProvider.notifier).updateBranding(
-        response['logo'], // Use the server-relative path
+        response['logo'],
         dominantColor,
-        companyName: _nameController.text,
+        companyName: _nameController.text.trim(),
       );
+      
+      setState(() {
+        _currentThemeColor = hexColor;
+        _currentLogoUrl = response['logo'];
+      });
       
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -221,8 +233,48 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
                       Text('App Branding & Theme', style: PulseTextStyles.bodyBold),
                     ]),
                     const SizedBox(height: 10),
-                    Text('Upload your company logo. The app will automatically extract its dominant color and update the entire application\'s theme for all your employees.', style: PulseTextStyles.caption),
+                    Text('Customize your organization\'s look. Pick a brand color or upload your company logo to automatically extract its palette.', style: PulseTextStyles.caption),
                     const SizedBox(height: 16),
+                    
+                    // Color Picker Grid
+                    Text('Select Brand Color', style: PulseTextStyles.captionBold),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: [
+                        // Pulse Premium Palette
+                        _brandColorCircle(const Color(0xFF7C4DFF), 'Indigo'),
+                        _brandColorCircle(const Color(0xFF00B8D4), 'Teal'),
+                        _brandColorCircle(const Color(0xFF00C853), 'Green'),
+                        _brandColorCircle(const Color(0xFFFF3D00), 'Orange'),
+                        _brandColorCircle(const Color(0xFFE91E63), 'Rose'),
+                        _brandColorCircle(const Color(0xFF2196F3), 'Blue'),
+                        _brandColorCircle(const Color(0xFF000000), 'Rich Black'),
+                        _brandColorCircle(const Color(0xFFFFD600), 'Amber'),
+                        
+                        // Custom Color Button
+                        GestureDetector(
+                          onTap: _showCustomColorDialog,
+                          child: Container(
+                            width: 38,
+                            height: 38,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(color: PulseColors.border, width: 2),
+                              gradient: const SweepGradient(
+                                colors: [Colors.red, Colors.yellow, Colors.green, Colors.blue, Colors.red],
+                              ),
+                            ),
+                            child: const Icon(Icons.colorize, size: 16, color: Colors.white),
+                          ),
+                        ),
+                      ],
+                    ),
+                    
+                    const SizedBox(height: 24),
+                    Text('Company Logo', style: PulseTextStyles.captionBold),
+                    const SizedBox(height: 10),
                     Row(
                       children: [
                         Container(
@@ -245,18 +297,19 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
                         const SizedBox(width: 16),
                         Expanded(
                           child: PulseButton(
-                            text: 'Upload Logo',
+                            text: 'Change Logo',
                             icon: Icons.upload,
+                            isSmall: true,
                             onPressed: _pickAndUploadLogo,
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 20),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Brand Ribbon (Extracted Palette)', style: PulseTextStyles.captionBold),
+                        Text('Current Brand Palette', style: PulseTextStyles.captionBold),
                         const SizedBox(height: 8),
                         Row(
                           children: [
@@ -476,7 +529,7 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
             border: Border.all(color: PulseColors.border, width: 2),
             boxShadow: [
               BoxShadow(
-                color: color.withOpacity(0.2),
+                color: color.withValues(alpha: 0.2),
                 blurRadius: 8,
                 offset: const Offset(0, 4),
               ),
@@ -494,6 +547,83 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _brandColorCircle(Color color, String label) {
+    final hex = '#${color.value.toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}';
+    final isSelected = _currentThemeColor == hex;
+    
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _currentThemeColor = hex;
+        });
+        // Real-time preview for admin
+        PulseColors.setCompanyBrandColor(color);
+      },
+      child: Container(
+        width: 38,
+        height: 38,
+        decoration: BoxDecoration(
+          color: color,
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: isSelected ? Colors.white : Colors.transparent, 
+            width: 2.5
+          ),
+          boxShadow: isSelected ? [
+            BoxShadow(color: color.withValues(alpha: 0.4), blurRadius: 10, spreadRadius: 2)
+          ] : [],
+        ),
+        child: isSelected ? const Icon(Icons.check, color: Colors.white, size: 20) : null,
+      ),
+    );
+  }
+
+  void _showCustomColorDialog() {
+    final controller = TextEditingController(text: _currentThemeColor ?? '#7C4DFF');
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Custom Brand Color'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Enter Hex Code (e.g. #FF5722)'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: controller,
+              decoration: const InputDecoration(
+                hintText: '#RRGGBB',
+                border: OutlineInputBorder(),
+              ),
+              textCapitalization: TextCapitalization.characters,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('CANCEL')),
+          PulseButton(
+            text: 'APPLY', 
+            isSmall: true,
+            onPressed: () {
+              String hex = controller.text.trim().toUpperCase();
+              if (!hex.startsWith('#')) hex = '#$hex';
+              if (hex.length != 7) return;
+              
+              try {
+                final color = Color(int.parse(hex.replaceAll('#', 'FF'), radix: 16));
+                setState(() {
+                  _currentThemeColor = hex;
+                });
+                PulseColors.setCompanyBrandColor(color);
+                Navigator.pop(context);
+              } catch (_) {}
+            }
+          ),
+        ],
+      )
     );
   }
 }

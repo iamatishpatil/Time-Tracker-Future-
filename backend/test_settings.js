@@ -1,6 +1,32 @@
-const sqlite3 = require('sqlite3').verbose();
-const db = new sqlite3.Database('./time_tracker_dev.db');
-db.all('SELECT * FROM settings', [], (err, rows) => {
-  console.log(JSON.stringify(rows, null, 2));
-  db.close();
+const http = require('http');
+
+const data = JSON.stringify({
+  company: 'FUTURE',
+  companyName: 'FUTURE',
+  themeColor: '#7C4DFF'
 });
+
+const options = {
+  hostname: 'localhost',
+  port: 3000,
+  path: '/api/admin/settings',
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Content-Length': data.length
+  }
+};
+
+const req = http.request(options, (res) => {
+  console.log(`Status: ${res.statusCode}`);
+  res.on('data', (d) => {
+    process.stdout.write(d);
+  });
+});
+
+req.on('error', (error) => {
+  console.error(error);
+});
+
+req.write(data);
+req.end();

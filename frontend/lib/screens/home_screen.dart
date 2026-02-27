@@ -28,6 +28,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   // --- The Clock & Strings ---
   late String _timeString; // e.g., "12:00:00 PM"
   late String _dateString; // e.g., "Monday, July 1"
+  Timer? _clockTimer; // Store timer reference so it can be cancelled
 
   Map<String, dynamic>? _user;
   bool _isLoading = true; // Shows a "shimmer" effect while loading
@@ -63,7 +64,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     _dateString = _formatDate(DateTime.now());
     
     // Timer.periodic runs every 1 second to update the clock numbers
-    Timer.periodic(const Duration(seconds: 1), (Timer t) => _getTime());
+    // ANR Fix: Store timer reference so we can cancel it in dispose()
+    _clockTimer = Timer.periodic(const Duration(seconds: 1), (Timer t) => _getTime());
 
     // Setup the "throbbing" animation for the button
     _animationController = AnimationController(vsync: this, duration: const Duration(seconds: 2))..repeat(reverse: true);
@@ -74,15 +76,20 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
   @override
   void dispose() {
+    _clockTimer?.cancel(); // ANR Fix: Cancel the 1-second timer to prevent memory leaks
     _animationController.dispose(); // Clean up memory
     super.dispose();
   }
 
   // --- Data Loading: Getting everything ready ---
   Future<void> _initializeData() async {
-    await _loadUser(); // Who is logged in?
-    await _getCurrentLocation(); // Where are they?
-    await _loadStats(); // How many hours did they work this month?
+    // ANR Fix: Load user first (needed for stats), then run location + stats in PARALLEL
+    // Previously these ran sequentially, blocking the UI for 3x the time
+    await _loadUser();
+    await Future.wait([
+      _getCurrentLocation(),
+      _loadStats(),
+    ]);
   }
 
   // Load the user from the vault and check if they are already working
@@ -208,11 +215,15 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   }
 
   void _getTime() {
+    // ANR Fix: Compute strings first, then call setState only if values changed
+    // Reduces unnecessary widget rebuilds triggered by the 1-second clock timer
     final DateTime now = DateTime.now();
-    if (mounted) {
+    final newTime = _formatDateTime(now);
+    final newDate = _formatDate(now);
+    if (mounted && (newTime != _timeString || newDate != _dateString)) {
       setState(() {
-        _timeString = _formatDateTime(now);
-        _dateString = _formatDate(now);
+        _timeString = newTime;
+        _dateString = newDate;
       });
     }
   }

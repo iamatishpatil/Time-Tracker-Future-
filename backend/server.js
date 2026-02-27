@@ -212,6 +212,22 @@ const createNotification = (userId, title, message) => {
   });
 };
 
+// Helper: notify ALL non-admin employees of a company (multi-tenancy safe)
+const notifyAllCompanyUsers = (company, title, message) => {
+  db.all(`SELECT id FROM users WHERE company = ? AND role = 'User' AND isActive = 1`, [company], (err, rows) => {
+    if (err || !rows) return;
+    rows.forEach(r => createNotification(r.id, title, message));
+  });
+};
+
+// Helper: notify ALL admins of a company (multi-tenancy safe)
+const notifyCompanyAdmins = (company, title, message) => {
+  db.all(`SELECT id FROM users WHERE company = ? AND role = 'Admin'`, [company], (err, rows) => {
+    if (err || !rows) return;
+    rows.forEach(r => createNotification(r.id, title, message));
+  });
+};
+
 // Distance calculation helper (Haversine formula)
 const calculateDistance = (lat1, lon1, lat2, lon2) => {
   const R = 6371e3; // metres
@@ -609,7 +625,7 @@ app.get('/api/user/:id', (req, res) => {
 });
 
 app.put('/api/user/:id', upload.single('profilePicture'), (req, res) => {
-  const { fullName, email, gender, company, department, experience, technologies, address, latitude, longitude, shiftId, isActive } = req.body;
+  const { fullName, email, gender, company, department, experience, technologies, address, latitude, longitude, shiftId, isActive, _notifyShift } = req.body;
   const userId = req.params.id;
   const profilePicture = req.file ? `/uploads/${req.file.filename}` : null;
 
@@ -676,11 +692,12 @@ app.post('/api/checkin', upload.single('photo'), (req, res) => {
     // 2. Get User Shift Info and Settings
     getUserWithShift(userId).then(user => {
       const company = user ? user.company : null;
-      let q = 'SELECT * FROM settings ORDER BY id DESC LIMIT 1';
+      // ANR Fix / BUG 1 FIX: Use both `company` ID and `companyName` columns for resilient lookup
+      let q = 'SELECT * FROM settings WHERE company IS NULL LIMIT 1';
       let p = [];
       if (company) {
-        q = 'SELECT * FROM settings WHERE companyName = ? ORDER BY id DESC LIMIT 1';
-        p = [company];
+        q = 'SELECT * FROM settings WHERE company = ? OR companyName = ? ORDER BY id DESC LIMIT 1';
+        p = [company, company];
       }
       
       db.get(q, p, (err, settings) => {
@@ -746,11 +763,12 @@ app.post('/api/checkout', upload.single('photo'), (req, res) => {
 
     getUserWithShift(userId).then(user => {
       const company = user ? user.company : null;
-      let q = 'SELECT * FROM settings ORDER BY id DESC LIMIT 1';
+      // BUG 1 FIX (checkout): Use both `company` ID and `companyName` for resilient lookup
+      let q = 'SELECT * FROM settings WHERE company IS NULL LIMIT 1';
       let p = [];
       if (company) {
-        q = 'SELECT * FROM settings WHERE companyName = ? ORDER BY id DESC LIMIT 1';
-        p = [company];
+        q = 'SELECT * FROM settings WHERE company = ? OR companyName = ? ORDER BY id DESC LIMIT 1';
+        p = [company, company];
       }
       
       db.get(q, p, (err, settings) => {
@@ -792,6 +810,10 @@ app.post('/api/checkout', upload.single('photo'), (req, res) => {
           [now, lat, long, address, photo, overtime, userId],
           function(err) {
             if (err) return res.status(500).json({ error: err.message });
+            // Notify employee of successful check-out
+            const checkOutDisplay = new Date(now).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+            const overtimeMsg = overtime > 0 ? ` You worked ${overtime.toFixed(1)}h overtime today. 🏆` : '';
+            createNotification(userId, '✅ Checked Out Successfully', `You checked out at ${checkOutDisplay}.${overtimeMsg}`);
             res.json({ message: 'Check-out successful', time: now, overtime: overtime.toFixed(2) });
           });
       });
@@ -831,6 +853,12 @@ app.patch('/api/admin/users/:id/active', (req, res) => {
   
   db.run('UPDATE users SET isActive = ? WHERE id = ? AND company = ?', [isActive, req.params.id, company], (err) => {
     if (err) return res.status(500).json({ error: err.message });
+    const userId = parseInt(req.params.id);
+    if (isActive === 0 || isActive === false) {
+      createNotification(userId, '⛔ Account Deactivated', 'Your account has been deactivated by the admin. Please contact your administrator.');
+    } else {
+      createNotification(userId, '✅ Account Reactivated', 'Your account has been reactivated. You can now log in and use the app.');
+    }
     res.json({ message: 'Status updated' });
   });
 });
@@ -841,6 +869,13 @@ app.patch('/api/admin/users/:id/approve', (req, res) => {
 
   db.run('UPDATE users SET isApproved = ?, rejectionReason = ? WHERE id = ? AND company = ?', [isApproved, rejectionReason || null, req.params.id, company], (err) => {
     if (err) return res.status(500).json({ error: err.message });
+    const userId = parseInt(req.params.id);
+    if (isApproved === 1 || isApproved === true) {
+      createNotification(userId, '🎉 Account Approved!', `Welcome! Your account has been approved. You can now check in and use all features.`);
+    } else {
+      const reason = rejectionReason ? ` Reason: ${rejectionReason}` : '';
+      createNotification(userId, '❌ Account Not Approved', `Your account registration was not approved.${reason} Please contact your admin.`);
+    }
     res.json({ message: 'Approval status updated' });
   });
 });
@@ -863,13 +898,20 @@ app.get('/api/admin/stats', (req, res) => {
       stats.presentToday = row ? row.count : 0;
       stats.absentToday = Math.max(0, stats.totalEmployees - stats.presentToday);
 
-      const lvQuery = `SELECT COUNT(DISTINCT l.userId) as count FROM leaves l JOIN users u ON l.userId = u.id 
-                      WHERE l.status = 'Approved' AND u.company = ? 
-                      AND date(?) BETWEEN date(l.startDate) AND date(l.endDate)`;
-      db.get(lvQuery, [company, today], (err, row) => {
+      // BUG 2 FIX: Add lateToday count (was always 0 before — dashboard stat card was broken)
+      const lateQuery = `SELECT COUNT(DISTINCT a.userId) as count FROM attendance a JOIN users u ON a.userId = u.id WHERE a.checkInTime LIKE ? AND a.status = 'Late' AND u.company = ?`;
+      db.get(lateQuery, [`${today}%`, company], (err, row) => {
         if (err) return res.status(500).json({ error: err.message });
-        stats.onLeaveToday = row ? row.count : 0;
-        res.json(stats);
+        stats.lateToday = row ? row.count : 0;
+
+        const lvQuery = `SELECT COUNT(DISTINCT l.userId) as count FROM leaves l JOIN users u ON l.userId = u.id 
+                        WHERE l.status = 'Approved' AND u.company = ? 
+                        AND date(?) BETWEEN date(l.startDate) AND date(l.endDate)`;
+        db.get(lvQuery, [company, today], (err, row) => {
+          if (err) return res.status(500).json({ error: err.message });
+          stats.onLeaveToday = row ? row.count : 0;
+          res.json(stats);
+        });
       });
     });
   });
@@ -880,7 +922,10 @@ app.get('/api/admin/users', (req, res) => {
   const company = req.query.company;
   if (!company) return res.status(400).json({ error: 'Company parameter is required' });
 
-  const query = `SELECT u.id, u.fullName, u.email, u.mobileNumber, u.role, u.profilePicture, u.weekOffs, u.company, s.name as shiftName 
+  // BUG 4 FIX: Added isApproved, isActive, salary, department to SELECT — admin employee screen showed wrong status
+  const query = `SELECT u.id, u.fullName, u.email, u.mobileNumber, u.role, u.profilePicture, 
+          u.weekOffs, u.company, u.isApproved, u.isActive, u.salary, u.department,
+          s.name as shiftName 
           FROM users u 
           LEFT JOIN shifts s ON u.shiftId = s.id
           WHERE u.company = ?`;
@@ -1021,12 +1066,15 @@ app.get('/api/admin/absent', (req, res) => {
       return res.json([]);
     }
 
+    // BUG 5 FIX: Exclude employees on approved leave — they were showing as "Absent" incorrectly
     let usersQuery = `SELECT id, fullName, mobileNumber, profilePicture, weekOffs 
             FROM users 
             WHERE role = "User" AND id NOT IN (
               SELECT userId FROM attendance WHERE checkInTime LIKE ?
+            ) AND id NOT IN (
+              SELECT userId FROM leaves WHERE status = 'Approved' AND date(?) BETWEEN date(startDate) AND date(endDate)
             )`;
-    let usersParams = [`${today}%`];
+    let usersParams = [`${today}%`, today];
     if (company) {
       usersQuery += ' AND company = ?';
       usersParams.push(company);
@@ -1129,7 +1177,9 @@ app.get('/api/settings', async (req, res) => {
 });
 
 app.post('/api/admin/settings', (req, res) => {
-  const { company, companyName, officeLat, officeLong, officeRadiusMeters, workingDays, weekendDays, geofenceEnabled, payrollEnabled, cameraAuthEnabled } = req.body;
+  fs.appendFileSync('server_log.txt', `[Settings] Body: ${JSON.stringify(req.body, null, 2)}\n`);
+  console.log('[Settings] Body Received:', JSON.stringify(req.body, null, 2));
+  const { company, companyName, officeLat, officeLong, officeRadiusMeters, workingDays, weekendDays, geofenceEnabled, payrollEnabled, cameraAuthEnabled, themeColor } = req.body;
   
   if (!company) {
     console.log('[Settings] Error: No company ID provided');
@@ -1142,7 +1192,7 @@ app.post('/api/admin/settings', (req, res) => {
   const payEnabled = payrollEnabled !== undefined ? payrollEnabled : 1;
   const camEnabled = cameraAuthEnabled !== undefined ? (cameraAuthEnabled ? 1 : 0) : 1;
 
-  console.log(`[Settings] Updating for company: ${company}, camEnabled: ${camEnabled}`);
+  console.log(`[Settings] Updating for company: ${company}, camEnabled: ${camEnabled}, themeColor: ${themeColor}`);
 
   // ROBUST LOOKUP: Check by 'company' ID first, then by 'companyName' fallback
   db.get('SELECT * FROM settings WHERE company = ? OR companyName = ? ORDER BY id DESC LIMIT 1', [company, company], (err, row) => {
@@ -1154,8 +1204,10 @@ app.post('/api/admin/settings', (req, res) => {
     if (row) {
       console.log(`[Settings] Found existing row id: ${row.id}. Updating...`);
       // Row exists - perform an UPDATE
-      db.run('UPDATE settings SET company = ?, companyName = ?, officeLat = ?, officeLong = ?, officeRadiusMeters = ?, workingDays = ?, weekendDays = ?, geofenceEnabled = ?, payrollEnabled = ?, cameraAuthEnabled = ? WHERE id = ?',
-        [company, companyName, officeLat, officeLong, officeRadiusMeters, wDays, wkDays, geoEnabled, payEnabled, camEnabled, row.id], function(err) {
+      const params = [company, companyName, officeLat, officeLong, officeRadiusMeters, wDays, wkDays, geoEnabled, payEnabled, camEnabled, themeColor, row.id];
+      fs.appendFileSync('server_log.txt', `[Settings] SQL Params: ${JSON.stringify(params)}\n`);
+      db.run('UPDATE settings SET company = ?, companyName = ?, officeLat = ?, officeLong = ?, officeRadiusMeters = ?, workingDays = ?, weekendDays = ?, geofenceEnabled = ?, payrollEnabled = ?, cameraAuthEnabled = ?, themeColor = ? WHERE id = ?',
+        params, function(err) {
           if (err) {
             console.error('[Settings] Update Error:', err);
             return res.status(500).json({ error: err.message });
@@ -1167,8 +1219,8 @@ app.post('/api/admin/settings', (req, res) => {
       console.log('[Settings] No row found. Creating new...');
       // New row - perform an INSERT
       db.run(
-        `INSERT INTO settings (company, companyName, officeLat, officeLong, officeRadiusMeters, workingDays, weekendDays, geofenceEnabled, payrollEnabled, cameraAuthEnabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [company, companyName, officeLat, officeLong, officeRadiusMeters, wDays, wkDays, geoEnabled, payEnabled, camEnabled],
+        `INSERT INTO settings (company, companyName, officeLat, officeLong, officeRadiusMeters, workingDays, weekendDays, geofenceEnabled, payrollEnabled, cameraAuthEnabled, themeColor) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [company, companyName, officeLat, officeLong, officeRadiusMeters, wDays, wkDays, geoEnabled, payEnabled, camEnabled, themeColor],
         function(err) {
           if (err) {
             console.error('[Settings] Create Error:', err);
@@ -1188,7 +1240,8 @@ app.post('/api/admin/branding', upload.single('logo'), (req, res) => {
   
   if (!company) return res.status(400).json({ error: 'Company Name is required' });
 
-  db.get('SELECT * FROM settings WHERE companyName = ? ORDER BY id DESC LIMIT 1', [company], (err, row) => {
+  // BUG 3 FIX: Branding lookup used companyName only — logo upload silently failed if settings row used `company` (ID) column
+  db.get('SELECT * FROM settings WHERE company = ? OR companyName = ? ORDER BY id DESC LIMIT 1', [company, company], (err, row) => {
     if (err) return res.status(500).json({ error: err.message });
     
     if (row) {
@@ -1230,6 +1283,12 @@ app.post('/api/admin/holidays', (req, res) => {
     [name, date, type || 'Public', duration || 'Full Day', company], 
     function(err) {
       if (err) return res.status(500).json({ error: err.message });
+      // Notify ALL employees of this company about the new holiday
+      if (company) {
+        const formattedDate = new Date(date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+        const durationLabel = duration === 'Half Day' ? 'Half Day Holiday' : 'Holiday';
+        notifyAllCompanyUsers(company, `🎉 New ${durationLabel}: ${name}`, `${name} has been added as a ${type || 'Public'} holiday on ${formattedDate}. Mark your calendars!`);
+      }
       res.json({ message: 'Holiday added', id: this.lastID });
     });
 });
@@ -1306,6 +1365,13 @@ app.post('/api/leaves/apply', (req, res) => {
     [userId, leaveType || 'Casual Leave', startDate, endDate, reason],
     function(err) {
       if (err) return res.status(500).json({ error: err.message });
+      // Confirm to employee + alert company admins (multi-tenancy safe)
+      createNotification(userId, '📋 Leave Request Submitted', `Your ${leaveType || 'Casual Leave'} from ${startDate} to ${endDate} has been submitted and is pending approval.`);
+      db.get('SELECT fullName, company FROM users WHERE id = ?', [userId], (err, user) => {
+        if (user && user.company) {
+          notifyCompanyAdmins(user.company, '🔔 New Leave Request', `${user.fullName} has applied for ${leaveType || 'Casual Leave'} (${startDate} to ${endDate}). Review in the Leaves section.`);
+        }
+      });
       res.json({ message: 'Leave application submitted', id: this.lastID });
     });
 });
@@ -1654,11 +1720,16 @@ app.post('/api/admin/payslips', (req, res) => {
     return res.status(400).json({ error: 'Missing required fields' });
   }
 
+  const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const monthLabel = monthNames[month - 1] || month;
+
   db.run(`INSERT INTO payslips (userId, company, month, year, basicSalary, allowances, deductions, netSalary) 
           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     [userId, company, month, year, basicSalary, allowances || 0, deductions || 0, netSalary],
     function(err) {
       if (err) return res.status(500).json({ error: err.message });
+      // Notify employee that their payslip is ready
+      createNotification(userId, `💰 Payslip Ready: ${monthLabel} ${year}`, `Your payslip for ${monthLabel} ${year} is now available. Net Salary: ₹${parseFloat(netSalary).toLocaleString('en-IN')}. Check the Payslips section.`);
       res.json({ message: 'Payslip created', id: this.lastID });
     });
 });

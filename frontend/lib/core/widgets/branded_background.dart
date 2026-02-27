@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/branding_provider.dart';
+import '../theme/pulse_colors.dart';
 import '../../services/api_service.dart';
 
 class BrandedBackground extends ConsumerWidget {
@@ -14,7 +15,13 @@ class BrandedBackground extends ConsumerWidget {
     final logoUrl = branding.logoUrl;
 
     return Stack(
+      // Ensure there is always an opaque background — prevents black screen on emulator
+      // when the theme hasn't been applied yet or the scaffold background is transparent.
       children: [
+        // Solid base background
+        Positioned.fill(
+          child: ColoredBox(color: PulseColors.background),
+        ),
         // The Watermark
         logoUrl != null && logoUrl.isNotEmpty
             ? Positioned.fill(

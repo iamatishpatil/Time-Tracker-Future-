@@ -64,10 +64,16 @@ class _CheckoutScreenState extends State<CheckoutScreen> with SingleTickerProvid
 
   void _updateTime() {
     final now = DateTime.now();
-    setState(() {
-      _currentTime = DateFormat('hh:mm:ss a').format(now);
-      _currentDate = DateFormat('EEEE, d MMMM y').format(now);
-    });
+    // ANR Fix: Only call setState if the displayed strings actually changed
+    // Prevents redundant rebuilds every second when nothing has visually changed
+    final newTime = DateFormat('hh:mm:ss a').format(now);
+    final newDate = DateFormat('EEEE, d MMMM y').format(now);
+    if (mounted && (newTime != _currentTime || newDate != _currentDate)) {
+      setState(() {
+        _currentTime = newTime;
+        _currentDate = newDate;
+      });
+    }
   }
 
   Future<void> _loadUserData() async {
@@ -130,10 +136,16 @@ class _CheckoutScreenState extends State<CheckoutScreen> with SingleTickerProvid
   Future<void> _handleCheckOut() async {
     bool isInside = false;
     double distance = 0;
+
+    // ANR Fix: Fetch settings ONCE and reuse for both geofence + camera checks
+    Map<String, dynamic>? settings;
     try {
-      // 1. Verify Geofence again (Can't check out from home!)-
-      final settings = await ApiService.getSettings();
-      if (settings['geofenceEnabled'] == 0) {
+      settings = await ApiService.getSettings();
+    } catch (_) {}
+
+    try {
+      // 1. Verify Geofence (Can't check out from outside!)
+      if (settings == null || settings['geofenceEnabled'] == 0) {
         isInside = true;
       } else if (settings['officeLat'] != null) {
         final double officeLat = (settings['officeLat'] as num).toDouble();
@@ -145,6 +157,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> with SingleTickerProvid
           officeLat, officeLong,
         );
         isInside = distance <= officeRadius;
+      } else {
+        isInside = true; // No office location set, allow checkout
       }
     } catch (_) {}
 
@@ -158,10 +172,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> with SingleTickerProvid
 
     setState(() => _isLoading = true);
 
-    // 2. Take a Goodbye Selfie!
+    // 2. Take a Goodbye Selfie! (reuse settings fetched above — no second API call)
     XFile? photo;
-    final settings = await ApiService.getSettings();
-    
     if (settings != null && settings['cameraAuthEnabled'] != 0) {
       final ImagePicker picker = ImagePicker();
       photo = await picker.pickImage(source: ImageSource.camera, preferredCameraDevice: CameraDevice.front);
@@ -172,6 +184,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> with SingleTickerProvid
         return;
       }
     }
+
 
     try {
       // 3. Inform the server that the shift has ended

@@ -53,7 +53,7 @@ class PulseTheme {
       cardTheme: CardThemeData(
         color: PulseColors.surface,
         elevation: 4,
-        shadowColor: Colors.black.withOpacity(0.05),
+        shadowColor: Colors.black.withValues(alpha: 0.05),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
           side: const BorderSide(color: PulseColors.border, width: 1),
@@ -67,7 +67,7 @@ class PulseTheme {
           backgroundColor: PulseColors.primary,
           foregroundColor: Colors.white,
           elevation: 2,
-          shadowColor: PulseColors.primary.withOpacity(0.3),
+          shadowColor: PulseColors.primary.withValues(alpha: 0.3),
           padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           textStyle: GoogleFonts.inter(
@@ -106,7 +106,7 @@ class PulseTheme {
       // Input Decoration
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: PulseColors.brandLight.withOpacity(0.3),
+        fillColor: PulseColors.brandLight.withValues(alpha: 0.3),
         contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
@@ -191,8 +191,8 @@ class PulseTheme {
 
       // Chips
       chipTheme: ChipThemeData(
-        backgroundColor: PulseColors.brandLight.withOpacity(0.5),
-        selectedColor: PulseColors.primary.withOpacity(0.15),
+        backgroundColor: PulseColors.brandLight.withValues(alpha: 0.5),
+        selectedColor: PulseColors.primary.withValues(alpha: 0.15),
         disabledColor: PulseColors.surfaceVariant,
         labelStyle: GoogleFonts.inter(
           fontSize: 13,

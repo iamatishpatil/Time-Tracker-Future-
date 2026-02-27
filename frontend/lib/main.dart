@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/theme/pulse_theme.dart';
+import 'core/providers/branding_provider.dart';
 import 'screens/splash_screen.dart';
 import 'screens/admin/admin_settings_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/register_screen.dart';
 import 'screens/checkout_screen.dart';
-import 'screens/admin/admin_dashboard_screen.dart';
 import 'screens/admin/admin_attendance_screen.dart';
 import 'screens/admin/admin_employees_screen.dart';
 import 'screens/admin/admin_leaves_screen.dart';
@@ -75,6 +75,9 @@ class TimeTrackerApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Watch branding to trigger rebuild when color changes
+    ref.watch(brandingProvider);
+    
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Time Tracker',

@@ -12,7 +12,6 @@ import 'edit_profile_screen.dart';
 import '../services/api_service.dart';
 import '../widgets/custom_drawer.dart';
 import '../services/pdf_service.dart';
-import '../core/widgets/pulse_app_bar.dart';
 import '../core/widgets/pulse_scaffold.dart';
 
 class MainContainer extends StatefulWidget {

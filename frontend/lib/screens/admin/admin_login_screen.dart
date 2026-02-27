@@ -5,7 +5,6 @@ import '../../core/widgets/pulse_button.dart';
 import '../../services/api_service.dart';
 import 'admin_container.dart';
 import '../forgot_password_screen.dart';
-import '../../core/widgets/branded_background.dart';
 import '../../core/widgets/branded_logo.dart';
 import 'package:intl_phone_field/intl_phone_field.dart';
 import 'package:local_auth/local_auth.dart';

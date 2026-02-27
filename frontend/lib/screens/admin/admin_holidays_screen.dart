@@ -120,56 +120,87 @@ class _AdminHolidaysScreenState extends State<AdminHolidaysScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Company Holidays')),
-      body: _isLoading
-          ? Padding(padding: const EdgeInsets.all(20), child: PulseShimmer.list(count: 5, itemHeight: 70))
-          : _holidays.isEmpty
-              ? const Center(child: PulseEmptyState(icon: Icons.beach_access, title: 'No Holidays', subtitle: 'Tap + to add one'))
-              : ListView.builder(
-                  padding: const EdgeInsets.all(14),
-                  itemCount: _holidays.length,
-                  itemBuilder: (ctx, i) {
-                    final h = _holidays[i];
-                    final isPublic = h['type'] == 'Public';
-                    final color = isPublic ? PulseColors.success : PulseColors.warning;
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: PulseCard(
-                        padding: const EdgeInsets.all(14),
-                        child: Row(children: [
-                          Container(
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(12)),
-                            child: Icon(Icons.celebration, color: color, size: 22),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                            Row(children: [
-                              Flexible(child: Text(h['name'], style: PulseTextStyles.bodyBold, overflow: TextOverflow.ellipsis)),
-                              if (h['duration'] == 'Half Day') ...[
-                                const SizedBox(width: 6),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(color: PulseColors.accent.withOpacity(0.2), borderRadius: BorderRadius.circular(6)),
-                                  child: Text('½ Day', style: PulseTextStyles.captionBold.copyWith(color: PulseColors.accent, fontSize: 9)),
-                                ),
-                              ],
-                            ]),
-                            const SizedBox(height: 2),
-                            Text('${h['date']} • ${h['type']} • ${h['duration']}', style: PulseTextStyles.caption.copyWith(fontSize: 11)),
-                          ])),
-                          IconButton(icon: Icon(Icons.delete, color: PulseColors.error, size: 20), onPressed: () => _deleteHoliday(h['id'], h['name'])),
-                        ]),
-                      ),
-                    );
-                  },
-                ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _addHoliday,
-        backgroundColor: PulseColors.primary,
-        child: const Icon(Icons.add, color: Colors.white),
+    // Logic: Split holidays into categories for the tabs
+    // Global holidays (company is null) go to Indian tab. 
+    // Company-specific holidays go to Company tab UNLESS explicitly set to 'Indian'.
+    final indianHolidays = _holidays.where((h) => h['company'] == null || h['type'] == 'Indian').toList();
+    final companyHolidays = _holidays.where((h) => h['company'] != null && h['type'] != 'Indian').toList();
+
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Holidays'),
+          bottom: const TabBar(
+            tabs: [
+              Tab(text: 'Company Holidays'),
+              Tab(text: 'Indian Holidays'),
+            ],
+            indicatorColor: Colors.white,
+            labelStyle: TextStyle(fontWeight: FontWeight.bold),
+          ),
+        ),
+        body: _isLoading
+            ? Padding(padding: const EdgeInsets.all(20), child: PulseShimmer.list(count: 5, itemHeight: 70))
+            : TabBarView(
+                children: [
+                  _buildHolidayList(companyHolidays, 'No Company Holidays'),
+                  _buildHolidayList(indianHolidays, 'No Indian Holidays'),
+                ],
+              ),
+        floatingActionButton: FloatingActionButton(
+          onPressed: _addHoliday,
+          backgroundColor: PulseColors.primary,
+          child: const Icon(Icons.add, color: Colors.white),
+        ),
       ),
+    );
+  }
+
+  Widget _buildHolidayList(List<dynamic> list, String emptyTitle) {
+    if (list.isEmpty) {
+      return Center(child: PulseEmptyState(icon: Icons.beach_access, title: emptyTitle, subtitle: 'Tap + to add one'));
+    }
+    return ListView.builder(
+      padding: const EdgeInsets.all(14),
+      itemCount: list.length,
+      itemBuilder: (ctx, i) {
+        final h = list[i];
+        final isPublic = h['type'] == 'Public';
+        final isIndian = h['type'] == 'Indian';
+        final color = isIndian ? PulseColors.accent : (isPublic ? PulseColors.success : PulseColors.warning);
+        
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: PulseCard(
+            padding: const EdgeInsets.all(14),
+            child: Row(children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(12)),
+                child: Icon(Icons.celebration, color: color, size: 22),
+              ),
+              const SizedBox(width: 12),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [
+                   Flexible(child: Text(h['name'], style: PulseTextStyles.bodyBold, overflow: TextOverflow.ellipsis)),
+                   if (h['duration'] == 'Half Day') ...[
+                     const SizedBox(width: 6),
+                     Container(
+                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                       decoration: BoxDecoration(color: PulseColors.accent.withOpacity(0.2), borderRadius: BorderRadius.circular(6)),
+                       child: Text('½ Day', style: PulseTextStyles.captionBold.copyWith(color: PulseColors.accent, fontSize: 9)),
+                     ),
+                   ],
+                ]),
+                const SizedBox(height: 2),
+                Text('${h['date']} • ${h['type']} • ${h['duration']}', style: PulseTextStyles.caption.copyWith(fontSize: 11)),
+              ])),
+              IconButton(icon: Icon(Icons.delete, color: PulseColors.error, size: 20), onPressed: () => _deleteHoliday(h['id'], h['name'])),
+            ]),
+          ),
+        );
+      },
     );
   }
 }

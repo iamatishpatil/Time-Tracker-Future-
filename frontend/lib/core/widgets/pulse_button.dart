@@ -12,6 +12,7 @@ class PulseButton extends StatefulWidget {
   final IconData? icon;
   final double width;
   final double height;
+  final bool isSmall;
 
   const PulseButton({
     super.key,
@@ -22,6 +23,7 @@ class PulseButton extends StatefulWidget {
     this.icon,
     this.width = double.infinity,
     this.height = 56,
+    this.isSmall = false,
   });
 
   @override
@@ -81,19 +83,19 @@ class _PulseButtonState extends State<PulseButton>
         scale: _scaleAnimation,
         child: Container(
           width: widget.width,
-          height: widget.height,
+          height: widget.isSmall ? 40 : widget.height,
           decoration: BoxDecoration(
             gradient: _isFilled && !isDisabled ? _gradient : null,
             color: _isFilled
                 ? (isDisabled ? PulseColors.surfaceVariant : null)
                 : Colors.transparent,
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(widget.isSmall ? 12 : 20),
             border: !_isFilled
                 ? Border.all(
                     color: widget.variant == PulseButtonVariant.outline
                         ? PulseColors.border
                         : PulseColors.primary,
-                    width: 1.5,
+                    width: widget.isSmall ? 1.0 : 1.5,
                   )
                 : null,
             boxShadow: _isFilled && !isDisabled
@@ -112,7 +114,7 @@ class _PulseButtonState extends State<PulseButton>
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
                           colors: [
-                            Colors.white.withOpacity(0.2),
+                            Colors.white.withValues(alpha: 0.2),
                             Colors.transparent,
                           ],
                         ),
@@ -123,7 +125,7 @@ class _PulseButtonState extends State<PulseButton>
                   color: Colors.transparent,
                   child: InkWell(
                     onTap: isDisabled ? null : widget.onPressed,
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: BorderRadius.circular(widget.isSmall ? 12 : 20),
                     child: Center(
                       child: widget.isLoading
                           ? const SizedBox(

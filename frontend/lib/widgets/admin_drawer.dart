@@ -128,7 +128,7 @@ class AdminDrawer extends StatelessWidget {
           ),
           _DrawerTile(
             icon: Icons.celebration_outlined,
-            title: 'Company Holidays',
+            title: 'Holidays',
             onTap: () {
               Navigator.pop(context);
               Navigator.pushNamed(context, '/admin-holidays');

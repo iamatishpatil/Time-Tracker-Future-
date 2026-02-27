@@ -17,8 +17,7 @@ import '../../widgets/admin_drawer.dart';
 import 'admin_attendance_screen.dart';
 import 'admin_employees_screen.dart';
 import 'admin_leaves_screen.dart';
-import 'admin_payroll_screen.dart';
-import 'admin_settings_screen.dart';
+import 'admin_payslips_screen.dart';
 import 'admin_shifts_screen.dart';
 import 'admin_holidays_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -55,64 +54,64 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
     return 'Good Evening';
   }
 
-  // The Big Fetch: Gets everything needed for the dashboard in one go.
+  // The Big Fetch: Gets everything needed for the dashboard in parallel.
   Future<void> _loadData() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
     try {
       final user = await ApiService.getStoredUser();
-      
-      // Sync branding with the current user's company
-      if (user != null && user['company'] != null) {
-        await ref.read(brandingProvider.notifier).fetchBranding(company: user['company']);
-      }
 
-      // Fetch all data in parallel for better performance and to avoid sequential bottlenecks
+      // ANR Fix 1: Run branding + all data fetches in PARALLEL using Future.wait
+      // Previously, branding was awaited BEFORE Future.wait, blocking everything sequentially
+      final company = user?['company'];
       final results = await Future.wait([
+        // Branding runs in parallel with the data fetches
+        company != null
+            ? ref.read(brandingProvider.notifier).fetchBranding(company: company)
+            : Future.value(),
         ApiService.getAdminStats(),
-        ApiService.getAllAttendance(limit: 5), // Fetch only what's needed for the recent list
+        ApiService.getAllAttendance(limit: 5),
         ApiService.getSettings(),
         ApiService.getHolidays(),
       ]);
 
-      final stats = results[0] as Map<String, dynamic>;
-      final recent = results[1] as List<dynamic>;
-      final settings = results[2] as Map<String, dynamic>;
-      final holidays = results[3] as List<dynamic>;
+      final stats    = results[1] as Map<String, dynamic>;
+      final recent   = results[2] as List<dynamic>;
+      final settings = results[3] as Map<String, dynamic>;
+      final holidays = results[4] as List<dynamic>;
 
-      final now = DateTime.now();
+      // ANR Fix 2: Process holiday list off the expensive path
+      // Keep only what we need — cap at 20 items before doing any work
+      final now      = DateTime.now();
       final todayStr = DateFormat('yyyy-MM-dd').format(now);
-      
+      final todayMidnight = DateTime(now.year, now.month, now.day, 23, 59);
+
       String? holidayName;
       String? holidayType;
-      List<dynamic> upcoming = [];
-      
-      for (var h in holidays) {
+      final List<dynamic> upcoming = [];
+
+      for (final h in holidays) {
         if (h['date'] == todayStr) {
-          holidayName = h['name'];
-          holidayType = h['type'];
+          holidayName = h['name'] as String?;
+          holidayType = h['type'] as String?;
           if (h['duration'] == 'Half Day') holidayName = '$holidayName (½ Day)';
         }
-        
-        final hDate = DateTime.parse(h['date']);
-        // If it's today, we show it in the banner, so we only put actual FUTURE holidays in the list
-        if (hDate.isAfter(DateTime(now.year, now.month, now.day, 23, 59))) {
+        final hDate = DateTime.tryParse(h['date'] ?? '');
+        if (hDate != null && hDate.isAfter(todayMidnight)) {
           upcoming.add(h);
+          if (upcoming.length >= 5) break; // ANR Fix: cap early — don't sort 100 items
         }
       }
-      upcoming.sort((a, b) => DateTime.parse(a['date']).compareTo(DateTime.parse(b['date'])));
-      if (upcoming.length > 5) upcoming = upcoming.sublist(0, 5);
-
-      // Note: Backend already sorts by checkInTime DESC, so we don't need expensive client-side sorting anymore.
 
       if (mounted) {
         setState(() {
-          _user = user;
-          _stats = stats;
-          _todayHoliday = holidayName;
-          _holidayType = holidayType;
+          _user             = user;
+          _stats            = stats;
+          _todayHoliday     = holidayName;
+          _holidayType      = holidayType;
           _upcomingHolidays = upcoming;
-          _recentActivity = recent;
-          _settings = settings;
+          _recentActivity   = recent;
+          _settings         = settings;
         });
       }
     } catch (e) {
@@ -205,7 +204,9 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                       _stat('Late', _stats?['lateToday']?.toString() ?? '0', PulseColors.warning, Icons.timer, 2,
                           onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => AdminAttendanceScreen()))),
                       _stat('Absent', _stats?['absentToday']?.toString() ?? '0', PulseColors.error, Icons.cancel, 3,
-                          onTap: () => Navigator.pushNamed(context, '/admin-absent')),
+                          // ANR Fix: '/admin-absent' route was pointing to a deleted screen.
+                          // Now correctly navigates to the Attendance screen which shows absent users
+                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => AdminAttendanceScreen()))),
                       _stat('On Leave', _stats?['onLeaveToday']?.toString() ?? '0', PulseColors.primary, Icons.beach_access, 4,
                           onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => AdminLeavesScreen()))),
                     ],
@@ -284,7 +285,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                       final actions = [
                         {'label': 'Holidays', 'icon': Icons.celebration, 'color': Colors.orange, 'onTap': () => Navigator.pushNamed(context, '/admin-holidays')},
                         if (_settings?['payrollEnabled'] != 0)
-                          {'label': 'Payroll', 'icon': Icons.payments, 'color': PulseColors.success, 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => AdminPayrollScreen()))},
+                          {'label': 'Payroll', 'icon': Icons.payments, 'color': PulseColors.success, 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => AdminPayslipsScreen()))},
                         {'label': 'Reports', 'icon': Icons.assessment, 'color': const Color(0xFF26A69A), 'onTap': () => Navigator.pushNamed(context, '/admin-reports')},
                         {'label': 'Shifts', 'icon': Icons.schedule, 'color': const Color(0xFFE91E63), 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => AdminShiftsScreen()))},
                       ];

@@ -21,7 +21,6 @@ class _UserPayslipsScreenState extends State<UserPayslipsScreen> {
   Map<String, dynamic>? _settings;
   bool _isLoading = true;
   bool _isPayrollEnabled = true;
-  String? _error;
   bool _isDownloading = false;
 
   @override
@@ -47,13 +46,12 @@ class _UserPayslipsScreenState extends State<UserPayslipsScreen> {
         }
       }
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _error = e.toString();
-          _isPayrollEnabled = false; // Assume disabled on error or if settings can't be fetched
-        });
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
-      }
+        if (mounted) {
+          setState(() {
+            _isPayrollEnabled = false; // Assume disabled on error or if settings can't be fetched
+          });
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+        }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }

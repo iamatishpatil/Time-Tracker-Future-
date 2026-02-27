@@ -6,8 +6,8 @@ import 'package:flutter/material.dart';
 import '../../core/theme/pulse_colors.dart';
 import '../../core/theme/pulse_text_styles.dart';
 import '../../core/widgets/pulse_card.dart';
-import '../../core/widgets/pulse_shimmer.dart';
-import '../../core/widgets/pulse_empty_state.dart';
+import 'package:frontend/core/widgets/pulse_shimmer.dart';
+import 'package:frontend/core/widgets/pulse_empty_state.dart';
 import '../../services/api_service.dart';
 import 'employee_form_screen.dart';
 
