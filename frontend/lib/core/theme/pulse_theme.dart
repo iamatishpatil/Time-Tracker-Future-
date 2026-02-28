@@ -13,12 +13,15 @@ class PulseTheme {
 
       colorScheme: ColorScheme.light(
         primary: PulseColors.primary,
-        onPrimary: Colors.white,
-        secondary: PulseColors.accent,
-        onSecondary: Colors.white,
+        onPrimary: PulseColors.onPrimary,
+        secondary: PulseColors.secondary,
+        onSecondary: PulseColors.onSecondary,
         tertiary: PulseColors.accent,
+        onTertiary: PulseColors.onAccent,
         surface: PulseColors.surface,
         onSurface: PulseColors.textPrimary,
+        primaryContainer: PulseColors.primaryContainer,
+        secondaryContainer: PulseColors.secondaryContainer,
         error: PulseColors.error,
         onError: Colors.white,
       ),
@@ -34,16 +37,17 @@ class PulseTheme {
       appBarTheme: AppBarTheme(
         backgroundColor: PulseColors.surface,
         elevation: 0,
-        scrolledUnderElevation: 1,
+        scrolledUnderElevation: 2,
         centerTitle: true,
+        surfaceTintColor: PulseColors.primary.withValues(alpha: 0.05),
         systemOverlayStyle: SystemUiOverlayStyle.dark,
-        titleTextStyle: GoogleFonts.inter(
+        titleTextStyle: GoogleFonts.outfit(
           color: PulseColors.textPrimary,
           fontSize: 20,
           fontWeight: FontWeight.w700,
           letterSpacing: -0.5,
         ),
-        iconTheme: const IconThemeData(
+        iconTheme: IconThemeData(
           color: PulseColors.textPrimary,
           size: 22,
         ),
@@ -52,10 +56,9 @@ class PulseTheme {
       // Cards
       cardTheme: CardThemeData(
         color: PulseColors.surface,
-        elevation: 4,
-        shadowColor: Colors.black.withValues(alpha: 0.05),
+        elevation: 0,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(24),
           side: const BorderSide(color: PulseColors.border, width: 1),
         ),
         margin: EdgeInsets.zero,
@@ -65,39 +68,29 @@ class PulseTheme {
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: PulseColors.primary,
-          foregroundColor: Colors.white,
-          elevation: 2,
-          shadowColor: PulseColors.primary.withValues(alpha: 0.3),
-          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+          foregroundColor: PulseColors.onPrimary,
+          elevation: 0,
+          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          textStyle: GoogleFonts.inter(
+          textStyle: GoogleFonts.plusJakartaSans(
             fontSize: 15,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 0.5,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0,
           ),
+        ).copyWith(
+          overlayColor: WidgetStateProperty.all(Colors.white.withValues(alpha: 0.1)),
         ),
       ),
 
       // Outlined Buttons
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: PulseColors.primary,
-          side: BorderSide(color: PulseColors.primary, width: 1.5),
+          foregroundColor: PulseColors.secondary,
+          side: BorderSide(color: PulseColors.secondary.withValues(alpha: 0.5), width: 1.5),
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          textStyle: GoogleFonts.inter(
+          textStyle: GoogleFonts.plusJakartaSans(
             fontSize: 15,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
-
-      // Text Buttons
-      textButtonTheme: TextButtonThemeData(
-        style: TextButton.styleFrom(
-          foregroundColor: PulseColors.primary,
-          textStyle: GoogleFonts.inter(
-            fontSize: 14,
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -106,117 +99,88 @@ class PulseTheme {
       // Input Decoration
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: PulseColors.brandLight.withValues(alpha: 0.3),
+        fillColor: PulseColors.primary.withValues(alpha: 0.03),
         contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: PulseColors.border),
+          borderRadius: BorderRadius.circular(18),
+          borderSide: BorderSide(color: PulseColors.primary.withValues(alpha: 0.1)),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: PulseColors.border),
+          borderRadius: BorderRadius.circular(18),
+          borderSide: BorderSide(color: PulseColors.primary.withValues(alpha: 0.1)),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(18),
           borderSide: BorderSide(color: PulseColors.primary, width: 2),
         ),
         errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(18),
           borderSide: const BorderSide(color: PulseColors.error),
         ),
-        focusedErrorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: PulseColors.error, width: 2),
-        ),
-        labelStyle: GoogleFonts.inter(
-          color: PulseColors.textSecondary,
-          fontSize: 14,
-        ),
-        hintStyle: GoogleFonts.inter(
-          color: PulseColors.textHint,
-          fontSize: 14,
-        ),
-        prefixIconColor: PulseColors.textSecondary,
-        suffixIconColor: PulseColors.textSecondary,
-        errorStyle: GoogleFonts.inter(
-          color: PulseColors.error,
-          fontSize: 12,
-        ),
+        labelStyle: GoogleFonts.inter(color: PulseColors.textSecondary, fontSize: 14),
+        hintStyle: GoogleFonts.inter(color: PulseColors.textHint, fontSize: 14),
+        prefixIconColor: PulseColors.primary.withValues(alpha: 0.6),
+        suffixIconColor: PulseColors.primary.withValues(alpha: 0.6),
       ),
 
       // Bottom Navigation
       bottomNavigationBarTheme: BottomNavigationBarThemeData(
         backgroundColor: PulseColors.surface,
         selectedItemColor: PulseColors.primary,
-        unselectedItemColor: PulseColors.textSecondary,
+        unselectedItemColor: PulseColors.textHint,
         type: BottomNavigationBarType.fixed,
-        elevation: 10,
-        selectedLabelStyle: GoogleFonts.inter(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-        ),
-        unselectedLabelStyle: GoogleFonts.inter(
-          fontSize: 11,
-          fontWeight: FontWeight.w400,
-        ),
+        elevation: 0,
+        enableFeedback: true,
       ),
 
-      // Dialogs
-      dialogTheme: DialogThemeData(
+      // Drawer
+      drawerTheme: DrawerThemeData(
         backgroundColor: PulseColors.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        titleTextStyle: GoogleFonts.inter(
-          fontSize: 20,
-          fontWeight: FontWeight.w700,
-          color: PulseColors.textPrimary,
-        ),
-        contentTextStyle: GoogleFonts.inter(
-          fontSize: 15,
-          color: PulseColors.textSecondary,
+        surfaceTintColor: PulseColors.primary.withValues(alpha: 0.05),
+        elevation: 0,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.horizontal(right: Radius.circular(24)),
         ),
       ),
 
-      // Switch
-      switchTheme: SwitchThemeData(
-        thumbColor: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) return Colors.white;
-          return Colors.white;
-        }),
-        trackColor: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) return PulseColors.success;
-          return PulseColors.textDisabled;
-        }),
-        trackOutlineColor: WidgetStateProperty.all(Colors.transparent),
+      // ProgressIndicator
+      progressIndicatorTheme: ProgressIndicatorThemeData(
+        color: PulseColors.primary,
+        linearTrackColor: PulseColors.primary.withValues(alpha: 0.1),
       ),
 
       // Chips
       chipTheme: ChipThemeData(
-        backgroundColor: PulseColors.brandLight.withValues(alpha: 0.5),
-        selectedColor: PulseColors.primary.withValues(alpha: 0.15),
-        disabledColor: PulseColors.surfaceVariant,
+        backgroundColor: PulseColors.primary.withValues(alpha: 0.08),
+        selectedColor: PulseColors.primary,
         labelStyle: GoogleFonts.inter(
-          fontSize: 13,
-          fontWeight: FontWeight.w500,
-          color: PulseColors.textSecondary,
-        ),
-        secondaryLabelStyle: GoogleFonts.inter(
           fontSize: 13,
           fontWeight: FontWeight.w600,
           color: PulseColors.primary,
         ),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: const BorderSide(color: PulseColors.border),
+        secondaryLabelStyle: GoogleFonts.inter(
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+          color: Colors.white,
         ),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        side: BorderSide.none,
       ),
 
-      // FAB
+      // Page Transitions
+      pageTransitionsTheme: const PageTransitionsTheme(
+        builders: {
+          TargetPlatform.android: CupertinoPageTransitionsBuilder(),
+          TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+        },
+      ),
+
+      // Floating Action Button
       floatingActionButtonTheme: FloatingActionButtonThemeData(
         backgroundColor: PulseColors.primary,
-        foregroundColor: Colors.white,
+        foregroundColor: PulseColors.onPrimary,
         elevation: 6,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       ),
 
       // Divider
@@ -233,56 +197,61 @@ class PulseTheme {
           color: Colors.white,
           fontSize: 14,
         ),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         behavior: SnackBarBehavior.floating,
+      ),
+
+      // Segmented Button
+      segmentedButtonTheme: SegmentedButtonThemeData(
+        style: SegmentedButton.styleFrom(
+          selectedBackgroundColor: PulseColors.primary,
+          selectedForegroundColor: PulseColors.onPrimary,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
       ),
 
       // TabBar
       tabBarTheme: TabBarThemeData(
         labelColor: PulseColors.primary,
         unselectedLabelColor: PulseColors.textSecondary,
-        indicatorColor: PulseColors.primary,
-        labelStyle: GoogleFonts.inter(
-          fontSize: 14,
-          fontWeight: FontWeight.w600,
+        indicatorSize: TabBarIndicatorSize.label,
+        indicator: UnderlineTabIndicator(
+          borderSide: BorderSide(width: 3, color: PulseColors.primary),
         ),
-        unselectedLabelStyle: GoogleFonts.inter(
+        labelStyle: GoogleFonts.plusJakartaSans(
           fontSize: 14,
-          fontWeight: FontWeight.w400,
+          fontWeight: FontWeight.w700,
         ),
-      ),
-
-      // ProgressIndicator
-      progressIndicatorTheme: ProgressIndicatorThemeData(
-        color: PulseColors.primary,
-        linearTrackColor: PulseColors.surfaceVariant,
-      ),
-
-      // Drawer
-      drawerTheme: const DrawerThemeData(
-        backgroundColor: PulseColors.surface,
+        unselectedLabelStyle: GoogleFonts.plusJakartaSans(
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
+        ),
       ),
 
       // BottomSheet
       bottomSheetTheme: const BottomSheetThemeData(
         backgroundColor: PulseColors.surface,
+        elevation: 10,
+        modalBackgroundColor: Colors.transparent,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
         ),
       ),
 
       // ListTile
       listTileTheme: ListTileThemeData(
-        iconColor: PulseColors.textSecondary,
+        iconColor: PulseColors.primary.withValues(alpha: 0.7),
         textColor: PulseColors.textPrimary,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        titleTextStyle: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 16),
+        subtitleTextStyle: GoogleFonts.inter(color: PulseColors.textSecondary, fontSize: 13),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       ),
 
       // Icon
-      iconTheme: const IconThemeData(
-        color: PulseColors.textSecondary,
-        size: 22,
+      iconTheme: IconThemeData(
+        color: PulseColors.primary.withValues(alpha: 0.8),
+        size: 24,
       ),
     );
   }

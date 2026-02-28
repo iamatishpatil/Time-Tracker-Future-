@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 // --- 1. The Admin Dashboard (Control Center) ---
 // This is the first screen the Boss/Admin sees. It provides a "Birds Eye View"
 // of the whole company's attendance for the day.
@@ -59,28 +60,28 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
     if (!mounted) return;
     setState(() => _isLoading = true);
     try {
-      final user = await ApiService.getStoredUser();
-
-      // ANR Fix 1: Run branding + all data fetches in PARALLEL using Future.wait
-      // Previously, branding was awaited BEFORE Future.wait, blocking everything sequentially
-      final company = user?['company'];
+      // ANR & Speed Fix: Everything runs in parallel immediately
       final results = await Future.wait([
-        // Branding runs in parallel with the data fetches
-        company != null
-            ? ref.read(brandingProvider.notifier).fetchBranding(company: company)
-            : Future.value(),
+        ApiService.getStoredUser(),
         ApiService.getAdminStats(),
         ApiService.getAllAttendance(limit: 5),
         ApiService.getSettings(),
         ApiService.getHolidays(),
       ]);
 
+      final user     = results[0] as Map<String, dynamic>?;
       final stats    = results[1] as Map<String, dynamic>;
       final recent   = results[2] as List<dynamic>;
       final settings = results[3] as Map<String, dynamic>;
       final holidays = results[4] as List<dynamic>;
 
-      // ANR Fix 2: Process holiday list off the expensive path
+      // Load branding asynchronously in the background so it doesn't block the UI
+      final company = user?['company'];
+      if (company != null) {
+        ref.read(brandingProvider.notifier).fetchBranding(company: company);
+      }
+
+      // Process holiday list off the expensive path
       // Keep only what we need — cap at 20 items before doing any work
       final now      = DateTime.now();
       final todayStr = DateFormat('yyyy-MM-dd').format(now);
@@ -97,9 +98,10 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
           if (h['duration'] == 'Half Day') holidayName = '$holidayName (½ Day)';
         }
         final hDate = DateTime.tryParse(h['date'] ?? '');
-        if (hDate != null && hDate.isAfter(todayMidnight)) {
+        final today = DateTime(now.year, now.month, now.day);
+        if (hDate != null && !hDate.isBefore(today) && hDate.month == now.month && hDate.year == now.year) {
           upcoming.add(h);
-          if (upcoming.length >= 5) break; // ANR Fix: cap early — don't sort 100 items
+          if (upcoming.length >= 5) break; 
         }
       }
 
@@ -358,7 +360,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                     CircleAvatar(
                       radius: 20,
                       backgroundColor: PulseColors.surfaceVariant,
-                      backgroundImage: log['profilePicture'] != null ? NetworkImage(ApiService.getImageUrl(log['profilePicture'])) : null,
+                      backgroundImage: log['profilePicture'] != null ? CachedNetworkImageProvider(ApiService.getImageUrl(log['profilePicture'])) : null,
                       child: log['profilePicture'] == null ? const Icon(Icons.person, size: 20, color: PulseColors.textHint) : null,
                     ),
                     Positioned(

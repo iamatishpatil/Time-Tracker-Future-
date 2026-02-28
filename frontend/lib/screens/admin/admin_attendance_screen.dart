@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 // --- 3. The Attendance Monitor ---
 // This screen allows the Admin to see exactly who is in the office, who is late,
 // and who hasn't shown up yet. It also supports exporting data for payroll.
@@ -221,7 +222,7 @@ class _AdminAttendanceScreenState extends State<AdminAttendanceScreen> {
             Row(children: [
               CircleAvatar(
                 radius: 20, backgroundColor: PulseColors.surfaceVariant,
-                backgroundImage: record['profilePicture'] != null ? NetworkImage(ApiService.getImageUrl(record['profilePicture'])) : null,
+                backgroundImage: record['profilePicture'] != null ? CachedNetworkImageProvider(ApiService.getImageUrl(record['profilePicture'])) : null,
                 child: record['profilePicture'] == null ? const Icon(Icons.person, size: 20, color: PulseColors.textHint) : null,
               ),
               const SizedBox(width: 12),
@@ -241,7 +242,7 @@ class _AdminAttendanceScreenState extends State<AdminAttendanceScreen> {
                 const SizedBox(height: 6),
                 InkWell(
                   onTap: () => _editAttendanceRecord(record),
-                  child: const Icon(Icons.edit_note, color: PulseColors.accent, size: 20),
+                  child: Icon(Icons.edit_note, color: PulseColors.accent, size: 20),
                 ),
               ]),
             ]),

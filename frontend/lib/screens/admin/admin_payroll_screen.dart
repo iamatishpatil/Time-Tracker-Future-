@@ -222,7 +222,7 @@ class _AdminPayrollScreenState extends State<AdminPayrollScreen> {
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(color: PulseColors.accent.withOpacity(0.15), borderRadius: BorderRadius.circular(12)),
-                child: const Icon(Icons.access_time, color: PulseColors.accent, size: 22),
+                child: Icon(Icons.access_time, color: PulseColors.accent, size: 22),
               ),
               const SizedBox(width: 12),
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

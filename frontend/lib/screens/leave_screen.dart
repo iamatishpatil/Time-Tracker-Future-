@@ -49,12 +49,18 @@ class _LeaveScreenState extends State<LeaveScreen> {
     try {
       final user = await ApiService.getStoredUser();
       if (user != null) {
-        // 1. Get how many days are Total, Used, and Left
-        final balance = await ApiService.getLeaveBalance(user['id']);
-        // 2. Short list of previous requests
-        final history = await ApiService.getLeaveHistory(user['id']);
-        // 3. The list of categories (Sick, Casual, etc)
-        final types = await ApiService.getLeaveTypes();
+        // Performance Fix: Fetch all data IN PARALLEL instead of one-by-one
+        final results = await Future.wait([
+          ApiService.getLeaveBalance(user['id']),
+          ApiService.getLeaveHistory(user['id']),
+          ApiService.getLeaveTypes(),
+          ApiService.getHolidays(),
+        ]);
+
+        final balance = results[0] as Map<String, dynamic>;
+        final history = results[1] as List<dynamic>;
+        final types = results[2] as List<String>;
+        final holidays = results[3] as List<dynamic>;
 
         if (mounted) {
           setState(() {
@@ -65,11 +71,8 @@ class _LeaveScreenState extends State<LeaveScreen> {
             if (!_leaveTypes.contains(_selectedLeaveType)) {
               _selectedLeaveType = _leaveTypes.isNotEmpty ? _leaveTypes[0] : 'Casual Leave';
             }
+            _holidays = holidays;
           });
-
-          // Also get holidays so we can skip them during calculations
-          final holidays = await ApiService.getHolidays();
-          if (mounted) setState(() => _holidays = holidays);
         }
       }
     } catch (e) {
@@ -268,7 +271,7 @@ class _LeaveScreenState extends State<LeaveScreen> {
 
                 return Row(
                   children: [
-                    const Icon(Icons.info_outline, size: 18, color: PulseColors.accent),
+                    Icon(Icons.info_outline, size: 18, color: PulseColors.accent),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(

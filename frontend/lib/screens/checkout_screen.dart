@@ -281,8 +281,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> with SingleTickerProvid
                             options: MapOptions(initialCenter: _currentPosition, initialZoom: 15.0),
                             children: [
                               TileLayer(
-                                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                                userAgentPackageName: 'com.timetracker.frontend',
+                                urlTemplate: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
+                                subdomains: const ['a', 'b', 'c', 'd'],
+                                userAgentPackageName: 'com.pulsehub.timetracker',
+                                maxZoom: 19,
                               ),
                               MarkerLayer(
                                 markers: [

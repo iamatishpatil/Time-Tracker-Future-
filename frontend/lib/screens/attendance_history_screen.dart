@@ -39,10 +39,13 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
       final user = await ApiService.getStoredUser();
       if (user != null) {
         _userName = user['fullName'] ?? 'User';
-        // 1. Get the list of attendance records
-        final history = await ApiService.getAttendance(user['id']);
-        // 2. Get the list of holidays (to show badges next to dates)
-        final holidays = await ApiService.getHolidays();
+        // Performance Fix: Fetch both IN PARALLEL
+        final results = await Future.wait([
+          ApiService.getAttendance(user['id']),
+          ApiService.getHolidays(),
+        ]);
+        final history = results[0] as List<dynamic>;
+        final holidays = results[1] as List<dynamic>;
         if (mounted) {
           setState(() {
             _history = history;

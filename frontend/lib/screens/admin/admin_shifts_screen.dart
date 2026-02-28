@@ -170,7 +170,7 @@ class _AdminShiftsScreenState extends State<AdminShiftsScreen> {
                               Text('Grace: ${shift['gracePeriodMins']}m  •  OT: ${shift['overtimeRate']}x  •  ₹${shift['latePenaltyPerMin'] ?? 0}/min',
                                   style: PulseTextStyles.caption.copyWith(fontSize: 10)),
                             ])),
-                            IconButton(icon: const Icon(Icons.edit, color: PulseColors.accent, size: 20), onPressed: () => _showShiftDialog(existing: shift)),
+                            IconButton(icon: Icon(Icons.edit, color: PulseColors.accent, size: 20), onPressed: () => _showShiftDialog(existing: shift)),
                             IconButton(icon: Icon(Icons.delete, color: PulseColors.error, size: 20), onPressed: () => _deleteShift(shift['id'])),
                           ],
                         ),

@@ -2,7 +2,9 @@
 // This file is like a "postman". Its only job is to take data from our 
 // Flutter screens and "deliver" it to the server, then bring back the answer.
 
+import 'dart:async'; // For TimeoutException
 import 'dart:convert'; // Converts text/json into stuff Dart understand
+import 'package:flutter/foundation.dart'; // For debugPrint
 import 'package:http/http.dart' as http; // The tool we use to talk to the internet
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart'; // Local storage (like a tiny vault)
@@ -15,6 +17,34 @@ class ApiService {
     return 'http://192.168.1.43:3000/api';
   }
 
+  // --- Performance: Default HTTP timeout ---
+  static const Duration _defaultTimeout = Duration(seconds: 10);
+
+  // Fast GET with timeout — prevents UI from hanging on slow/dead server
+  static Future<http.Response> _get(String url) {
+    return http.get(Uri.parse(url)).timeout(_defaultTimeout);
+  }
+
+  // Fast POST with timeout
+  static Future<http.Response> _post(String url, {Map<String, String>? headers, Object? body}) {
+    return http.post(Uri.parse(url), headers: headers, body: body).timeout(_defaultTimeout);
+  }
+
+  // Fast PUT with timeout
+  static Future<http.Response> _put(String url, {Map<String, String>? headers, Object? body}) {
+    return http.put(Uri.parse(url), headers: headers, body: body).timeout(_defaultTimeout);
+  }
+
+  // Fast PATCH with timeout
+  static Future<http.Response> _patch(String url, {Map<String, String>? headers, Object? body}) {
+    return http.patch(Uri.parse(url), headers: headers, body: body).timeout(_defaultTimeout);
+  }
+
+  // Fast DELETE with timeout
+  static Future<http.Response> _delete(String url, {Map<String, String>? headers, Object? body}) {
+    return http.delete(Uri.parse(url), headers: headers, body: body).timeout(_defaultTimeout);
+  }
+
   // Helper to get full URLs for images stored on the server
   static String getImageUrl(String? path) {
     if (path == null || path.isEmpty) return '';
@@ -22,17 +52,28 @@ class ApiService {
     return baseUrl.replaceAll('/api', '') + path;
   }
 
+  // --- Performance: Cached company lookup ---
+  static String? _cachedCompany;
+
   // A private helper to find out which company the current user belongs to
+  // Caches the result to avoid repeated SharedPreferences reads
   static Future<String?> _getCompany() async {
+    if (_cachedCompany != null) return _cachedCompany;
     final prefs = await SharedPreferences.getInstance();
     final userStr = prefs.getString('user');
     if (userStr != null) {
       try {
         final user = json.decode(userStr);
-        return user['company'];
+        _cachedCompany = user['company'];
+        return _cachedCompany;
       } catch (_) {}
     }
     return null;
+  }
+
+  // Call this on logout to clear the cache
+  static void _clearCache() {
+    _cachedCompany = null;
   }
 
   // --- Registration Logic ---
@@ -237,17 +278,33 @@ class ApiService {
   }
 
   // Checks if the user is currently "on the clock"
-  static Future<bool> getCheckInStatus(int userId) async {
+  static Future<Map<String, dynamic>> getCheckInStatus(int userId) async {
     final response = await http.get(Uri.parse('$baseUrl/attendance/status/$userId'));
     if (response.statusCode == 200) {
-      final data = json.decode(response.body);
-      return data['isCheckedIn'] ?? false;
+      return json.decode(response.body); // Returns { isCheckedIn: true/false }
+    } else {
+      return {'isCheckedIn': false};
     }
-    return false;
   }
+
+  // Get user-specific dashboard stats via server-side computation.
+  // ANR Fix: No longer downloads all records - server does the SQL aggregation.
+  static Future<Map<String, dynamic>> getDashboardStats(int userId) async {
+    try {
+      final response = await http.get(Uri.parse('$baseUrl/attendance/stats/$userId'));
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      }
+    } catch (e) {
+      debugPrint('getDashboardStats error: $e');
+    }
+    return {'todayHours': '0.0', 'monthHours': '0.0', 'attendanceRate': 0};
+  }
+
   
   // Clear the phone's memory to log the user out
   static Future<void> logout() async {
+    _clearCache(); // Clear cached company on logout
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('user');
   }
@@ -825,13 +882,15 @@ class ApiService {
 
 
 
-  static Future<Map<String, dynamic>> updateBranding({XFile? logo, String? themeColor}) async {
+  static Future<Map<String, dynamic>> updateBranding({XFile? logo, String? themeColor, String? secondaryColor, String? accentColor}) async {
     final company = await _getCompany();
     if (company == null) throw Exception('Company not found');
 
     var request = http.MultipartRequest('POST', Uri.parse('$baseUrl/admin/branding'));
     request.fields['company'] = company;
     if (themeColor != null) request.fields['themeColor'] = themeColor;
+    if (secondaryColor != null) request.fields['secondaryColor'] = secondaryColor;
+    if (accentColor != null) request.fields['accentColor'] = accentColor;
     
     if (logo != null) {
       request.files.add(await http.MultipartFile.fromPath('logo', logo.path));

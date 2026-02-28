@@ -32,8 +32,13 @@ class _UserPayslipsScreenState extends State<UserPayslipsScreen> {
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
     try {
-      final user = await ApiService.getStoredUser();
-      final settings = await ApiService.getSettings();
+      // Performance Fix: Fetch user and settings IN PARALLEL
+      final initialResults = await Future.wait([
+        ApiService.getStoredUser(),
+        ApiService.getSettings(),
+      ]);
+      final user = initialResults[0] as Map<String, dynamic>?;
+      final settings = initialResults[1] as Map<String, dynamic>;
       if (user != null) {
         final data = await ApiService.getUserPayslips(user['id']);
         if (mounted) {
@@ -143,7 +148,7 @@ class _UserPayslipsScreenState extends State<UserPayslipsScreen> {
                             onPressed: _isDownloading ? null : () => _downloadPayslip(item),
                             icon: _isDownloading 
                               ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                              : const Icon(Icons.download, color: PulseColors.accent),
+                              : Icon(Icons.download, color: PulseColors.accent),
                             tooltip: 'Download PDF',
                           ),
                         ],

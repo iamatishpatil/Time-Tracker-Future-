@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 // --- 2. The Employees Directory ---
 // This is the "Phonebook" of the company. Admins can see every staff member,
 // search for them, and turn their access ON or OFF.
@@ -155,7 +156,7 @@ class _AdminEmployeesScreenState extends State<AdminEmployeesScreen> {
                   radius: 24,
                   backgroundColor: PulseColors.surfaceVariant,
                   backgroundImage: employee['profilePicture'] != null
-                      ? NetworkImage(ApiService.getImageUrl(employee['profilePicture']))
+                      ? CachedNetworkImageProvider(ApiService.getImageUrl(employee['profilePicture']))
                       : null,
                   child: employee['profilePicture'] == null ? const Icon(Icons.person, size: 24, color: PulseColors.textHint) : null,
                 ),
@@ -295,7 +296,7 @@ class _AdminEmployeesScreenState extends State<AdminEmployeesScreen> {
                   ),
                 Row(mainAxisSize: MainAxisSize.min, children: [
                   IconButton(
-                    icon: const Icon(Icons.edit_outlined, color: PulseColors.accent, size: 20),
+                    icon: Icon(Icons.edit_outlined, color: PulseColors.accent, size: 20),
                     onPressed: () async {
                       final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => EmployeeFormScreen(employee: employee)));
                       if (result == true) _loadEmployees();

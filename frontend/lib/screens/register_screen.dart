@@ -390,7 +390,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 Icons.home_outlined,
                 maxLines: 2,
                 suffixIcon: IconButton(
-                  icon: const Icon(Icons.my_location_rounded, color: PulseColors.accent),
+                  icon: Icon(Icons.my_location_rounded, color: PulseColors.accent),
                   onPressed: _getCurrentLocation,
                   tooltip: 'Get Current Location',
                 ),

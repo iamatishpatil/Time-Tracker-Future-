@@ -1,6 +1,8 @@
-// --- 1. The Main Shell (Container) ---
-// This file is like a "Cabinet". It stays on the screen, but it has 4 "drawers" 
-// (Tabs) that we can open and close.
+// --- Main Shell (Container) ---
+// Stays on screen; swaps content via indexed tab system.
+// ANR Fix: Removed serial history fetch from initState. History is now loaded
+// lazily by AttendanceHistoryScreen itself. The container only loads the user
+// profile (fast, from SharedPreferences) which prevents the startup spinner.
 
 import 'package:flutter/material.dart';
 import '../core/theme/pulse_colors.dart';
@@ -11,7 +13,6 @@ import 'leave_screen.dart';
 import 'edit_profile_screen.dart';
 import '../services/api_service.dart';
 import '../widgets/custom_drawer.dart';
-import '../services/pdf_service.dart';
 import '../core/widgets/pulse_scaffold.dart';
 
 class MainContainer extends StatefulWidget {
@@ -22,78 +23,47 @@ class MainContainer extends StatefulWidget {
 }
 
 class _MainContainerState extends State<MainContainer> {
-  // --- The Brain of the Navigation ---
-  int _selectedIndex = 0; // Keeps track of which tab is currently open (0 to 3)
-  Map<String, dynamic>? _user; // Stores the logged-in user's info
-  List<dynamic> _history = []; // Stores the user's attendance records
+  int _selectedIndex = 0;
+  Map<String, dynamic>? _user;
 
   @override
   void initState() {
     super.initState();
-    _loadUser(); // Load data as soon as the cabinet opens!
+    _loadUser();
   }
 
-  // Fetch the user and their history from the server/vault
+  // ANR Fix: Only fetches user from local SharedPreferences (instant).
+  // No heavy API call here that would block the UI spinner.
   Future<void> _loadUser() async {
     final user = await ApiService.getStoredUser();
-    if (user != null) {
-      final history = await ApiService.getAttendance(user['id']);
-      setState(() {
-        _user = user;
-        _history = history;
-      });
-    }
+    if (mounted) setState(() => _user = user);
   }
 
-  // If the user updates their profile, we need to refresh the info here too
   void _updateUser(Map<String, dynamic> updatedUser) {
-    setState(() => _user = updatedUser);
+    if (mounted) setState(() => _user = updatedUser);
   }
 
   @override
   Widget build(BuildContext context) {
-    // Show a spinner while we wait for the user's data to load
     if (_user == null) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
-    // --- The 4 Drawers (Screens) ---
-    final List<Widget> screens = [
-      const HomeScreen(), // Tab 0
-      const AttendanceHistoryScreen(), // Tab 1
-      const LeaveScreen(), // Tab 2
-      EditProfileScreen(user: _user!, onUserUpdated: _updateUser), // Tab 3
-    ];
+    final List<String> titles = ['Dashboard', 'Attendance', 'Leaves', 'Profile'];
 
-    // The titles that appear at the top of the app bar
-    final List<String> titles = [
-      'Dashboard',
-      'Attendance',
-      'Leaves',
-      'Profile',
-    ];
-
+    // ANR Fix: Using IndexedStack keeps all screens alive, avoiding
+    // re-creation and redundant network calls on every tab switch.
     return PulseScaffold(
       title: titles[_selectedIndex],
-      actions: [
-        if (_selectedIndex == 1 && _history.isNotEmpty)
-          IconButton(
-            icon: const Icon(Icons.picture_as_pdf_rounded, size: 20),
-            tooltip: 'Download Report',
-            onPressed: () => PdfService.generateAttendanceReport(
-                _user!['fullName'] ?? 'User', _history),
-          ),
-        const SizedBox(width: 8),
-      ],
       drawer: CustomDrawer(user: _user!),
-      body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 300),
-        switchInCurve: Curves.easeOut,
-        switchOutCurve: Curves.easeIn,
-        child: KeyedSubtree(
-          key: ValueKey(_selectedIndex),
-          child: screens[_selectedIndex],
-        ),
+      body: IndexedStack(
+        index: _selectedIndex,
+        children: [
+          const HomeScreen(),
+          const AttendanceHistoryScreen(),
+          const LeaveScreen(),
+          EditProfileScreen(user: _user!, onUserUpdated: _updateUser),
+        ],
       ),
       bottomNavigationBar: Container(
         margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
@@ -102,15 +72,13 @@ class _MainContainerState extends State<MainContainer> {
           borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.08),
+              color: Colors.black.withValues(alpha: 0.08),
               blurRadius: 20,
-              spreadRadius: 0,
               offset: const Offset(0, 4),
             ),
             BoxShadow(
-              color: PulseColors.primary.withOpacity(0.04),
+              color: PulseColors.primary.withValues(alpha: 0.04),
               blurRadius: 8,
-              spreadRadius: 0,
             ),
           ],
         ),
@@ -132,18 +100,16 @@ class _MainContainerState extends State<MainContainer> {
     );
   }
 
-  // A helper function to build each button in the bottom bar
   Widget _buildNavItem(int index, IconData activeIcon, IconData inactiveIcon, String label) {
     final isSelected = _selectedIndex == index;
     return GestureDetector(
-      onTap: () => setState(() => _selectedIndex = index), // Change tab on tap
+      onTap: () => setState(() => _selectedIndex = index),
       behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          // Add a subtle glow/background when selected
-          color: isSelected ? PulseColors.brandLight.withOpacity(0.5) : Colors.transparent,
+          color: isSelected ? PulseColors.brandLight.withValues(alpha: 0.5) : Colors.transparent,
           borderRadius: BorderRadius.circular(16),
         ),
         child: Row(
@@ -154,14 +120,11 @@ class _MainContainerState extends State<MainContainer> {
               color: isSelected ? PulseColors.brandPrimary : PulseColors.textHint,
               size: 22,
             ),
-            // Show the text label ONLY if this tab is selected
             if (isSelected) ...[
               const SizedBox(width: 8),
               Text(
                 label,
-                style: PulseTextStyles.captionBold.copyWith(
-                  color: PulseColors.primary,
-                ),
+                style: PulseTextStyles.captionBold.copyWith(color: PulseColors.primary),
               ),
             ],
           ],

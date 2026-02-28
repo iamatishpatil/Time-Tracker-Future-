@@ -38,8 +38,10 @@ class AdminMapScreen extends StatelessWidget {
             ),
             children: [
               TileLayer(
-                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                userAgentPackageName: 'com.timetracker.frontend',
+                urlTemplate: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
+                subdomains: const ['a', 'b', 'c', 'd'],
+                userAgentPackageName: 'com.pulsehub.timetracker',
+                maxZoom: 19,
               ),
               MarkerLayer(
                 markers: [
@@ -64,7 +66,7 @@ class AdminMapScreen extends StatelessWidget {
                   Text('Location Details', style: PulseTextStyles.bodyBold),
                   const SizedBox(height: 8),
                   Row(children: [
-                    const Icon(Icons.location_on, size: 18, color: PulseColors.accent),
+                    Icon(Icons.location_on, size: 18, color: PulseColors.accent),
                     const SizedBox(width: 8),
                     Expanded(child: Text(address, style: PulseTextStyles.body)),
                   ]),

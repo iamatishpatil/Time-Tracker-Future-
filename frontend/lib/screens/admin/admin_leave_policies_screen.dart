@@ -156,7 +156,7 @@ class _AdminLeavePoliciesScreenState extends State<AdminLeavePoliciesScreen> {
                         Text(p['leaveType'], style: PulseTextStyles.bodyBold),
                         Text('${p['daysPerYear']} days/year  •  ${(p['daysPerYear'] / 12).toStringAsFixed(1)}/mo  •  ${isPaid ? 'Paid' : 'Unpaid'}', style: PulseTextStyles.caption),
                       ])),
-                      IconButton(icon: const Icon(Icons.edit, color: PulseColors.accent, size: 20), onPressed: () => _editPolicy(p)),
+                      IconButton(icon: Icon(Icons.edit, color: PulseColors.accent, size: 20), onPressed: () => _editPolicy(p)),
                     ]),
                   ),
                 );

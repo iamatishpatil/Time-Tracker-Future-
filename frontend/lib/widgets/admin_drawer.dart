@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import '../core/theme/pulse_colors.dart';
 import '../core/theme/pulse_text_styles.dart';
@@ -46,7 +47,7 @@ class AdminDrawer extends StatelessWidget {
                       radius: 32,
                       backgroundColor: PulseColors.surfaceVariant,
                       backgroundImage: user['profilePicture'] != null
-                          ? NetworkImage(ApiService.getImageUrl(user['profilePicture']))
+                          ? CachedNetworkImageProvider(ApiService.getImageUrl(user['profilePicture']))
                           : null,
                       child: user['profilePicture'] == null
                           ? Icon(Icons.admin_panel_settings, size: 28, color: PulseColors.primary)

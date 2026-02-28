@@ -27,8 +27,13 @@ class _UserShiftsScreenState extends State<UserShiftsScreen> {
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
     try {
-      final shifts = await ApiService.getShifts();
-      final user = await ApiService.getStoredUser();
+      // Performance Fix: Fetch both IN PARALLEL
+      final results = await Future.wait([
+        ApiService.getShifts(),
+        ApiService.getStoredUser(),
+      ]);
+      final shifts = results[0] as List<dynamic>;
+      final user = results[1] as Map<String, dynamic>?;
       if (mounted) setState(() { _shifts = shifts; _user = user; });
     } catch (e) {
       if (mounted) {

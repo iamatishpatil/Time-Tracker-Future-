@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 // --- 11. The Employee Onboarding Form ---
 // This is the "Data Entry" screen for the Admin. It collects everything 
 // needed for a new staff member: from their phone number to their salary.
@@ -162,7 +163,7 @@ class _EmployeeFormScreenState extends State<EmployeeFormScreen> {
                               backgroundImage: _imageFile != null
                                   ? FileImage(File(_imageFile!.path))
                                   : (widget.employee?['profilePicture'] != null
-                                      ? NetworkImage(ApiService.getImageUrl(widget.employee!['profilePicture']))
+                                      ? CachedNetworkImageProvider(ApiService.getImageUrl(widget.employee!['profilePicture']))
                                       : null) as ImageProvider?,
                               child: (_imageFile == null && widget.employee?['profilePicture'] == null)
                                   ? const Icon(Icons.camera_alt, size: 28, color: PulseColors.textHint)

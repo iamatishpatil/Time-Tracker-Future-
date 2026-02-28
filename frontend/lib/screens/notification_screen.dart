@@ -29,8 +29,13 @@ class _NotificationScreenState extends State<NotificationScreen> {
     try {
       final user = await ApiService.getStoredUser();
       if (user != null) {
-        var notifications = await ApiService.getNotifications(user['id']);
-        final holidays = await ApiService.getHolidays();
+        // Performance Fix: Fetch both IN PARALLEL
+        final results = await Future.wait([
+          ApiService.getNotifications(user['id']),
+          ApiService.getHolidays(),
+        ]);
+        var notifications = results[0] as List<dynamic>;
+        final holidays = results[1] as List<dynamic>;
 
         final now = DateTime.now();
         for (var h in holidays) {

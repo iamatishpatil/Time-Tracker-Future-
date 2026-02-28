@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 // --- 4. The Leave Approval Screen ---
 // This is where Admins review "Time-Off" requests. They can see the reason,
 // the dates, and then decide to Approve or Reject the request.
@@ -137,7 +138,7 @@ class _AdminLeavesScreenState extends State<AdminLeavesScreen> {
             Row(children: [
               CircleAvatar(
                 radius: 20, backgroundColor: PulseColors.surfaceVariant,
-                backgroundImage: leave['profilePicture'] != null ? NetworkImage(ApiService.getImageUrl(leave['profilePicture'])) : null,
+                backgroundImage: leave['profilePicture'] != null ? CachedNetworkImageProvider(ApiService.getImageUrl(leave['profilePicture'])) : null,
                 child: leave['profilePicture'] == null ? const Icon(Icons.person, size: 20, color: PulseColors.textHint) : null,
               ),
               const SizedBox(width: 12),

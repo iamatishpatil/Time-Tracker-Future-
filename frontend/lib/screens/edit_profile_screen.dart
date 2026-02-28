@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 // --- 1. The Edit Profile Screen ---
 // This is where users can keep their info (Name, Email, Skills) up to date.
 // It uses "Multipart" data to send both text and images to the server.
@@ -227,7 +228,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                               backgroundImage: _imageFile != null
                                   ? FileImage(File(_imageFile!.path))
                                   : (_currentUser!['profilePicture'] != null
-                                      ? NetworkImage(ApiService.getImageUrl(_currentUser!['profilePicture']))
+                                      ? CachedNetworkImageProvider(ApiService.getImageUrl(_currentUser!['profilePicture']))
                                       : null) as ImageProvider?,
                               child: (_imageFile == null && _currentUser!['profilePicture'] == null)
                                   ? const Icon(Icons.camera_alt, size: 30, color: PulseColors.textHint)

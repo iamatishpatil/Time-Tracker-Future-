@@ -1,0 +1,455 @@
+# Time Tracker — AWS Deployment Architecture
+
+> **Version**: 1.0 · **Date**: 27 Feb 2026 · **Audience**: DevOps / Infrastructure Engineer
+
+---
+
+## 1. Application Overview
+
+| Layer | Technology | Details |
+|-------|-----------|---------|
+| **Mobile App** | Flutter 3.x (Dart SDK ^3.10.8) | Android & iOS, Riverpod state management |
+| **Backend API** | Node.js + Express v5 | RESTful, ~60 endpoints, [server.js](file:///c:/Users/admin/Desktop/Time%20Tracker/backend/server.js) monolith |
+| **Database** | SQLite3 (file-based) | 10+ tables, multi-tenant via `company` column |
+| **File Storage** | Local `./uploads/` directory | Profile pictures, company logos |
+| **Auth** | bcryptjs (password hashing) | No JWT — session via SharedPreferences |
+| **Security** | Helmet, express-rate-limit, CORS | Rate limit: 100 req / 15 min window |
+
+### Key Features
+- Multi-tenant employee management (attendance, leaves, payroll, shifts)
+- Geofence-based check-in/check-out with GPS validation
+- Company-specific branding (logo + theme color)
+- Push notifications (in-app), PDF payslip generation
+- Biometric authentication (device-level via `local_auth`)
+
+---
+
+## 2. Current Architecture (Local)
+
+```mermaid
+graph LR
+    A["📱 Flutter App<br/>(Android/iOS)"] -->|HTTP REST| B["🖥️ Node.js API<br/>Express v5<br/>Port 3000"]
+    B --> C["🗄️ SQLite3<br/>File DB"]
+    B --> D["📂 ./uploads/<br/>Static Files"]
+```
+
+### Environment Configuration
+
+| Environment | Config File | DB File | Port |
+|-------------|------------|---------|------|
+| Development | [.env.development](file:///c:/Users/admin/Desktop/Time%20Tracker/backend/.env.development) | [time_tracker_dev.db](file:///c:/Users/admin/Desktop/Time%20Tracker/backend/time_tracker_dev.db) | 3000 |
+| Staging | [.env.staging](file:///c:/Users/admin/Desktop/Time%20Tracker/backend/.env.staging) | `time_tracker_staging.db` | 3000 |
+| Production | [.env.production](file:///c:/Users/admin/Desktop/Time%20Tracker/backend/.env.production) | `time_tracker_prod.db` | 3000 |
+
+---
+
+## 3. Recommended AWS Architecture (Production)
+
+> [!IMPORTANT]
+> SQLite is **not suitable for production** under concurrent load. The migration to **RDS (PostgreSQL/MySQL)** is the single most critical infrastructure change.
+
+```mermaid
+graph TB
+    subgraph "Client Layer"
+        APP["📱 Flutter Mobile App<br/>(Play Store / App Store)"]
+    end
+
+    subgraph "AWS Cloud"
+        subgraph "Edge & Networking"
+            R53["Route 53<br/>DNS"]
+            CF["CloudFront<br/>CDN"]
+            ALB["Application Load Balancer<br/>HTTPS :443"]
+        end
+
+        subgraph "Compute — ECS Fargate"
+            ECS1["API Container 1<br/>Node.js"]
+            ECS2["API Container 2<br/>Node.js"]
+        end
+
+        subgraph "Data Layer"
+            RDS["RDS PostgreSQL<br/>Multi-AZ<br/>db.t3.micro"]
+            S3["S3 Bucket<br/>Uploads / Logos"]
+        end
+
+        subgraph "Monitoring & Secrets"
+            CW["CloudWatch<br/>Logs + Alarms"]
+            SM["Secrets Manager<br/>DB Creds, API Keys"]
+            ECR["ECR<br/>Docker Images"]
+        end
+    end
+
+    APP -->|HTTPS| R53
+    R53 --> ALB
+    ALB --> ECS1
+    ALB --> ECS2
+    ECS1 --> RDS
+    ECS2 --> RDS
+    ECS1 --> S3
+    ECS2 --> S3
+    CF --> S3
+    ECS1 -.->|logs| CW
+    ECS2 -.->|logs| CW
+    ECS1 -.->|secrets| SM
+```
+
+---
+
+## 4. AWS Services Breakdown
+
+### 4.1 Compute — ECS Fargate (Recommended)
+
+| Item | Detail |
+|------|--------|
+| **Service** | Amazon ECS (Fargate launch type) |
+| **Why Fargate** | Serverless containers — no EC2 management, auto-scaling |
+| **Image Registry** | Amazon ECR (Elastic Container Registry) |
+| **Task Definition** | 0.5 vCPU, 1 GB RAM (start), auto-scale to 4 tasks |
+| **Health Check** | `GET /api/health` → 200 OK |
+
+**Dockerfile** (to be created at `backend/Dockerfile`):
+```dockerfile
+FROM node:20-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --only=production
+COPY . .
+RUN mkdir -p uploads
+EXPOSE 3000
+CMD ["node", "server.js"]
+```
+
+> [!TIP]
+> **Alternative (Budget)**: A single **EC2 t3.micro** with PM2 process manager is sufficient for < 100 concurrent users and falls under Free Tier.
+
+### 4.2 Database — Amazon RDS
+
+| Item | Detail |
+|------|--------|
+| **Engine** | PostgreSQL 16 (or MySQL 8) |
+| **Instance** | `db.t3.micro` (Free Tier eligible) |
+| **Storage** | 20 GB gp3, auto-scaling to 100 GB |
+| **Multi-AZ** | Enable for production (automatic failover) |
+| **Backups** | Automated, 7-day retention |
+
+> [!CAUTION]
+> **Migration Required**: The current SQLite schema must be migrated to PostgreSQL. All `db.run()` / `db.get()` / `db.all()` calls in [server.js](file:///c:/Users/admin/Desktop/Time%20Tracker/backend/server.js) must be refactored to use a PostgreSQL driver (e.g., `pg` or `knex.js` ORM).
+
+**Key Schema Tables to Migrate**:
+
+| Table | Rows (est.) | Multi-Tenant Key |
+|-------|------------|------------------|
+| `users` | Primary | `company` column |
+| `attendance` | High volume | via `userId` → `users.company` |
+| `leaves` | Medium | via `userId` → `users.company` |
+| `settings` | Low (1 per company) | `company` column |
+| `holidays` | Low | `company` column (NULL = global) |
+| `shifts` | Low | `company` column |
+| `leave_policies` | Low | `company` column |
+| `leave_balances` | Medium | via `userId` |
+| `notifications` | High volume | via `userId` |
+| `payslips` | Medium | `company` column |
+
+### 4.3 File Storage — Amazon S3
+
+| Item | Detail |
+|------|--------|
+| **Bucket** | `time-tracker-uploads-{env}` |
+| **Purpose** | Profile pictures, company logos, generated payslips |
+| **Access** | Private, presigned URLs for read access |
+| **CDN** | CloudFront distribution for fast global image delivery |
+| **Lifecycle** | Move to S3 IA after 90 days, Glacier after 1 year |
+
+**Code Changes Required**:
+- Replace `multer` local disk storage with `multer-s3`
+- Update `ApiService.getImageUrl()` in Flutter to use S3/CloudFront URLs
+- Replace `/uploads/` static serving with S3 presigned URLs
+
+### 4.4 Networking
+
+| Component | Configuration |
+|-----------|--------------|
+| **VPC** | Custom VPC with 2 public + 2 private subnets (2 AZs) |
+| **ALB** | Application Load Balancer in public subnets, HTTPS only |
+| **Security Groups** | ALB: allow 443 inbound; ECS: allow 3000 from ALB only; RDS: allow 5432 from ECS only |
+| **Route 53** | `api.timetracker.yourdomain.com` → ALB |
+| **ACM** | SSL/TLS certificate for the domain |
+
+### 4.5 Monitoring & Logging
+
+| Service | Purpose |
+|---------|---------|
+| **CloudWatch Logs** | Container stdout/stderr, API request logs |
+| **CloudWatch Alarms** | CPU > 70%, Memory > 80%, 5xx error rate > 1% |
+| **CloudWatch Dashboards** | API latency, request count, error rates |
+| **SNS** | Alert notifications to team (email/Slack) |
+
+### 4.6 Secrets Management
+
+| Secret | Service |
+|--------|---------|
+| Database credentials | AWS Secrets Manager |
+| API keys (future OTP/SMS) | AWS Secrets Manager |
+| Environment config | ECS Task Definition environment variables |
+
+---
+
+## 5. CI/CD Pipeline
+
+```mermaid
+graph LR
+    GH["GitHub<br/>Push to main"] --> CB["CodeBuild<br/>Build & Test"]
+    CB --> ECR["ECR<br/>Push Image"]
+    ECR --> CD["CodeDeploy /<br/>ECS Rolling Update"]
+    CD --> ECS["ECS Fargate<br/>Blue-Green Deploy"]
+```
+
+| Stage | Tool | Action |
+|-------|------|--------|
+| **Source** | GitHub / CodeCommit | Trigger on push to [main](file:///c:/Users/admin/Desktop/Time%20Tracker/frontend/lib/main.dart#29-47) or `release/*` |
+| **Build** | AWS CodeBuild | `npm ci`, `npm test`, `docker build`, push to ECR |
+| **Deploy** | ECS Service Update | Rolling update (or blue-green via CodeDeploy) |
+| **Mobile** | Local / Codemagic | `flutter build apk --release`, upload to Play Store |
+
+**buildspec.yml** (CodeBuild):
+```yaml
+version: 0.2
+phases:
+  pre_build:
+    commands:
+      - echo Logging in to ECR...
+      - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_URI
+  build:
+    commands:
+      - docker build -t time-tracker-api .
+      - docker tag time-tracker-api:latest $ECR_URI:$CODEBUILD_RESOLVED_SOURCE_VERSION
+      - docker tag time-tracker-api:latest $ECR_URI:latest
+  post_build:
+    commands:
+      - docker push $ECR_URI:$CODEBUILD_RESOLVED_SOURCE_VERSION
+      - docker push $ECR_URI:latest
+      - echo Writing image definition...
+      - printf '[{"name":"api","imageUri":"%s"}]' $ECR_URI:latest > imagedefinitions.json
+artifacts:
+  files:
+    - imagedefinitions.json
+```
+
+---
+
+## 6. Flutter App Configuration for Production
+
+### API Base URL Management
+Update [api_service.dart](file:///c:/Users/admin/Desktop/Time%20Tracker/frontend/lib/services/api_service.dart) to support environment switching:
+
+```dart
+class ApiService {
+  // Production
+  static const String baseUrl = 'https://api.timetracker.yourdomain.com/api';
+  
+  // Staging
+  // static const String baseUrl = 'https://api-staging.timetracker.yourdomain.com/api';
+}
+```
+
+### Build & Release
+```bash
+# Android APK
+flutter build apk --release --build-name=1.0.1 --build-number=3
+
+# Android App Bundle (Play Store)
+flutter build appbundle --release
+
+# iOS (requires macOS)
+flutter build ipa --release
+```
+
+---
+
+## 7. Security Checklist
+
+| # | Item | Status | Priority |
+|---|------|--------|----------|
+| 1 | Implement JWT authentication | ❌ Not done | 🔴 Critical |
+| 2 | HTTPS everywhere (ACM + ALB) | ⬜ Pending | 🔴 Critical |
+| 3 | Migrate SQLite → RDS PostgreSQL | ⬜ Pending | 🔴 Critical |
+| 4 | Move uploads to S3 (private bucket) | ⬜ Pending | 🟡 High |
+| 5 | Add API input validation (express-validator) | ❌ Not done | 🟡 High |
+| 6 | Enable WAF on ALB | ⬜ Pending | 🟡 High |
+| 7 | Implement RBAC middleware | ❌ Not done | 🟡 High |
+| 8 | Database connection pooling | ⬜ Pending | 🟢 Medium |
+| 9 | Enable CloudWatch logging | ⬜ Pending | 🟢 Medium |
+| 10 | Setup backup & disaster recovery | ⬜ Pending | 🟢 Medium |
+
+---
+
+## 8. Cost Estimation (Monthly)
+
+### Minimal Setup (< 100 users)
+
+| Service | Spec | Est. Cost |
+|---------|------|-----------|
+| EC2 (t3.micro) | 1 instance | ~$8.50 / mo (or Free Tier) |
+| RDS PostgreSQL (t3.micro) | Single-AZ, 20 GB | ~$15 / mo (or Free Tier) |
+| S3 | 5 GB storage | ~$0.12 / mo |
+| ALB | 1 LB | ~$16 / mo |
+| Route 53 | 1 hosted zone | ~$0.50 / mo |
+| CloudWatch | Basic | Free Tier |
+| **Total** | | **~$40 / mo** |
+
+### Production Setup (100–1000 users)
+
+| Service | Spec | Est. Cost |
+|---------|------|-----------|
+| ECS Fargate | 2 tasks (0.5 vCPU, 1 GB) | ~$30 / mo |
+| RDS PostgreSQL (t3.small) | Multi-AZ, 50 GB | ~$50 / mo |
+| S3 + CloudFront | 50 GB + CDN | ~$10 / mo |
+| ALB | 1 LB | ~$16 / mo |
+| Secrets Manager | 5 secrets | ~$2 / mo |
+| CloudWatch | Enhanced | ~$10 / mo |
+| **Total** | | **~$118 / mo** |
+
+---
+
+## 9. Migration Roadmap
+
+```mermaid
+gantt
+    title AWS Migration Phases
+    dateFormat  YYYY-MM-DD
+    section Phase 1 - Foundation
+    VPC & Networking Setup        :p1a, 2026-03-01, 2d
+    RDS PostgreSQL Setup          :p1b, after p1a, 2d
+    S3 Bucket + IAM Policies      :p1c, after p1a, 1d
+    section Phase 2 - Code Changes
+    SQLite → PostgreSQL Migration :p2a, after p1b, 5d
+    Multer → S3 Upload Migration  :p2b, after p1c, 3d
+    Add JWT Auth                  :p2c, after p2a, 3d
+    Add Health Check Endpoint     :p2d, after p2a, 1d
+    section Phase 3 - Containerize
+    Create Dockerfile             :p3a, after p2d, 1d
+    ECR Setup + Push Image        :p3b, after p3a, 1d
+    ECS Fargate Service Setup     :p3c, after p3b, 2d
+    section Phase 4 - Go Live
+    ALB + Route 53 + SSL          :p4a, after p3c, 2d
+    CI/CD Pipeline                :p4b, after p4a, 2d
+    Staging Testing               :p4c, after p4b, 3d
+    Production Cutover            :p4d, after p4c, 1d
+    Monitoring & Alerting         :p4e, after p4d, 1d
+```
+
+| Phase | Duration | Description |
+|-------|----------|-------------|
+| **Phase 1** — Foundation | ~3 days | VPC, RDS, S3, IAM setup |
+| **Phase 2** — Code Changes | ~8 days | DB migration, S3 uploads, JWT auth |
+| **Phase 3** — Containerize | ~3 days | Dockerfile, ECR, ECS Fargate |
+| **Phase 4** — Go Live | ~7 days | ALB, DNS, CI/CD, testing, cutover |
+| **Total** | **~3 weeks** | End-to-end migration |
+
+---
+
+## 10. Critical Pre-Deployment Decisions
+
+> [!WARNING]
+> These decisions must be made by the engineering/product team before the DevOps engineer begins work.
+
+1. **Database Engine**: PostgreSQL (recommended) or MySQL?
+2. **Domain Name**: What will `api.{domain}` be?
+3. **JWT vs Session Auth**: Implement JWT before deployment?
+4. **OTP/SMS Provider**: Twilio, AWS SNS, or MSG91 for real OTP?
+5. **Push Notifications**: Firebase Cloud Messaging (FCM) integration?
+6. **Budget Tier**: Minimal ($40/mo) or Production ($118/mo)?
+7. **Flutter API URL**: Hardcoded or runtime config (Firebase Remote Config)?
+
+---
+
+## Appendix A: API Endpoint Summary
+
+| Category | Method | Endpoint | Auth Required |
+|----------|--------|----------|--------------|
+| Auth | POST | `/api/register` | No |
+| Auth | POST | `/api/login` | No |
+| Auth | POST | `/api/forgot-password` | No |
+| Attendance | POST | `/api/check-in` | User |
+| Attendance | POST | `/api/check-out` | User |
+| Attendance | GET | `/api/attendance/:userId` | User |
+| Leaves | POST | `/api/leaves/apply` | User |
+| Leaves | GET | `/api/leaves/:userId` | User |
+| Leaves | GET | `/api/leaves/balance/:userId` | User |
+| Settings | GET | `/api/settings` | Any |
+| Holidays | GET | `/api/admin/holidays` | Admin |
+| Admin | GET | `/api/admin/users` | Admin |
+| Admin | GET | `/api/admin/stats` | Admin |
+| Admin | GET | `/api/admin/attendance` | Admin |
+| Admin | POST | `/api/admin/settings` | Admin |
+| Admin | POST | `/api/admin/branding` | Admin |
+| Reports | GET | `/api/admin/reports/overtime` | Admin |
+| Reports | GET | `/api/admin/reports/payroll` | Admin |
+| Payslips | POST | `/api/admin/payslips` | Admin |
+| Shifts | GET | `/api/admin/shifts` | Admin |
+| Notifications | GET | `/api/notifications/:userId` | User |
+
+---
+
+## Appendix B: Database ER Diagram
+
+```mermaid
+erDiagram
+    users ||--o{ attendance : "checks in"
+    users ||--o{ leaves : "applies for"
+    users ||--o{ notifications : "receives"
+    users ||--o{ leave_balances : "has"
+    users ||--o{ payslips : "gets"
+    users }o--|| shifts : "assigned to"
+    
+    users {
+        int id PK
+        text fullName
+        text email UK
+        text mobileNumber UK
+        text company
+        text role
+        int shiftId FK
+        int isActive
+        int isApproved
+    }
+    
+    attendance {
+        int id PK
+        int userId FK
+        datetime checkInTime
+        datetime checkOutTime
+        text status
+        real overtimeHours
+    }
+    
+    settings {
+        int id PK
+        text company UK
+        text companyName
+        text themeColor
+        text companyLogo
+        int geofenceEnabled
+    }
+    
+    holidays {
+        int id PK
+        text name
+        text date
+        text company
+        text type
+    }
+    
+    shifts {
+        int id PK
+        text name
+        text startTime
+        text endTime
+        text company
+    }
+    
+    leave_policies {
+        int id PK
+        text leaveType
+        int daysPerYear
+        text company
+    }

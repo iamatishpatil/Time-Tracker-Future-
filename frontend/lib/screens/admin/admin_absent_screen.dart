@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import '../../core/theme/pulse_colors.dart';
 import '../../core/theme/pulse_text_styles.dart';
@@ -55,7 +56,7 @@ class _AdminAbsentScreenState extends State<AdminAbsentScreen> {
                         child: Row(children: [
                           CircleAvatar(
                             radius: 22, backgroundColor: PulseColors.surfaceVariant,
-                            backgroundImage: employee['profilePicture'] != null ? NetworkImage(ApiService.getImageUrl(employee['profilePicture'])) : null,
+                            backgroundImage: employee['profilePicture'] != null ? CachedNetworkImageProvider(ApiService.getImageUrl(employee['profilePicture'])) : null,
                             child: employee['profilePicture'] == null ? const Icon(Icons.person, size: 22, color: PulseColors.textHint) : null,
                           ),
                           const SizedBox(width: 12),

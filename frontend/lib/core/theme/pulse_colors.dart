@@ -5,6 +5,8 @@ class PulseColors {
 
   // Dynamic Brand Palette
   static Color _brandPrimary = const Color(0xFF7C4DFF);
+  static Color _brandSecondary = const Color(0xFF7C4DFF);
+  static Color _brandAccent = const Color(0xFF00B8D4);
   static Color _brandVibrant = const Color(0xFF7C4DFF);
   static Color _brandMuted = const Color(0xFF7C4DFF);
   static Color _brandLight = const Color(0xFFF0E6FF);
@@ -13,17 +15,19 @@ class PulseColors {
   // Method to inject the full company branding palette
   static void setCompanyBrandPalette({
     required Color primary,
+    Color? secondary,
+    Color? accent,
     Color? vibrant,
     Color? muted,
     Color? light,
     Color? dark,
   }) {
     _brandPrimary = primary;
+    _brandSecondary = secondary ?? primary;
+    _brandAccent = accent ?? const Color(0xFF00B8D4);
     _brandVibrant = vibrant ?? primary;
     _brandMuted = muted ?? Color.lerp(primary, Colors.grey.shade400, 0.4) ?? primary;
-    // Premium Light: A very subtle tint for surfaces, avoiding pure white
     _brandLight = light ?? Color.lerp(primary, Colors.white, 0.94) ?? primary;
-    // Professional Dark: Deep, rich tones for contrast
     _brandDark = dark ?? Color.lerp(primary, Colors.black, 0.7) ?? primary;
   }
 
@@ -32,31 +36,34 @@ class PulseColors {
     setCompanyBrandPalette(primary: color);
   }
 
-  // Background
+  // Contrast-Aware Colors (Calculated)
+  static Color get onPrimary => _brandPrimary.computeLuminance() > 0.5 ? Colors.black : Colors.white;
+  static Color get onSecondary => _brandSecondary.computeLuminance() > 0.5 ? Colors.black : Colors.white;
+  static Color get onAccent => _brandAccent.computeLuminance() > 0.5 ? Colors.black : Colors.white;
+  static Color get onVibrant => _brandVibrant.computeLuminance() > 0.5 ? Colors.black : Colors.white;
+
+  static Color get primaryContainer => _brandPrimary.withValues(alpha: 0.08);
+  static Color get secondaryContainer => _brandSecondary.withValues(alpha: 0.08);
+  
+  // Background & Surface
   static const Color background = Color(0xFFF8F9FD);
   static const Color surface = Color(0xFFFFFFFF);
   static const Color surfaceVariant = Color(0xFFF0F2F5);
   static const Color surfaceLight = Color(0xFFFFFFFF);
 
-  // Primary (Now Dynamic)
-  static Color get brandPrimary => _brandPrimary;
+  // Dynamic Getters
   static Color get primary => _brandPrimary;
-  static Color get brandVibrant => _brandVibrant;
-  static Color get brandMuted => _brandMuted;
-  static Color get brandLight => _brandLight;
-  static Color get primaryLight => _brandLight; // Compatibility alias
-  static Color get primaryDark => _brandDark;
-
-  // Accent
-  static const Color accent = Color(0xFF00B8D4);
-  static const Color accentDim = Color(0xFF0097A7);
+  static Color get secondary => _brandSecondary;
+  static Color get accent => _brandAccent;
+  static Color get vibrant => _brandVibrant;
+  static Color get muted => _brandMuted;
+  static Color get light => _brandLight;
+  static Color get dark => _brandDark;
 
   // Semantic
   static const Color success = Color(0xFF00C853);
-  static const Color successDim = Color(0xFF1B5E20);
   static const Color warning = Color(0xFFF57C00);
   static const Color error = Color(0xFFD32F2F);
-  static const Color errorDim = Color(0xFFB71C1C);
 
   // Text
   static const Color textPrimary = Color(0xFF1A1A2E);
@@ -68,46 +75,86 @@ class PulseColors {
   static const Color border = Color(0xFFE2E8F0);
   static Color get borderFocused => _brandPrimary;
 
-  // Misc
+  // Shimmer
   static const Color shimmerBase = Color(0xFFF1F5F9);
   static const Color shimmerHighlight = Color(0xFFF8FAFC);
+
+  // Misc
   static const Color divider = Color(0xFFEDF2F7);
   static const Color overlay = Color(0x66000000);
 
-  // --- Advanced Brand Utilities ---
-  static LinearGradient get brandGradient => LinearGradient(
-    colors: [_brandPrimary, _brandVibrant],
+  // --- Premium UI Extensions ---
+  
+  // Advanced Gradients
+  static LinearGradient get primaryGradient => LinearGradient(
+    colors: [_brandPrimary, _brandVibrant, _brandPrimary.withValues(alpha: 0.8)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    stops: const [0.0, 0.5, 1.0],
+  );
+
+  static LinearGradient get meshGradient => LinearGradient(
+    colors: [
+      _brandPrimary.withValues(alpha: 0.15),
+      _brandAccent.withValues(alpha: 0.1),
+      _brandPrimary.withValues(alpha: 0.05),
+    ],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
 
   static LinearGradient get glassGradient => LinearGradient(
     colors: [
-      Colors.white.withValues(alpha: 0.15),
+      Colors.white.withValues(alpha: 0.2),
       Colors.white.withValues(alpha: 0.05),
     ],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
 
-  // Soft Layered Shadow (Modern Premium Style)
+  static LinearGradient get surfaceGradient => LinearGradient(
+    colors: [Colors.white, _brandPrimary.withValues(alpha: 0.02)],
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+  );
+
+  static LinearGradient get drawerGradient => LinearGradient(
+    colors: [_brandPrimary, _brandPrimary.withValues(alpha: 0.85)],
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+  );
+
+  // Compatibility Gradients
+  static LinearGradient get brandGradient => primaryGradient;
+  static LinearGradient get successGradient => const LinearGradient(
+    colors: [Color(0xFF00C853), Color(0xFF1B5E20)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+  static LinearGradient get errorGradient => const LinearGradient(
+    colors: [Color(0xFFD32F2F), Color(0xFFB71C1C)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
+  // Modern Shadows
   static List<BoxShadow> get premiumShadow => [
     BoxShadow(
-      color: Colors.black.withOpacity(0.03),
-      blurRadius: 4,
-      offset: const Offset(0, 2),
+      color: Colors.black.withValues(alpha: 0.03),
+      blurRadius: 10,
+      offset: const Offset(0, 4),
     ),
     BoxShadow(
-      color: _brandPrimary.withOpacity(0.08),
+      color: _brandPrimary.withValues(alpha: 0.05),
       blurRadius: 20,
       offset: const Offset(0, 10),
-      spreadRadius: -5,
+      spreadRadius: -2,
     ),
   ];
 
   static List<BoxShadow> get brandShadow => [
     BoxShadow(
-      color: _brandPrimary.withOpacity(0.15),
+      color: _brandPrimary.withValues(alpha: 0.15),
       blurRadius: 24,
       offset: const Offset(0, 12),
       spreadRadius: -4,
@@ -116,40 +163,27 @@ class PulseColors {
 
   static List<BoxShadow> get brandGlow => [
     BoxShadow(
-      color: _brandPrimary.withOpacity(0.25),
-      blurRadius: 20,
-      spreadRadius: 2,
+      color: _brandPrimary.withValues(alpha: 0.3),
+      blurRadius: 15,
+      spreadRadius: 1,
     ),
   ];
 
-  // Gradients (Updated for Light Mode)
-  static LinearGradient get primaryGradient => LinearGradient(
-    colors: [_brandPrimary, _brandVibrant],
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-  );
+  static List<BoxShadow> get glassShadow => [
+    BoxShadow(
+      color: Colors.black.withValues(alpha: 0.03),
+      blurRadius: 12,
+      offset: const Offset(0, 4),
+    ),
+  ];
 
-  static const LinearGradient accentGradient = LinearGradient(
-    colors: [Color(0xFF00B8D4), Color(0xFF0097A7)],
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-  );
-
-  static const LinearGradient successGradient = LinearGradient(
-    colors: [Color(0xFF00C853), Color(0xFF1B5E20)],
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-  );
-
-  static const LinearGradient errorGradient = LinearGradient(
-    colors: [Color(0xFFD32F2F), Color(0xFFB71C1C)],
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-  );
-
-  static const LinearGradient backgroundGradient = LinearGradient(
-    colors: [Color(0xFFF8F9FD), Color(0xFFFFFFFF)],
-    begin: Alignment.topCenter,
-    end: Alignment.bottomCenter,
-  );
+  // --- Compatibility Aliases ---
+  static Color get brandPrimary => _brandPrimary;
+  static Color get brandSecondary => _brandSecondary;
+  static Color get brandAccent => _brandAccent;
+  static Color get brandVibrant => _brandVibrant;
+  static Color get brandMuted => _brandMuted;
+  static Color get brandLight => _brandLight;
+  static Color get primaryLight => _brandLight;
+  static Color get primaryDark => _brandDark;
 }

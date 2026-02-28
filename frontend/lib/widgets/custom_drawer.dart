@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import '../core/theme/pulse_colors.dart';
 import '../core/theme/pulse_text_styles.dart';
@@ -52,7 +53,7 @@ class CustomDrawer extends StatelessWidget {
                               radius: 36,
                               backgroundColor: PulseColors.surfaceVariant,
                               backgroundImage: user['profilePicture'] != null
-                                  ? NetworkImage(ApiService.getImageUrl(user['profilePicture']))
+                                  ? CachedNetworkImageProvider(ApiService.getImageUrl(user['profilePicture']))
                                   : null,
                               child: user['profilePicture'] == null
                                   ? const Icon(Icons.person, size: 32, color: PulseColors.textHint)
