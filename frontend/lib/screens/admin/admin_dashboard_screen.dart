@@ -125,6 +125,8 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(brandingProvider);
+    
     final content = RefreshIndicator(
       onRefresh: _loadData,
       child: _isLoading

@@ -136,6 +136,7 @@ class _AdminEmployeesScreenState extends State<AdminEmployeesScreen> {
                   physics: const AlwaysScrollableScrollPhysics(),
                   padding: const EdgeInsets.all(14),
                   itemCount: filtered.length,
+                  itemExtent: 185.0, // Fixed height optimization for 60fps scrolling
                   itemBuilder: (context, index) => _buildCard(filtered[index]),
                 ),
     );

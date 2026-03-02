@@ -21,16 +21,17 @@ import '../core/theme/pulse_text_styles.dart';
 import '../core/widgets/pulse_card.dart';
 import '../core/widgets/pulse_shimmer.dart';
 import '../services/api_service.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../core/providers/branding_provider.dart';
 
-
-class HomeScreen extends StatefulWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMixin {
+class _HomeScreenState extends ConsumerState<HomeScreen> with SingleTickerProviderStateMixin {
   // --- Clock ---
   String _timeString = '';
   String _dateString = '';
@@ -278,6 +279,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(brandingProvider);
+    
     if (_isLoading) {
       return Padding(
         padding: const EdgeInsets.all(24),

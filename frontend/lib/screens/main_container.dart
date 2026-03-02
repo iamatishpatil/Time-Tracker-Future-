@@ -14,15 +14,17 @@ import 'edit_profile_screen.dart';
 import '../services/api_service.dart';
 import '../widgets/custom_drawer.dart';
 import '../core/widgets/pulse_scaffold.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../core/providers/branding_provider.dart';
 
-class MainContainer extends StatefulWidget {
+class MainContainer extends ConsumerStatefulWidget {
   const MainContainer({super.key});
 
   @override
-  State<MainContainer> createState() => _MainContainerState();
+  ConsumerState<MainContainer> createState() => _MainContainerState();
 }
 
-class _MainContainerState extends State<MainContainer> {
+class _MainContainerState extends ConsumerState<MainContainer> {
   int _selectedIndex = 0;
   Map<String, dynamic>? _user;
 
@@ -45,6 +47,8 @@ class _MainContainerState extends State<MainContainer> {
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(brandingProvider);
+    
     if (_user == null) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }

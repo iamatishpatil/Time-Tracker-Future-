@@ -9,20 +9,22 @@ import '../core/widgets/branded_logo.dart';
 import 'package:intl_phone_field/intl_phone_field.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../core/providers/branding_provider.dart';
 import '../core/widgets/pulse_scaffold.dart';
 
 // --- 1. Login Screen (StatefulWidget) ---
-// We use a StatefulWidget because this screen needs to "remember" things 
+// We use a ConsumerStatefulWidget because this screen needs to "remember" things 
 // like what the user typed or if a loading spinner is showing.
-class LoginScreen extends StatefulWidget {
+class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
 
 // This is where the actual "Brain" and "Body" of the LoginScreen live.
-class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStateMixin {
+class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProviderStateMixin {
   // GlobalKey is like a "Handle" to control and validate the Form.
   final _formKey = GlobalKey<FormState>();
   
@@ -127,22 +129,28 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
           await prefs.setString(_isAdminSelected ? 'saved_admin_password' : 'saved_password', _passwordController.text);
 
           final user = response['user'];
+
+          // Pre-fetch the branding before navigating so the theme is applied instantly
+          try {
+            await ref.read(brandingProvider.notifier).fetchBranding(company: user['company']).timeout(const Duration(seconds: 4));
+          } catch (e) {
+            debugPrint("Failed to load branding strictly on login: $e");
+          }
+
           if (_isAdminSelected) {
             if (user['role'] == 'Admin') {
               Navigator.pushReplacement(
                   context, MaterialPageRoute(builder: (context) => const AdminContainer()));
             } else {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Access Denied: You are not an Admin')),
+                const SnackBar(content: Text('Access Denied: You are not an Admin. Please use the Employee portal.')),
               );
             }
           } else {
             if (user['role'] == 'Admin') {
-              // Even if employee mode is selected, if they are admin, let them in?
-              // Or redirect to admin? The user said "toggle for employee and admin".
-              // Usually, admins can log in as admins.
-              Navigator.pushReplacement(
-                  context, MaterialPageRoute(builder: (context) => const AdminContainer()));
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Access Denied: You are an Admin. Please use the Admin portal.')),
+              );
             } else {
               Navigator.pushReplacementNamed(context, '/home');
             }
@@ -166,8 +174,9 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     return PulseScaffold(
       useBrandedBackground: true,
       body: Center(
+        child: SafeArea(
           child: SingleChildScrollView( // Allows scrolling if the screen is small
-            padding: const EdgeInsets.symmetric(horizontal: 24),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
             child: FadeTransition( // Applies the fade-in animation
               opacity: _fadeAnimation,
               child: SlideTransition( // Applies the slide-up animation
@@ -367,6 +376,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
             ),
           ),
         ),
+      ),
     );
   }
 }

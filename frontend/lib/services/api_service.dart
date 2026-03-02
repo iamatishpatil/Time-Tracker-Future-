@@ -14,35 +14,51 @@ class ApiService {
   // --- The Server Address ---
   // Every server has an address (IP). We use this to tell Flutter where to send data.
   static String get baseUrl {
-    return 'http://192.168.1.43:3000/api';
+    return 'http://192.168.1.26:3000/api';
   }
 
   // --- Performance: Default HTTP timeout ---
   static const Duration _defaultTimeout = Duration(seconds: 10);
 
-  // Fast GET with timeout — prevents UI from hanging on slow/dead server
-  static Future<http.Response> _get(String url) {
-    return http.get(Uri.parse(url)).timeout(_defaultTimeout);
+  // --- Internal Security: JWT Injector ---
+  static Future<Map<String, String>> _getHeaders(Map<String, String>? customHeaders) async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('jwt_token');
+    final headers = {'Content-Type': 'application/json', ...?customHeaders};
+    if (token != null) {
+      headers['Authorization'] = 'Bearer $token';
+    }
+    return headers;
   }
 
-  // Fast POST with timeout
-  static Future<http.Response> _post(String url, {Map<String, String>? headers, Object? body}) {
-    return http.post(Uri.parse(url), headers: headers, body: body).timeout(_defaultTimeout);
+  // Fast GET with timeout + JWT
+  static Future<http.Response> _get(String url, {Map<String, String>? headers}) async {
+    final finalHeaders = await _getHeaders(headers);
+    return http.get(Uri.parse(url), headers: finalHeaders).timeout(_defaultTimeout);
   }
 
-  // Fast PUT with timeout
-  static Future<http.Response> _put(String url, {Map<String, String>? headers, Object? body}) {
-    return http.put(Uri.parse(url), headers: headers, body: body).timeout(_defaultTimeout);
+  // Fast POST with timeout + JWT
+  static Future<http.Response> _post(String url, {Map<String, String>? headers, Object? body}) async {
+    final finalHeaders = await _getHeaders(headers);
+    return _post(url, headers: finalHeaders, body: body).timeout(_defaultTimeout);
   }
 
-  // Fast PATCH with timeout
-  static Future<http.Response> _patch(String url, {Map<String, String>? headers, Object? body}) {
-    return http.patch(Uri.parse(url), headers: headers, body: body).timeout(_defaultTimeout);
+  // Fast PUT with timeout + JWT
+  static Future<http.Response> _put(String url, {Map<String, String>? headers, Object? body}) async {
+    final finalHeaders = await _getHeaders(headers);
+    return _put(url, headers: finalHeaders, body: body).timeout(_defaultTimeout);
   }
 
-  // Fast DELETE with timeout
-  static Future<http.Response> _delete(String url, {Map<String, String>? headers, Object? body}) {
-    return http.delete(Uri.parse(url), headers: headers, body: body).timeout(_defaultTimeout);
+  // Fast PATCH with timeout + JWT
+  static Future<http.Response> _patch(String url, {Map<String, String>? headers, Object? body}) async {
+    final finalHeaders = await _getHeaders(headers);
+    return _patch(url, headers: finalHeaders, body: body).timeout(_defaultTimeout);
+  }
+
+  // Fast DELETE with timeout + JWT
+  static Future<http.Response> _delete(String url, {Map<String, String>? headers, Object? body}) async {
+    final finalHeaders = await _getHeaders(headers);
+    return _delete(url, headers: finalHeaders, body: body).timeout(_defaultTimeout);
   }
 
   // Helper to get full URLs for images stored on the server
@@ -72,8 +88,11 @@ class ApiService {
   }
 
   // Call this on logout to clear the cache
-  static void _clearCache() {
+  static Future<void> _clearCache() async {
     _cachedCompany = null;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('jwt_token');
+    await prefs.remove('user');
   }
 
   // --- Registration Logic ---
@@ -96,7 +115,13 @@ class ApiService {
       var response = await http.Response.fromStream(streamedResponse);
       
       if (response.statusCode == 200) {
-        return json.decode(response.body); // Server says YES!
+        final data = json.decode(response.body); // Server says YES!
+        if (data['token'] != null) {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('jwt_token', data['token']);
+          await prefs.setString('user', json.encode(data['user']));
+        }
+        return data; 
       } else {
         // Server said NO, let's find out why (e.g., email already exists)
         String errorMessage = 'Failed to register';
@@ -129,6 +154,9 @@ class ApiService {
         // so the app remembers they are logged in even if they close it.
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('user', json.encode(data['user']));
+        if (data['token'] != null) {
+          await prefs.setString('jwt_token', data['token']);
+        }
         
         return data;
       } else {
@@ -269,7 +297,7 @@ class ApiService {
 
   // --- Fetching Attendance Data ---
   static Future<List<dynamic>> getAttendance(int userId) async {
-    final response = await http.get(Uri.parse('$baseUrl/attendance/$userId'));
+    final response = await _get('$baseUrl/attendance/$userId');
     if (response.statusCode == 200) {
       return json.decode(response.body);
     } else {
@@ -279,7 +307,7 @@ class ApiService {
 
   // Checks if the user is currently "on the clock"
   static Future<Map<String, dynamic>> getCheckInStatus(int userId) async {
-    final response = await http.get(Uri.parse('$baseUrl/attendance/status/$userId'));
+    final response = await _get('$baseUrl/attendance/status/$userId');
     if (response.statusCode == 200) {
       return json.decode(response.body); // Returns { isCheckedIn: true/false }
     } else {
@@ -291,7 +319,7 @@ class ApiService {
   // ANR Fix: No longer downloads all records - server does the SQL aggregation.
   static Future<Map<String, dynamic>> getDashboardStats(int userId) async {
     try {
-      final response = await http.get(Uri.parse('$baseUrl/attendance/stats/$userId'));
+      final response = await _get('$baseUrl/attendance/stats/$userId');
       if (response.statusCode == 200) {
         return json.decode(response.body);
       }
@@ -304,9 +332,7 @@ class ApiService {
   
   // Clear the phone's memory to log the user out
   static Future<void> logout() async {
-    _clearCache(); // Clear cached company on logout
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('user');
+    await _clearCache(); // Clears all local storage (user & jwt_token)
   }
 
   // --- OTP & Password Recovery ---
@@ -398,7 +424,7 @@ class ApiService {
 
   // Get a list of all leaves the CURRENT user has applied for
   static Future<List<dynamic>> getLeaveHistory(int userId) async {
-    final response = await http.get(Uri.parse('$baseUrl/leaves/$userId'));
+    final response = await _get('$baseUrl/leaves/$userId');
     if (response.statusCode == 200) {
       return json.decode(response.body);
     } else {
@@ -421,7 +447,7 @@ class ApiService {
 
   // Find out how many leave days are LEFT for the user (e.g., 10 Sick leaves remaining)
   static Future<Map<String, dynamic>> getLeaveBalance(int userId) async {
-    final response = await http.get(Uri.parse('$baseUrl/leaves/balance/$userId'));
+    final response = await _get('$baseUrl/leaves/balance/$userId');
     if (response.statusCode == 200) {
       return json.decode(response.body);
     } else {
@@ -437,7 +463,7 @@ class ApiService {
       return ['Sick Leave', 'Casual Leave', 'Earned Leave'];
     }
     String qs = '?company=${Uri.encodeComponent(company)}';
-    final response = await http.get(Uri.parse('$baseUrl/leaves/types$qs'));
+    final response = await _get('$baseUrl/leaves/types$qs');
     if (response.statusCode == 200) {
       List<dynamic> data = json.decode(response.body);
       return data.map((e) => e.toString()).toList();
@@ -445,6 +471,17 @@ class ApiService {
       // Default list if the server request fails
       return ['Sick Leave', 'Casual Leave', 'Earned Leave'];
     }
+  }
+
+  // --- Performance: Parsing JSON in a separate Isolate ---
+  // Large JSON payloads from the server block the main UI thread during parsing. 
+  // We offset this to a separate CPU thread to ensure the app never stutters.
+  static Map<String, dynamic> _parseJsonMap(String responseBody) {
+    return json.decode(responseBody) as Map<String, dynamic>;
+  }
+
+  static List<dynamic> _parseJsonList(String responseBody) {
+    return json.decode(responseBody) as List<dynamic>;
   }
 
   // ============ ADMIN METHODS ============
@@ -455,9 +492,9 @@ class ApiService {
     final company = await _getCompany();
     if (company == null) throw Exception('Company context missing. Please login again.');
     String qs = '?company=${Uri.encodeComponent(company)}';
-    final response = await http.get(Uri.parse('$baseUrl/admin/stats$qs'));
+    final response = await _get('$baseUrl/admin/stats$qs');
     if (response.statusCode == 200) {
-      return json.decode(response.body);
+      return await compute(_parseJsonMap, response.body);
     } else {
       throw Exception('Failed to load admin stats');
     }
@@ -467,9 +504,9 @@ class ApiService {
   static Future<List<dynamic>> getAllUsers() async {
     final company = await _getCompany();
     String qs = company != null ? '?company=${Uri.encodeComponent(company)}' : '';
-    final response = await http.get(Uri.parse('$baseUrl/admin/users$qs'));
+    final response = await _get('$baseUrl/admin/users$qs');
     if (response.statusCode == 200) {
-      return json.decode(response.body);
+      return await compute(_parseJsonList, response.body);
     } else {
       throw Exception('Failed to load users');
     }
@@ -479,9 +516,9 @@ class ApiService {
   static Future<List<dynamic>> getAbsentEmployees() async {
     final company = await _getCompany();
     String qs = company != null ? '?company=${Uri.encodeComponent(company)}' : '';
-    final response = await http.get(Uri.parse('$baseUrl/admin/absent$qs'));
+    final response = await _get('$baseUrl/admin/absences$qs');
     if (response.statusCode == 200) {
-      return json.decode(response.body);
+      return await compute(_parseJsonList, response.body);
     } else {
       throw Exception('Failed to load absent employees');
     }
@@ -503,7 +540,7 @@ class ApiService {
     final uri = Uri.parse('$baseUrl/admin/attendance').replace(queryParameters: params.isNotEmpty ? params : null);
     final response = await http.get(uri);
     if (response.statusCode == 200) {
-      return json.decode(response.body);
+      return await compute(_parseJsonList, response.body);
     } else {
       throw Exception('Failed to load attendance records');
     }
@@ -543,9 +580,9 @@ class ApiService {
   static Future<List<dynamic>> getAllLeaves() async {
     final company = await _getCompany();
     String qs = company != null ? '?company=${Uri.encodeComponent(company)}' : '';
-    final response = await http.get(Uri.parse('$baseUrl/admin/leaves$qs'));
+    final response = await _get('$baseUrl/admin/leaves$qs');
     if (response.statusCode == 200) {
-      return json.decode(response.body);
+      return await compute(_parseJsonList, response.body);
     } else {
       throw Exception('Failed to load leave requests');
     }
@@ -642,7 +679,7 @@ class ApiService {
   static Future<List<dynamic>> getShifts() async {
     final company = await _getCompany();
     String qs = company != null ? '?company=${Uri.encodeComponent(company)}' : '';
-    final response = await http.get(Uri.parse('$baseUrl/admin/shifts$qs'));
+    final response = await _get('$baseUrl/admin/shifts$qs');
     if (response.statusCode == 200) {
       return json.decode(response.body);
     } else {
@@ -689,7 +726,7 @@ class ApiService {
   static Future<Map<String, dynamic>> getSettings({String? company}) async {
     final effectiveCompany = company ?? await _getCompany();
     String qs = effectiveCompany != null ? '?company=${Uri.encodeComponent(effectiveCompany)}' : '';
-    final response = await http.get(Uri.parse('$baseUrl/settings$qs'))
+    final response = await _get('$baseUrl/settings$qs')
         .timeout(const Duration(seconds: 10));
     if (response.statusCode == 200) {
       return json.decode(response.body);
@@ -714,7 +751,7 @@ class ApiService {
   // --- Notifications ---
   // Bell icons, unread alerts, etc.
   static Future<List<dynamic>> getNotifications(int userId) async {
-    final response = await http.get(Uri.parse('$baseUrl/notifications/$userId'));
+    final response = await _get('$baseUrl/notifications/$userId');
     if (response.statusCode == 200) {
       return json.decode(response.body);
     } else {
@@ -723,7 +760,7 @@ class ApiService {
   }
 
   static Future<void> markNotificationRead(int id) async {
-    final response = await http.put(Uri.parse('$baseUrl/notifications/$id/read'));
+    final response = await _put('$baseUrl/notifications/$id/read');
     if (response.statusCode != 200) {
       throw Exception('Failed to mark notification as read');
     }
@@ -738,7 +775,7 @@ class ApiService {
        return [];
     }
     String qs = '?company=${Uri.encodeComponent(company)}';
-    final response = await http.get(Uri.parse('$baseUrl/admin/holidays$qs'));
+    final response = await _get('$baseUrl/admin/holidays$qs');
     if (response.statusCode == 200) return json.decode(response.body);
     throw Exception('Failed to load holidays');
   }
@@ -781,7 +818,7 @@ class ApiService {
       query = '?company=${Uri.encodeComponent(company)}';
     }
     
-    final response = await http.get(Uri.parse('$baseUrl/admin/reports/attendance$query'));
+    final response = await _get('$baseUrl/admin/reports/attendance$query');
      if (response.statusCode == 200) {
       return json.decode(response.body);
     } else {
@@ -842,7 +879,7 @@ class ApiService {
   static Future<List<dynamic>> getLeavePolicies() async {
     final company = await _getCompany();
     String qs = company != null ? '?company=${Uri.encodeComponent(company)}' : '';
-    final response = await http.get(Uri.parse('$baseUrl/admin/leave-policies$qs'));
+    final response = await _get('$baseUrl/admin/leave-policies$qs');
     if (response.statusCode == 200) {
       return json.decode(response.body);
     } else {
@@ -923,14 +960,14 @@ class ApiService {
   static Future<List<dynamic>> getAdminPayslips() async {
     final company = await _getCompany();
     String qs = company != null ? '?company=${Uri.encodeComponent(company)}' : '';
-    final response = await http.get(Uri.parse('$baseUrl/admin/payslips$qs'));
+    final response = await _get('$baseUrl/admin/payslips$qs');
     
     if (response.statusCode == 200) return json.decode(response.body);
     throw Exception('Failed to load payslips');
   }
 
   static Future<List<dynamic>> getUserPayslips(int userId) async {
-    final response = await http.get(Uri.parse('$baseUrl/payslips/$userId'));
+    final response = await _get('$baseUrl/payslips/$userId');
     if (response.statusCode == 200) return json.decode(response.body);
     throw Exception('Failed to load your payslips');
   }

@@ -113,6 +113,7 @@ class _AdminLeavesScreenState extends State<AdminLeavesScreen> {
                   physics: const AlwaysScrollableScrollPhysics(),
                   padding: const EdgeInsets.all(14),
                   itemCount: _leaves.length,
+                  itemExtent: 220.0, // Fixed height optimization for 60fps scrolling
                   itemBuilder: (context, index) => _buildCard(_leaves[index]),
                 ),
     );

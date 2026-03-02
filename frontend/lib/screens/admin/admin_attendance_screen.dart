@@ -166,6 +166,7 @@ class _AdminAttendanceScreenState extends State<AdminAttendanceScreen> {
                         physics: const AlwaysScrollableScrollPhysics(),
                         padding: const EdgeInsets.symmetric(horizontal: 14),
                         itemCount: _filteredAttendance.length,
+                        itemExtent: 140.0, // Fixed height optimization for 60fps scrolling
                         itemBuilder: (context, index) => _buildCard(_filteredAttendance[index]),
                       ),
           ),

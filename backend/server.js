@@ -4,6 +4,7 @@ const multer = require('multer');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 const path = require('path');
 const fs = require('fs');
 const compression = require('compression'); 
@@ -39,6 +40,19 @@ const limiter = rateLimit({
   legacyHeaders: false,
 });
 app.use(limiter);
+
+// JWT Middleware
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+  if (token == null) return res.status(401).json({ error: 'Authentication required' });
+
+  jwt.verify(token, process.env.JWT_SECRET || 'fallback_dev_secret_do_not_use_in_prod', (err, user) => {
+    if (err) return res.status(403).json({ error: 'Invalid or expired token' });
+    req.user = user;
+    next();
+  });
+};
 
 // Ensure uploads directory exists
 if (!fs.existsSync('./uploads')) {
@@ -200,27 +214,7 @@ const provisionCompany = async (companyIdRaw) => {
   }
 };
 
-// --- NOTIFICATIONS ---
-
-app.get('/api/notifications/:userId', async (req, res) => {
-  try {
-    const result = await pool.query('SELECT * FROM notifications WHERE "userId" = $1 ORDER BY "createdAt" DESC', [req.params.userId]);
-    res.json(result.rows);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.put('/api/notifications/:id/read', async (req, res) => {
-  try {
-    await pool.query('UPDATE notifications SET "isRead" = 1 WHERE id = $1', [req.params.id]);
-    res.json({ message: 'Marked as read' });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ============ API ENDPOINTS ============
+// ============ PUBLIC API ENDPOINTS ============
 
 
 // --- AUTH & OTP ---
@@ -336,7 +330,13 @@ app.post('/api/register', upload.single('profilePicture'), async (req, res) => {
       createNotification(newUserId, welcomeTitle, welcomeMsg);
     }
 
-    res.json({ message: 'User registered', id: newUserId });
+    const token = jwt.sign(
+      { id: newUserId, role: role || 'User', company: company },
+      process.env.JWT_SECRET || 'fallback_dev_secret_do_not_use_in_prod',
+      { expiresIn: '30d' }
+    );
+
+    res.json({ message: 'User registered', id: newUserId, token: token, user: { id: newUserId, fullName, company, role } });
   } catch (err) {
     if (err.code === '23505') {
        return res.status(400).json({ error: 'Mobile number or email already exists' });
@@ -369,9 +369,40 @@ app.post('/api/login', async (req, res) => {
       return res.status(403).json({ error: 'Your account is pending admin approval. Please wait for the initial approval.' });
     }
     
-    res.json({ message: 'Login successful', user: user });
+    // Generate JWT Token
+    const token = jwt.sign(
+      { id: user.id, role: user.role, company: user.company },
+      process.env.JWT_SECRET || 'fallback_dev_secret_do_not_use_in_prod',
+      { expiresIn: '30d' }
+    );
+
+    res.json({ message: 'Login successful', user: user, token: token });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// ============ SECURE API ENDPOINTS ============
+// All endpoints below this require a valid JWT token.
+app.use(authenticateToken);
+
+// --- NOTIFICATIONS ---
+
+app.get('/api/notifications/:userId', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM notifications WHERE "userId" = $1 ORDER BY "createdAt" DESC', [req.params.userId]);
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/notifications/:id/read', async (req, res) => {
+  try {
+    await pool.query('UPDATE notifications SET "isRead" = 1 WHERE id = $1', [req.params.id]);
+    res.json({ message: 'Marked as read' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -817,7 +848,7 @@ app.get('/api/admin/attendance', async (req, res) => {
     let counter = 2;
 
     if (startDate && endDate) {
-      query += ` AND CAST(a."checkInTime" AS DATE) BETWEEN $${counter} AND $${counter+1}`;
+      query += ` AND a."checkInTime"::text >= $${counter} AND a."checkInTime"::text < $${counter+1}::date + interval '1 day'`;
       params.push(startDate, endDate);
       counter += 2;
     }

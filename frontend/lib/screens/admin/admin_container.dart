@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/providers/branding_provider.dart';
 import '../../core/theme/pulse_colors.dart';
 import '../../core/theme/pulse_text_styles.dart';
 import '../../core/widgets/pulse_scaffold.dart';
@@ -35,6 +36,8 @@ class _AdminContainerState extends ConsumerState<AdminContainer> {
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(brandingProvider);
+    
     if (_user == null) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
