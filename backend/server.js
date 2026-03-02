@@ -852,7 +852,7 @@ app.get('/api/admin/attendance', async (req, res) => {
     let counter = 2;
 
     if (startDate && endDate) {
-      query += ` AND a."checkInTime"::text >= $${counter} AND a."checkInTime"::text < $${counter+1}::date + interval '1 day'`;
+      query += ` AND a."checkInTime" >= $${counter}::date AND a."checkInTime" < $${counter+1}::date + interval '1 day'`;
       params.push(startDate, endDate);
       counter += 2;
     }

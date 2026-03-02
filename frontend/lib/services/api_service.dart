@@ -40,25 +40,25 @@ class ApiService {
   // Fast POST with timeout + JWT
   static Future<http.Response> _post(String url, {Map<String, String>? headers, Object? body}) async {
     final finalHeaders = await _getHeaders(headers);
-    return _post(url, headers: finalHeaders, body: body).timeout(_defaultTimeout);
+    return http.post(Uri.parse(url), headers: finalHeaders, body: body).timeout(_defaultTimeout);
   }
 
   // Fast PUT with timeout + JWT
   static Future<http.Response> _put(String url, {Map<String, String>? headers, Object? body}) async {
     final finalHeaders = await _getHeaders(headers);
-    return _put(url, headers: finalHeaders, body: body).timeout(_defaultTimeout);
+    return http.put(Uri.parse(url), headers: finalHeaders, body: body).timeout(_defaultTimeout);
   }
 
   // Fast PATCH with timeout + JWT
   static Future<http.Response> _patch(String url, {Map<String, String>? headers, Object? body}) async {
     final finalHeaders = await _getHeaders(headers);
-    return _patch(url, headers: finalHeaders, body: body).timeout(_defaultTimeout);
+    return http.patch(Uri.parse(url), headers: finalHeaders, body: body).timeout(_defaultTimeout);
   }
 
   // Fast DELETE with timeout + JWT
   static Future<http.Response> _delete(String url, {Map<String, String>? headers, Object? body}) async {
     final finalHeaders = await _getHeaders(headers);
-    return _delete(url, headers: finalHeaders, body: body).timeout(_defaultTimeout);
+    return http.delete(Uri.parse(url), headers: finalHeaders, body: body).timeout(_defaultTimeout);
   }
 
   // Helper to get full URLs for images stored on the server
@@ -393,9 +393,8 @@ class ApiService {
 
   // --- Password Management ---
   static Future<void> changePassword(int userId, String oldPassword, String newPassword) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/change-password'),
-      headers: {'Content-Type': 'application/json'},
+    final response = await _post(
+      '$baseUrl/change-password',
       body: json.encode({
         'userId': userId,
         'oldPassword': oldPassword,
@@ -412,9 +411,8 @@ class ApiService {
   // --- Leave Management (User Side) ---
   // Apply for leave (Sick leave, Casual leave, etc.)
   static Future<void> applyLeave(Map<String, dynamic> data) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/leaves/apply'),
-      headers: {'Content-Type': 'application/json'},
+    final response = await _post(
+      '$baseUrl/leaves/apply',
       body: json.encode(data),
     );
     if (response.statusCode != 200) {
@@ -434,9 +432,8 @@ class ApiService {
 
   // Cancel a leave request that hasn't started yet
   static Future<void> cancelLeave(int leaveId, int userId) async {
-    final response = await http.put(
-      Uri.parse('$baseUrl/leaves/$leaveId/cancel'),
-      headers: {'Content-Type': 'application/json'},
+    final response = await _put(
+      '$baseUrl/leaves/$leaveId/cancel',
       body: json.encode({'userId': userId}),
     );
     if (response.statusCode != 200) {
@@ -538,7 +535,7 @@ class ApiService {
     if (company != null) params['company'] = company;
 
     final uri = Uri.parse('$baseUrl/admin/attendance').replace(queryParameters: params.isNotEmpty ? params : null);
-    final response = await http.get(uri);
+    final response = await _get(uri.toString());
     if (response.statusCode == 200) {
       return await compute(_parseJsonList, response.body);
     } else {
@@ -550,9 +547,8 @@ class ApiService {
   static Future<void> updateAttendance(int id, Map<String, dynamic> data) async {
     final company = await _getCompany();
     data['company'] = company;
-    final response = await http.put(
-      Uri.parse('$baseUrl/admin/attendance/$id'),
-      headers: {'Content-Type': 'application/json'},
+    final response = await _put(
+      '$baseUrl/admin/attendance/$id',
       body: json.encode(data),
     );
     if (response.statusCode != 200) {
@@ -565,9 +561,8 @@ class ApiService {
   static Future<void> createManualAttendance(Map<String, dynamic> data) async {
     final company = await _getCompany();
     data['company'] = company; // Although the backend might use userId to find company, passing it explicitly is safer
-    final response = await http.post(
-      Uri.parse('$baseUrl/admin/attendance'),
-      headers: {'Content-Type': 'application/json'},
+    final response = await _post(
+      '$baseUrl/admin/attendance',
       body: json.encode(data),
     );
     if (response.statusCode != 200) {
@@ -591,9 +586,8 @@ class ApiService {
   // Approve or Reject a leave request
   static Future<void> updateLeaveStatus(int id, String status, {String? rejectionReason}) async {
     final company = await _getCompany();
-    final response = await http.put(
-      Uri.parse('$baseUrl/admin/leaves/$id'),
-      headers: {'Content-Type': 'application/json'},
+    final response = await _put(
+      '$baseUrl/admin/leaves/$id',
       body: json.encode({
         'status': status, 
         'rejectionReason': rejectionReason,
@@ -631,9 +625,8 @@ class ApiService {
 
   static Future<void> toggleUserApproval(int id, bool isApproved, {String? reason}) async {
     final company = await _getCompany();
-    final response = await http.patch(
-      Uri.parse('$baseUrl/admin/users/$id/approve'),
-      headers: {'Content-Type': 'application/json'},
+    final response = await _patch(
+      '$baseUrl/admin/users/$id/approve',
       body: json.encode({
         'isApproved': isApproved ? 1 : 0,
         'company': company,
@@ -648,9 +641,8 @@ class ApiService {
 
   static Future<void> toggleEmployeeActive(int id, bool isActive) async {
     final company = await _getCompany();
-    final response = await http.patch(
-      Uri.parse('$baseUrl/admin/users/$id/active'),
-      headers: {'Content-Type': 'application/json'},
+    final response = await _patch(
+      '$baseUrl/admin/users/$id/active',
       body: json.encode({
         'isActive': isActive ? 1 : 0,
         'company': company,
@@ -664,9 +656,8 @@ class ApiService {
 
   static Future<void> deleteUser(int id) async {
     final company = await _getCompany();
-    final response = await http.delete(
-      Uri.parse('$baseUrl/admin/users/$id'),
-      headers: {'Content-Type': 'application/json'},
+    final response = await _delete(
+      '$baseUrl/admin/users/$id',
       body: json.encode({'company': company}),
     );
     if (response.statusCode != 200) {
@@ -690,9 +681,8 @@ class ApiService {
   static Future<void> createShift(Map<String, dynamic> shiftData) async {
     final company = await _getCompany();
     if (company != null) shiftData['company'] = company;
-    final response = await http.post(
-      Uri.parse('$baseUrl/admin/shifts'),
-      headers: {'Content-Type': 'application/json'},
+    final response = await _post(
+      '$baseUrl/admin/shifts',
       body: json.encode(shiftData),
     );
      if (response.statusCode != 200) {
@@ -703,9 +693,8 @@ class ApiService {
   static Future<void> updateShift(int id, Map<String, dynamic> data) async {
     final company = await _getCompany();
     data['company'] = company;
-    final response = await http.put(
-      Uri.parse('$baseUrl/admin/shifts/$id'),
-      headers: {'Content-Type': 'application/json'},
+    final response = await _put(
+      '$baseUrl/admin/shifts/$id',
       body: json.encode(data),
     );
     if (response.statusCode != 200) throw Exception('Failed to update shift');
@@ -738,9 +727,8 @@ class ApiService {
   static Future<void> updateSettings(Map<String, dynamic> settingsData) async {
     final companyId = await _getCompany();
     if (companyId != null) settingsData['company'] = companyId;
-    final response = await http.post(
-      Uri.parse('$baseUrl/admin/settings'),
-      headers: {'Content-Type': 'application/json'},
+    final response = await _post(
+      '$baseUrl/admin/settings',
       body: json.encode(settingsData),
     );
      if (response.statusCode != 200) {
@@ -787,9 +775,8 @@ class ApiService {
     };
     if (company != null) data['company'] = company;
     
-    final response = await http.post(
-      Uri.parse('$baseUrl/admin/holidays'),
-      headers: {'Content-Type': 'application/json'},
+    final response = await _post(
+      '$baseUrl/admin/holidays',
       body: json.encode(data),
     );
     if (response.statusCode != 200) throw Exception('Failed to add holiday');
@@ -797,9 +784,8 @@ class ApiService {
 
   static Future<void> deleteHoliday(int id) async {
     final company = await _getCompany();
-    final response = await http.delete(
-      Uri.parse('$baseUrl/admin/holidays/$id'),
-      headers: {'Content-Type': 'application/json'},
+    final response = await _delete(
+      '$baseUrl/admin/holidays/$id',
       body: json.encode({'company': company}),
     );
     if (response.statusCode != 200) throw Exception('Failed to delete holiday');
@@ -834,7 +820,7 @@ class ApiService {
     if (company != null) params['company'] = company;
     
     final uri = Uri.parse('$baseUrl/admin/reports/payroll').replace(queryParameters: params.isNotEmpty ? params : null);
-    final response = await http.get(uri);
+    final response = await _get(uri.toString());
     if (response.statusCode == 200) {
       return json.decode(response.body);
     } else {
@@ -850,7 +836,7 @@ class ApiService {
     if (company != null) params['company'] = company;
 
     final uri = Uri.parse('$baseUrl/admin/reports/overtime').replace(queryParameters: params.isNotEmpty ? params : null);
-    final response = await http.get(uri);
+    final response = await _get(uri.toString());
     if (response.statusCode == 200) {
       return json.decode(response.body);
     } else {
@@ -866,7 +852,7 @@ class ApiService {
     if (company != null) params['company'] = company;
 
     final uri = Uri.parse('$baseUrl/admin/reports/salary-hours').replace(queryParameters: params.isNotEmpty ? params : null);
-    final response = await http.get(uri);
+    final response = await _get(uri.toString());
     if (response.statusCode == 200) {
       return json.decode(response.body);
     } else {
@@ -890,9 +876,8 @@ class ApiService {
   static Future<void> saveLeavePolicy(Map<String, dynamic> policyData) async {
     final company = await _getCompany();
     if (company != null) policyData['company'] = company;
-    final response = await http.post(
-      Uri.parse('$baseUrl/admin/leave-policies'),
-      headers: {'Content-Type': 'application/json'},
+    final response = await _post(
+      '$baseUrl/admin/leave-policies',
       body: json.encode(policyData),
     );
     if (response.statusCode != 200) {
@@ -902,9 +887,8 @@ class ApiService {
 
   static Future<void> adjustLeaveBalance(int userId, String leaveType, int totalDays) async {
     final company = await _getCompany();
-    final response = await http.put(
-      Uri.parse('$baseUrl/admin/leave-balance'),
-      headers: {'Content-Type': 'application/json'},
+    final response = await _put(
+      '$baseUrl/admin/leave-balance',
       body: json.encode({
         'userId': userId,
         'leaveType': leaveType,
@@ -949,9 +933,8 @@ class ApiService {
     final company = await _getCompany();
     if (company != null) data['company'] = company;
     
-    final response = await http.post(
-      Uri.parse('$baseUrl/admin/payslips'),
-      headers: {'Content-Type': 'application/json'},
+    final response = await _post(
+      '$baseUrl/admin/payslips',
       body: json.encode(data),
     );
     if (response.statusCode != 200) throw Exception('Failed to create payslip');
@@ -974,9 +957,8 @@ class ApiService {
 
   static Future<void> deletePayslip(int id) async {
     final company = await _getCompany();
-    final response = await http.delete(
-      Uri.parse('$baseUrl/admin/payslips/$id'),
-      headers: {'Content-Type': 'application/json'},
+    final response = await _delete(
+      '$baseUrl/admin/payslips/$id',
       body: json.encode({'company': company}),
     );
     if (response.statusCode != 200) throw Exception('Failed to delete payslip');
