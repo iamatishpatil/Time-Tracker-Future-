@@ -138,8 +138,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       }
       if (permission == LocationPermission.deniedForever) throw Exception('Location permissions are permanently denied');
 
-      Position position = await Geolocator.getCurrentPosition();
-      List<Placemark> placemarks = await placemarkFromCoordinates(position.latitude, position.longitude);
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      ).timeout(const Duration(seconds: 5));
+      List<Placemark> placemarks = await placemarkFromCoordinates(
+        position.latitude, 
+        position.longitude,
+      ).timeout(const Duration(seconds: 5));
       if (placemarks.isNotEmpty) {
         Placemark p = placemarks[0];
         

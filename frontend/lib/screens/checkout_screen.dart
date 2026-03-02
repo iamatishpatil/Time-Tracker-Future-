@@ -105,20 +105,29 @@ class _CheckoutScreenState extends State<CheckoutScreen> with SingleTickerProvid
     }
     if (permission == LocationPermission.deniedForever) return;
 
-    Position position = await Geolocator.getCurrentPosition();
-    if (mounted) {
-      setState(() {
-        _currentPosition = LatLng(position.latitude, position.longitude);
-        _mapController.move(_currentPosition, 15);
-      });
-      _getAddressFromLatLng(position.latitude, position.longitude);
+    try {
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      ).timeout(const Duration(seconds: 5));
+      if (mounted) {
+        setState(() {
+          _currentPosition = LatLng(position.latitude, position.longitude);
+          _mapController.move(_currentPosition, 15);
+        });
+        _getAddressFromLatLng(position.latitude, position.longitude);
+      }
+    } catch (_) {
+      // Ignored if timeout or unavailable
     }
   }
 
   // Helper to turn coordinates into an address
   Future<void> _getAddressFromLatLng(double lat, double lng) async {
     try {
-      List<Placemark> placemarks = await placemarkFromCoordinates(lat, lng);
+      List<Placemark> placemarks = await placemarkFromCoordinates(
+        lat, 
+        lng,
+      ).timeout(const Duration(seconds: 5));
       if (placemarks.isNotEmpty) {
         Placemark place = placemarks[0];
         if (mounted) {

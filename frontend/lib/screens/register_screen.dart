@@ -89,27 +89,49 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   // --- Location Logic ---
   Future<void> _getCurrentLocation() async {
+    // Show a small loading indicator inside the text field while fetching
+    setState(() => _addressController.text = 'Fetching location...');
+
     // Ask the phone for permission to see the location
     var status = await Permission.location.request();
     if (status.isGranted) {
       try {
-        // Get GPS coordinates
-        Position position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
-        setState(() {
-          _latitude = position.latitude;
-          _longitude = position.longitude;
-        });
+        // Get GPS coordinates with a strict timeout to prevent ANR lockups
+        Position position = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high,
+        ).timeout(const Duration(seconds: 5));
 
-        // Convert GPS coordinates into a human-readable Address
-        List<Placemark> placemarks = await placemarkFromCoordinates(position.latitude, position.longitude);
-        if (placemarks.isNotEmpty) {
+        if (mounted) {
+          setState(() {
+            _latitude = position.latitude;
+            _longitude = position.longitude;
+          });
+        }
+
+        // Convert GPS coordinates into a human-readable Address with timeout
+        List<Placemark> placemarks = await placemarkFromCoordinates(
+          position.latitude, 
+          position.longitude,
+        ).timeout(const Duration(seconds: 5));
+
+        if (placemarks.isNotEmpty && mounted) {
           Placemark place = placemarks[0];
           // Fill the Address text box automatically
-          _addressController.text = '${place.street}, ${place.subLocality}, ${place.locality}, ${place.postalCode}';
+          setState(() {
+            _addressController.text = '${place.street}, ${place.subLocality}, ${place.locality}, ${place.postalCode}';
+          });
         }
       } catch (e) {
         debugPrint('Error getting location: $e');
+        if (mounted) {
+          setState(() => _addressController.text = '');
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Failed to get location. Please try again or enter manually.')),
+          );
+        }
       }
+    } else {
+       if (mounted) setState(() => _addressController.text = '');
     }
   }
 
