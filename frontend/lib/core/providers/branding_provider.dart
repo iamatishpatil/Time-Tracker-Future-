@@ -79,20 +79,36 @@ class BrandingNotifier extends StateNotifier<BrandingState> {
       final secondary = parseHex(secondaryHex, primary);
       final accent = parseHex(accentHex, const Color(0xFF00B8D4));
 
-      List<Color> paletteList = [];
+      // Optimization: If nothing meaningful changed, don't trigger a rebuild or re-extract colors
+      if (state.logoUrl == logo && 
+          state.primaryColor.value == primary.value && 
+          state.secondaryColor.value == secondary.value &&
+          state.accentColor.value == accent.value &&
+          state.companyName == name) {
+        state = state.copyWith(isLoading: false);
+        return;
+      }
+
+      List<Color> paletteList = state.extractedPalette;
 
       if (logo != null && logo.isNotEmpty) {
-        final palette = await _extractFullPalette(ApiService.getImageUrl(logo));
-        paletteList = palette['all'] as List<Color>? ?? [];
-        PulseColors.setCompanyBrandPalette(
-          primary: primary,
-          secondary: secondary,
-          accent: accent,
-          vibrant: palette['vibrant'],
-          muted: palette['muted'],
-          light: palette['light'],
-          dark: palette['dark'],
-        );
+        // Only extract if the logo is actually different
+        if (state.logoUrl != logo || paletteList.isEmpty) {
+          final palette = await _extractFullPalette(ApiService.getImageUrl(logo));
+          paletteList = palette['all'] as List<Color>? ?? [];
+          PulseColors.setCompanyBrandPalette(
+            primary: primary,
+            secondary: secondary,
+            accent: accent,
+            vibrant: palette['vibrant'],
+            muted: palette['muted'],
+            light: palette['light'],
+            dark: palette['dark'],
+          );
+        } else {
+          // Just update the base colors if logo is the same
+          PulseColors.setCompanyBrandPalette(primary: primary, secondary: secondary, accent: accent);
+        }
       } else {
         PulseColors.setCompanyBrandPalette(primary: primary, secondary: secondary, accent: accent);
       }
@@ -140,19 +156,23 @@ class BrandingNotifier extends StateNotifier<BrandingState> {
     final sColor = secondary ?? primary;
     final aColor = accent ?? state.accentColor;
 
-    List<Color> paletteList = [];
+    List<Color> paletteList = state.extractedPalette;
     if (logo != null && logo.isNotEmpty) {
-      final palette = await _extractFullPalette(ApiService.getImageUrl(logo));
-      paletteList = palette['all'] as List<Color>? ?? [];
-      PulseColors.setCompanyBrandPalette(
-        primary: primary,
-        secondary: sColor,
-        accent: aColor,
-        vibrant: palette['vibrant'],
-        muted: palette['muted'],
-        light: palette['light'],
-        dark: palette['dark'],
-      );
+      if (state.logoUrl != logo || paletteList.isEmpty) {
+        final palette = await _extractFullPalette(ApiService.getImageUrl(logo));
+        paletteList = palette['all'] as List<Color>? ?? [];
+        PulseColors.setCompanyBrandPalette(
+          primary: primary,
+          secondary: sColor,
+          accent: aColor,
+          vibrant: palette['vibrant'],
+          muted: palette['muted'],
+          light: palette['light'],
+          dark: palette['dark'],
+        );
+      } else {
+        PulseColors.setCompanyBrandPalette(primary: primary, secondary: sColor, accent: aColor);
+      }
     } else {
       PulseColors.setCompanyBrandPalette(primary: primary, secondary: sColor, accent: aColor);
     }

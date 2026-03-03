@@ -54,6 +54,22 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
+
+// Multitenancy Helper: Verify if a userId belongs to the requester's company
+const verifyCompanyOwnership = async (req, res, targetUserId) => {
+    const requesterCompany = req.user.company;
+    if (!requesterCompany) return false;
+    
+    try {
+        const result = await pool.query('SELECT company FROM users WHERE id = $1', [targetUserId]);
+        if (result.rowCount === 0) return false;
+        return result.rows[0].company === requesterCompany;
+    } catch (err) {
+        console.error('Ownership check error:', err);
+        return false;
+    }
+};
+
 // Ensure uploads directory exists
 if (!fs.existsSync('./uploads')) {
   fs.mkdirSync('./uploads');
@@ -318,12 +334,12 @@ app.post('/api/register', upload.single('profilePicture'), async (req, res) => {
     const approvalStatus = (role === 'Admin') ? 1 : 0;
     
     const query = `
-      INSERT INTO users ("fullName", email, "mobileNumber", gender, password, role, company, department, experience, technologies, address, latitude, longitude, "profilePicture", "shiftId", "isActive", "isApproved", "weekOffs") 
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18) 
+      INSERT INTO users ("fullName", email, "mobileNumber", gender, password, role, company, department, experience, technologies, address, latitude, longitude, "profilePicture", "shiftId", "isActive", "isApproved", "weekOffs", "biometricToken") 
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19) 
       RETURNING id
     `;
     const result = await pool.query(query, [
-      fullName, email, mobileNumber, gender, hashedPassword, role || 'User', company, department, experience, technologies, address, latitude, longitude, profilePicture, shiftId, isActive !== undefined ? isActive : 1, approvalStatus, 'Sunday'
+      fullName, email, mobileNumber, gender, hashedPassword, role || 'User', company, department, experience, technologies, address, latitude, longitude, profilePicture, shiftId, isActive !== undefined ? isActive : 1, approvalStatus, 'Sunday', req.body.biometricToken || null
     ]);
     const newUserId = result.rows[0].id;
 
@@ -373,7 +389,44 @@ app.post('/api/login', async (req, res) => {
       return res.status(403).json({ error: 'Your account is pending admin approval. Please wait for the initial approval.' });
     }
     
+    // If the client sent a biometric token to link during this login
+    if (req.body.biometricToken && req.body.biometricToken !== user.biometricToken) {
+        await pool.query('UPDATE users SET "biometricToken" = $1 WHERE id = $2', [req.body.biometricToken, user.id]);
+        user.biometricToken = req.body.biometricToken;
+    }
+    
     // Generate JWT Token
+    const token = jwt.sign(
+      { id: user.id, role: user.role, company: user.company },
+      process.env.JWT_SECRET || 'fallback_dev_secret_do_not_use_in_prod',
+      { expiresIn: '30d' }
+    );
+
+    res.json({ message: 'Login successful', user: user, token: token });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// --- Biometric Specific Login ---
+app.post('/api/login/biometric', async (req, res) => {
+  const { biometricToken } = req.body;
+  if (!biometricToken) return res.status(400).json({ error: 'Biometric token is required' });
+
+  try {
+    const query = `
+      SELECT u.*, s.name as "shiftName", s."startTime" as "shiftStart", s."endTime" as "shiftEnd" 
+      FROM users u 
+      LEFT JOIN shifts s ON u."shiftId" = s.id 
+      WHERE u."biometricToken" = $1
+    `;
+    const result = await pool.query(query, [biometricToken]);
+    const user = result.rows[0];
+    
+    if (!user) return res.status(401).json({ error: 'Biometric token not recognized. Please login manually first.' });
+    if (user.isActive === 0) return res.status(403).json({ error: 'Account is deactivated. Please contact admin.' });
+    if (user.role !== 'Admin' && user.isApproved === 0) return res.status(403).json({ error: 'Your account is pending admin approval.' });
+
     const token = jwt.sign(
       { id: user.id, role: user.role, company: user.company },
       process.env.JWT_SECRET || 'fallback_dev_secret_do_not_use_in_prod',
@@ -393,6 +446,9 @@ app.use(authenticateToken);
 // --- NOTIFICATIONS ---
 
 app.get('/api/notifications/:userId', async (req, res) => {
+  if (!(await verifyCompanyOwnership(req, res, req.params.userId))) {
+    return res.status(403).json({ error: 'Access denied: User belongs to a different company' });
+  }
   try {
     const result = await pool.query('SELECT * FROM notifications WHERE "userId" = $1 ORDER BY "createdAt" DESC', [req.params.userId]);
     res.json(result.rows);
@@ -500,8 +556,9 @@ app.post('/api/checkin', upload.single('photo'), async (req, res) => {
     // 4. Geofencing check
     if (settings && settings.geofenceEnabled !== 0 && settings.officeLat && settings.officeLong && lat && long) {
       const distance = calculateDistance(lat, long, settings.officeLat, settings.officeLong);
-      if (distance > settings.officeRadiusMeters) {
-        return res.status(403).json({ error: `Outside office radius. Distance: ${Math.round(distance)}m, Max: ${settings.officeRadiusMeters}m` });
+      const buffer = 20.0;
+      if (distance > (settings.officeRadiusMeters + buffer)) {
+        return res.status(403).json({ error: `Outside office radius. Distance: ${Math.round(distance)}m, Limit: ${settings.officeRadiusMeters + buffer}m (incl. buffer)` });
       }
     }
 
@@ -570,8 +627,9 @@ app.post('/api/checkout', upload.single('photo'), async (req, res) => {
     // 3. Geofencing check
     if (settings && settings.geofenceEnabled !== 0 && settings.officeLat && settings.officeLong && lat && long) {
       const distance = calculateDistance(lat, long, settings.officeLat, settings.officeLong);
-      if (distance > settings.officeRadiusMeters) {
-        return res.status(403).json({ error: `Outside office radius. Distance: ${Math.round(distance)}m, Max: ${settings.officeRadiusMeters}m` });
+      const buffer = 20.0;
+      if (distance > (settings.officeRadiusMeters + buffer)) {
+        return res.status(403).json({ error: `Outside office radius. Distance: ${Math.round(distance)}m, Limit: ${settings.officeRadiusMeters + buffer}m (incl. buffer)` });
       }
     }
 
@@ -618,6 +676,9 @@ app.post('/api/checkout', upload.single('photo'), async (req, res) => {
 
 
 app.get('/api/attendance/status/:userId', async (req, res) => {
+  if (!(await verifyCompanyOwnership(req, res, req.params.userId))) {
+    return res.status(403).json({ error: 'Access denied: User belongs to a different company' });
+  }
   try {
     const result = await pool.query('SELECT id FROM attendance WHERE "userId" = $1 AND "checkOutTime" IS NULL', [req.params.userId]);
     res.json({ isCheckedIn: result.rowCount > 0 });
@@ -628,6 +689,9 @@ app.get('/api/attendance/status/:userId', async (req, res) => {
 
 // Dashboard stats computed server-side via SQL — much faster than fetching all records to the device
 app.get('/api/attendance/stats/:userId', async (req, res) => {
+  if (!(await verifyCompanyOwnership(req, res, req.params.userId))) {
+    return res.status(403).json({ error: 'Access denied: User belongs to a different company' });
+  }
   const userId = req.params.userId;
   const now = new Date();
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
@@ -664,6 +728,9 @@ app.get('/api/attendance/stats/:userId', async (req, res) => {
 });
 
 app.get('/api/attendance/:userId', async (req, res) => {
+  if (!(await verifyCompanyOwnership(req, res, req.params.userId))) {
+    return res.status(403).json({ error: 'Access denied: User belongs to a different company' });
+  }
   try {
     const result = await pool.query('SELECT * FROM attendance WHERE "userId" = $1 ORDER BY "checkInTime" DESC', [req.params.userId]);
     res.json(result.rows);
@@ -676,7 +743,9 @@ app.get('/api/attendance/:userId', async (req, res) => {
 
 // Quick toggle for employee active status (uses JSON, not multipart)
 app.patch('/api/admin/users/:id/active', async (req, res) => {
-  const { isActive, company } = req.body;
+  const { isActive } = req.body;
+  const company = req.user.company;
+  if (!company) return res.status(403).json({ error: 'Company context missing in token' });
   if (isActive === undefined || !company) return res.status(400).json({ error: 'isActive and company are required' });
   
   try {
@@ -696,7 +765,9 @@ app.patch('/api/admin/users/:id/active', async (req, res) => {
 });
 
 app.patch('/api/admin/users/:id/approve', async (req, res) => {
-  const { isApproved, company, rejectionReason } = req.body;
+  const { isApproved rejectionReason } = req.body;
+  const company = req.user.company;
+  if (!company) return res.status(403).json({ error: 'Company context missing in token' });
   if (isApproved === undefined || !company) return res.status(400).json({ error: 'isApproved and company are required' });
 
   try {
@@ -717,8 +788,8 @@ app.patch('/api/admin/users/:id/approve', async (req, res) => {
 });
 
 app.get('/api/admin/stats', async (req, res) => {
-  const company = req.query.company;
-  if (!company) return res.status(400).json({ error: 'Company parameter is required' });
+  const company = req.user.company;
+  if (!company) return res.status(403).json({ error: 'Company context missing in token' });
 
   try {
     const today = new Date().toISOString().split('T')[0];
@@ -771,8 +842,8 @@ app.get('/api/admin/stats', async (req, res) => {
 
 
 app.get('/api/admin/users', async (req, res) => {
-  const company = req.query.company;
-  if (!company) return res.status(400).json({ error: 'Company parameter is required' });
+  const company = req.user.company;
+  if (!company) return res.status(403).json({ error: 'Company context missing in token' });
 
   try {
     const query = `
@@ -791,7 +862,8 @@ app.get('/api/admin/users', async (req, res) => {
 });
 
 app.delete('/api/admin/users/:id', async (req, res) => {
-  const { company } = req.body; 
+  const company = req.user.company;
+  if (!company) return res.status(403).json({ error: 'Company context missing in token' }); 
   if (!company) return res.status(400).json({ error: 'Company Name is required' });
 
   try {
@@ -811,8 +883,10 @@ app.delete('/api/admin/users/:id', async (req, res) => {
   }
 });
 
-app.post('/api/admin/users', upload.single('profilePicture'), async (req, res) => {
-  const { fullName, mobileNumber, email, password, role, department, salary, shiftId, isActive, weekOffs, company } = req.body;
+app.post('/api/admin/users', async (req, res) => {
+  const { fullName, mobileNumber, email, password, role, department, salary, shiftId, isActive, weekOffs } = req.body;
+  const company = req.user.company;
+  if (!company) return res.status(403).json({ error: 'Company context missing in token' });
   const profilePicture = req.file ? `/uploads/${req.file.filename}` : null;
 
   try {
@@ -837,8 +911,9 @@ app.post('/api/admin/users', upload.single('profilePicture'), async (req, res) =
 // Consolidated User and Attendance endpoints
 
 app.get('/api/admin/attendance', async (req, res) => {
-  const { userId, startDate, endDate, department, company, limit } = req.query;
-  if (!company) return res.status(400).json({ error: 'Company parameter is required' });
+  const { userId, startDate, endDate, department, limit } = req.query;
+  const company = req.user.company;
+  if (!company) return res.status(403).json({ error: 'Company context missing in token' });
 
   try {
     let query = `
@@ -895,7 +970,9 @@ app.post('/api/admin/attendance', async (req, res) => {
 
 // Edit an attendance record (Admin)
 app.put('/api/admin/attendance/:id', async (req, res) => {
-  const { checkInTime, checkOutTime, status, overtimeHours, adminId, company } = req.body;
+  const { checkInTime, checkOutTime, status, overtimeHours, adminId } = req.body;
+  const company = req.user.company;
+  if (!company) return res.status(403).json({ error: 'Company context missing in token' });
   if (!company) return res.status(400).json({ error: 'Company is required' });
 
   try {
@@ -917,7 +994,7 @@ app.put('/api/admin/attendance/:id', async (req, res) => {
 // Note: Merged into above endpoint
 
 app.get('/api/admin/absent', async (req, res) => {
-  const company = req.query.company;
+  const company = req.user.company;
   const now = new Date();
   const today = now.toISOString().split('T')[0];
   const dayName = now.toLocaleDateString('en-US', { weekday: 'long' });
@@ -957,8 +1034,8 @@ app.get('/api/admin/absent', async (req, res) => {
 // --- Shifts Management ---
 
 app.get('/api/admin/shifts', async (req, res) => {
-  const company = req.query.company;
-  if (!company) return res.status(400).json({ error: 'Company parameter is required' });
+  const company = req.user.company;
+  if (!company) return res.status(403).json({ error: 'Company context missing in token' });
 
   try {
     const result = await pool.query('SELECT * FROM shifts WHERE company = $1', [company]);
@@ -976,7 +1053,9 @@ app.get('/api/admin/shifts', async (req, res) => {
 });
 
 app.put('/api/admin/shifts/:id', async (req, res) => {
-  const { name, startTime, endTime, gracePeriodMins, overtimeRate, latePenaltyPerMin, company } = req.body;
+  const { name, startTime, endTime, gracePeriodMins, overtimeRate, latePenaltyPerMin } = req.body;
+  const company = req.user.company;
+  if (!company) return res.status(403).json({ error: 'Company context missing in token' });
   if (!company) return res.status(400).json({ error: 'Company is required' });
   
   try {
@@ -993,7 +1072,8 @@ app.put('/api/admin/shifts/:id', async (req, res) => {
 });
 
 app.delete('/api/admin/shifts/:id', async (req, res) => {
-  const { company } = req.body;
+  const company = req.user.company;
+  if (!company) return res.status(403).json({ error: 'Company context missing in token' });
   if (!company) return res.status(400).json({ error: 'Company is required' });
 
   try {
@@ -1006,7 +1086,9 @@ app.delete('/api/admin/shifts/:id', async (req, res) => {
 });
 
 app.post('/api/admin/shifts', async (req, res) => {
-  const { name, startTime, endTime, gracePeriodMins, overtimeRate, latePenaltyPerMin, company } = req.body;
+  const { name, startTime, endTime, gracePeriodMins, overtimeRate, latePenaltyPerMin } = req.body;
+  const company = req.user.company;
+  if (!company) return res.status(403).json({ error: 'Company context missing in token' });
   try {
     const result = await pool.query(
       `INSERT INTO shifts (name, "startTime", "endTime", "gracePeriodMins", "overtimeRate", "latePenaltyPerMin", company) 
@@ -1022,7 +1104,8 @@ app.post('/api/admin/shifts', async (req, res) => {
 // --- Company Settings ---
 
 app.get('/api/settings', async (req, res) => {
-  const company = req.query.company;
+  const company = req.user.company;
+  if (!company) return res.status(403).json({ error: 'Company context missing in token' });
   if (!company) return res.status(400).json({ error: 'Company parameter is required' });
 
   try {
@@ -1042,7 +1125,9 @@ app.get('/api/settings', async (req, res) => {
 });
 
 app.post('/api/admin/settings', async (req, res) => {
-  const { company, companyName, officeLat, officeLong, officeRadiusMeters, workingDays, weekendDays, geofenceEnabled, payrollEnabled, cameraAuthEnabled, themeColor, secondaryColor, accentColor } = req.body;
+  const { companyName, officeLat, officeLong, officeRadiusMeters, workingDays, weekendDays, geofenceEnabled, payrollEnabled, cameraAuthEnabled, themeColor, secondaryColor, accentColor } = req.body;
+  const company = req.user.company;
+  if (!company) return res.status(403).json({ error: 'Company context missing in token' });
   
   if (!company) return res.status(400).json({ error: 'Company ID is required' });
 
@@ -1124,7 +1209,8 @@ app.post('/api/admin/branding', (req, res, next) => {
 
 // --- Holidays ---
 app.get('/api/admin/holidays', async (req, res) => {
-  const company = req.query.company;
+  const company = req.user.company;
+  if (!company) return res.status(403).json({ error: 'Company context missing in token' });
   if (!company) return res.status(400).json({ error: 'Company parameter is required' });
 
   try {
@@ -1137,7 +1223,9 @@ app.get('/api/admin/holidays', async (req, res) => {
 });
 
 app.post('/api/admin/holidays', async (req, res) => {
-  const { name, date, type, duration, company } = req.body;
+  const { name, date, type, duration } = req.body;
+  const company = req.user.company;
+  if (!company) return res.status(403).json({ error: 'Company context missing in token' });
   try {
     const query = 'INSERT INTO holidays (name, date, type, duration, company) VALUES ($1, $2, $3, $4, $5) RETURNING id';
     const result = await pool.query(query, [name, date, type || 'Public', duration || 'Full Day', company]);
@@ -1154,7 +1242,8 @@ app.post('/api/admin/holidays', async (req, res) => {
 });
 
 app.delete('/api/admin/holidays/:id', async (req, res) => {
-  const { company } = req.body;
+  const company = req.user.company;
+  if (!company) return res.status(403).json({ error: 'Company context missing in token' });
   if (!company) return res.status(400).json({ error: 'Company is required' });
 
   try {
@@ -1168,7 +1257,8 @@ app.delete('/api/admin/holidays/:id', async (req, res) => {
 
 // --- Leave Policies ---
 app.get('/api/admin/leave-policies', async (req, res) => {
-  const company = req.query.company;
+  const company = req.user.company;
+  if (!company) return res.status(403).json({ error: 'Company context missing in token' });
   if (!company) return res.status(400).json({ error: 'Company parameter is required' });
 
   try {
@@ -1186,7 +1276,9 @@ app.get('/api/admin/leave-policies', async (req, res) => {
 });
 
 app.post('/api/admin/leave-policies', async (req, res) => {
-  const { leaveType, daysPerYear, isPaid, company } = req.body;
+  const { leaveType, daysPerYear, isPaid } = req.body;
+  const company = req.user.company;
+  if (!company) return res.status(403).json({ error: 'Company context missing in token' });
   try {
     const query = `
       INSERT INTO leave_policies ("leaveType", "daysPerYear", "isPaid", company) 
@@ -1201,7 +1293,9 @@ app.post('/api/admin/leave-policies', async (req, res) => {
 });
 
 app.put('/api/admin/leave-balance', async (req, res) => {
-  const { userId, leaveType, totalDays, company } = req.body;
+  const { userId, leaveType, totalDays } = req.body;
+  const company = req.user.company;
+  if (!company) return res.status(403).json({ error: 'Company context missing in token' });
   if (!company) return res.status(400).json({ error: 'Company is required' });
 
   try {
@@ -1222,6 +1316,9 @@ app.put('/api/admin/leave-balance', async (req, res) => {
 });
 
 app.get('/api/admin/leave-balance/:userId', async (req, res) => {
+  if (!(await verifyCompanyOwnership(req, res, req.params.userId))) {
+    return res.status(403).json({ error: 'Access denied: User belongs to a different company' });
+  }
   try {
     const result = await pool.query('SELECT * FROM leave_balances WHERE "userId" = $1', [req.params.userId]);
     res.json(result.rows);
@@ -1279,6 +1376,12 @@ app.get('/api/leaves/types', async (req, res) => {
 
 // IMPORTANT: This route MUST be above /api/leaves/:userId to prevent 'balance' matching as a userId
 app.get('/api/leaves/balance/:userId', async (req, res) => {
+  if (!(await verifyCompanyOwnership(req, res, req.params.userId))) {
+    return res.status(403).json({ error: 'Access denied: User belongs to a different company' });
+  }
+  if (!(await verifyCompanyOwnership(req, res, req.params.userId))) {
+    return res.status(403).json({ error: 'Access denied: User belongs to a different company' });
+  }
   const currentMonth = new Date().getMonth() + 1; // 1-12
   const userId = req.params.userId;
 
@@ -1375,6 +1478,9 @@ app.get('/api/leaves/balance/:userId', async (req, res) => {
 });
 
 app.get('/api/leaves/:userId', async (req, res) => {
+  if (!(await verifyCompanyOwnership(req, res, req.params.userId))) {
+    return res.status(403).json({ error: 'Access denied: User belongs to a different company' });
+  }
   try {
     const result = await pool.query('SELECT * FROM leaves WHERE "userId" = $1 ORDER BY "createdAt" DESC', [req.params.userId]);
     res.json(result.rows);
@@ -1399,7 +1505,8 @@ app.put('/api/leaves/:id/cancel', async (req, res) => {
 });
 
 app.get('/api/admin/leaves', async (req, res) => {
-  const company = req.query.company;
+  const company = req.user.company;
+  if (!company) return res.status(403).json({ error: 'Company context missing in token' });
   if (!company) return res.status(400).json({ error: 'Company parameter is required' });
   try {
     const query = `
@@ -1417,7 +1524,9 @@ app.get('/api/admin/leaves', async (req, res) => {
 });
 
 app.put('/api/admin/leaves/:id', async (req, res) => {
-  const { status, rejectionReason, company } = req.body;
+  const { status, rejectionReason } = req.body;
+  const company = req.user.company;
+  if (!company) return res.status(403).json({ error: 'Company context missing in token' });
   if (!company) return res.status(400).json({ error: 'Company is required' });
 
   try {
@@ -1617,7 +1726,9 @@ app.get('/api/admin/reports/attendance', async (req, res) => {
 
 // Admin: Create Payslip
 app.post('/api/admin/payslips', async (req, res) => {
-  const { userId, company, month, year, basicSalary, allowances, deductions, netSalary } = req.body;
+  const { userId month, year, basicSalary, allowances, deductions, netSalary } = req.body;
+  const company = req.user.company;
+  if (!company) return res.status(403).json({ error: 'Company context missing in token' });
   if (!userId || !month || !year || basicSalary === undefined) {
     return res.status(400).json({ error: 'Missing required fields' });
   }
@@ -1641,7 +1752,8 @@ app.post('/api/admin/payslips', async (req, res) => {
 
 // Admin: Get all Payslips for Company
 app.get('/api/admin/payslips', async (req, res) => {
-  const company = req.query.company;
+  const company = req.user.company;
+  if (!company) return res.status(403).json({ error: 'Company context missing in token' });
   if (!company) return res.status(400).json({ error: 'Company parameter is required' });
   try {
     const query = `
@@ -1660,7 +1772,8 @@ app.get('/api/admin/payslips', async (req, res) => {
 
 // Admin: Delete a Payslip
 app.delete('/api/admin/payslips/:id', async (req, res) => {
-  const { company } = req.body;
+  const company = req.user.company;
+  if (!company) return res.status(403).json({ error: 'Company context missing in token' });
   if (!company) return res.status(400).json({ error: 'Company is required' });
 
   try {
@@ -1674,6 +1787,9 @@ app.delete('/api/admin/payslips/:id', async (req, res) => {
 
 // User: Get My Payslips
 app.get('/api/payslips/:userId', async (req, res) => {
+  if (!(await verifyCompanyOwnership(req, res, req.params.userId))) {
+    return res.status(403).json({ error: 'Access denied: User belongs to a different company' });
+  }
   try {
     const query = `
       SELECT p.*, u."fullName", u.email

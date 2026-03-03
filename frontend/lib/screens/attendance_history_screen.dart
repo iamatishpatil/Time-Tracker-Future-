@@ -12,6 +12,7 @@ import '../core/widgets/pulse_empty_state.dart';
 import '../services/api_service.dart';
 import '../services/pdf_service.dart';
 import '../core/widgets/pulse_scaffold.dart';
+import '../core/widgets/pulse_button.dart'; // For smaller icon usage if needed
 
 class AttendanceHistoryScreen extends StatefulWidget {
   const AttendanceHistoryScreen({super.key});
@@ -221,22 +222,14 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
                                           ),
                                       ],
                                     ),
-                                    if (record['checkInAddress'] != null) ...[
-                                      const SizedBox(height: 10),
-                                      Row(
-                                        children: [
-                                          const Icon(Icons.location_on, size: 13, color: PulseColors.textHint),
-                                          const SizedBox(width: 4),
-                                          Expanded(
-                                            child: Text(
-                                              record['checkInAddress'],
-                                              style: PulseTextStyles.caption.copyWith(fontSize: 11),
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
+                                    if (record['checkInAddress'] != null || record['checkOutAddress'] != null) ...[
+                                      const SizedBox(height: 12),
+                                      if (record['checkInAddress'] != null)
+                                        _addressRow('In:', record['checkInAddress']),
+                                      if (record['checkOutAddress'] != null) ...[
+                                        const SizedBox(height: 4),
+                                        _addressRow('Out:', record['checkOutAddress']),
+                                      ],
                                     ],
                                   ],
                                 ),
@@ -248,6 +241,27 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
               ],
             ),
       ),
+    );
+  }
+
+  // Helper row for showing addresses
+  Widget _addressRow(String label, String address) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 25,
+          child: Text(label, style: PulseTextStyles.captionBold.copyWith(fontSize: 10, color: PulseColors.primaryLight)),
+        ),
+        const Icon(Icons.location_on, size: 12, color: PulseColors.textHint),
+        const SizedBox(width: 4),
+        Expanded(
+          child: Text(
+            address,
+            style: PulseTextStyles.caption.copyWith(fontSize: 11),
+          ),
+        ),
+      ],
     );
   }
 

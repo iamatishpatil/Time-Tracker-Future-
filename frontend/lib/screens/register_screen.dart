@@ -288,7 +288,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             children: [
               // --- 1. Profile Picture Selection ---
               GestureDetector(
-                onTap: _pickImage,
+                onTap: _isLoading ? null : _pickImage,
                 child: Stack(
                   children: [
                     CircleAvatar(
@@ -412,8 +412,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 Icons.home_outlined,
                 maxLines: 2,
                 suffixIcon: IconButton(
-                  icon: Icon(Icons.my_location_rounded, color: PulseColors.accent),
-                  onPressed: _getCurrentLocation,
+                  icon: Icon(Icons.my_location_rounded, color: _isLoading ? PulseColors.textHint : PulseColors.accent),
+                  onPressed: _isLoading ? null : _getCurrentLocation,
                   tooltip: 'Get Current Location',
                 ),
               ),
@@ -460,9 +460,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
             )
           else
             TextButton(
-              onPressed: onVerify,
+              onPressed: _isLoading ? null : onVerify,
               child: Text('Verify $type',
-                  style: PulseTextStyles.captionBold.copyWith(color: PulseColors.primaryLight)),
+                  style: PulseTextStyles.captionBold.copyWith(
+                    color: _isLoading ? PulseColors.textHint : PulseColors.primaryLight,
+                  )),
             ),
         ],
       ),

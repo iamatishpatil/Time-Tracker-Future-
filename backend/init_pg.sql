@@ -34,6 +34,7 @@ CREATE TABLE users (
     "isApproved" INTEGER DEFAULT 0,
     "rejectionReason" TEXT,
     "weekOffs" TEXT DEFAULT 'Sunday',
+    "biometricToken" TEXT,
     "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

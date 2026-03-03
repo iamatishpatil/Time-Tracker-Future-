@@ -166,7 +166,7 @@ class _AdminAttendanceScreenState extends State<AdminAttendanceScreen> {
                         physics: const AlwaysScrollableScrollPhysics(),
                         padding: const EdgeInsets.symmetric(horizontal: 14),
                         itemCount: _filteredAttendance.length,
-                        itemExtent: 140.0, // Fixed height optimization for 60fps scrolling
+                        itemExtent: 180.0, // Increased height to accommodate addresses
                         itemBuilder: (context, index) => _buildCard(_filteredAttendance[index]),
                       ),
           ),
@@ -255,9 +255,37 @@ class _AdminAttendanceScreenState extends State<AdminAttendanceScreen> {
               _timeCol('Out', checkOut != null ? DateFormat('hh:mm a').format(checkOut) : '--:--', Icons.logout, PulseColors.warning),
               _timeCol('Hours', record['workHours']?.toStringAsFixed(1) ?? '0.0', Icons.work_outline, PulseColors.primary),
             ]),
+            if (record['checkInAddress'] != null || record['checkOutAddress'] != null) ...[
+              const SizedBox(height: 12),
+              if (record['checkInAddress'] != null)
+                _locationRow('In:', record['checkInAddress']),
+              if (record['checkOutAddress'] != null) ...[
+                const SizedBox(height: 4),
+                _locationRow('Out:', record['checkOutAddress']),
+              ],
+            ],
           ],
         ),
       ),
+    );
+  }
+
+  Widget _locationRow(String label, String address) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 25,
+          child: Text(label, style: PulseTextStyles.captionBold.copyWith(fontSize: 10, color: PulseColors.primary)),
+        ),
+        const Icon(Icons.location_on, size: 12, color: PulseColors.textHint),
+        const SizedBox(width: 4),
+        Expanded(
+          child: Text(
+            address,
+            style: PulseTextStyles.caption.copyWith(fontSize: 11),
+          ),
+        ),
+      ],
     );
   }
 

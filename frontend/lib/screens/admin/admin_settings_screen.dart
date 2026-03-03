@@ -307,10 +307,16 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
                       children: [
                         Positioned(
                           top: 20, left: 20,
-                          child: CircleAvatar(
-                            radius: 30,
-                            backgroundColor: Colors.white,
-                            backgroundImage: _currentLogoUrl != null ? CachedNetworkImageProvider(ApiService.getImageUrl(_currentLogoUrl!)) : null,
+                          child: Container(
+                            width: 60, height: 60,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(20),
+                              boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10)],
+                              image: _currentLogoUrl != null 
+                                  ? DecorationImage(image: CachedNetworkImageProvider(ApiService.getImageUrl(_currentLogoUrl!)), fit: BoxFit.contain)
+                                  : null,
+                            ),
                             child: _currentLogoUrl == null ? Icon(Icons.business, color: PulseColors.primary) : null,
                           ),
                         ),
@@ -321,7 +327,7 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
                             padding: const EdgeInsets.all(12),
                             child: Row(
                               children: [
-                                Container(width: 40, height: 40, decoration: BoxDecoration(color: PulseColors.primary, shape: BoxShape.circle)),
+                                Container(width: 40, height: 40, decoration: BoxDecoration(color: PulseColors.primary, borderRadius: BorderRadius.circular(15))),
                                 const SizedBox(width: 12),
                                 Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                                   Container(width: 80, height: 8, decoration: BoxDecoration(color: PulseColors.textPrimary, borderRadius: BorderRadius.circular(4))),
@@ -614,7 +620,7 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
         content: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Container(width: 60, height: 60, decoration: BoxDecoration(color: color, shape: BoxShape.circle, border: Border.all(color: PulseColors.border))),
+            Container(width: 60, height: 60, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(15), border: Border.all(color: PulseColors.border))),
           ],
         ),
         actions: [
@@ -693,7 +699,7 @@ class _LogoUploadWidget extends StatelessWidget {
                     height: 120,
                     decoration: BoxDecoration(
                       color: PulseColors.background,
-                      borderRadius: BorderRadius.circular(24),
+                      borderRadius: BorderRadius.circular(20),
                       border: Border.all(color: PulseColors.border, width: 2),
                       boxShadow: PulseColors.premiumShadow,
                       image: selectedLogo != null
@@ -836,7 +842,7 @@ class _BrandingPaletteWidget extends StatelessWidget {
                         height: 50,
                         decoration: BoxDecoration(
                           color: color,
-                          shape: BoxShape.circle,
+                          borderRadius: BorderRadius.circular(15),
                           border: Border.all(color: PulseColors.border, width: 2),
                           boxShadow: [
                             BoxShadow(

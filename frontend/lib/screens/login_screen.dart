@@ -12,9 +12,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/providers/branding_provider.dart';
 import '../core/widgets/pulse_scaffold.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:uuid/uuid.dart';
 
 // --- 1. Login Screen (StatefulWidget) ---
-// We use a ConsumerStatefulWidget because this screen needs to "remember" things 
+// We use a ConsumerStatefulWidget because this screen needs to "remember" things
 // like what the user typed or if a loading spinner is showing.
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -27,19 +29,22 @@ class LoginScreen extends ConsumerStatefulWidget {
 class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProviderStateMixin {
   // GlobalKey is like a "Handle" to control and validate the Form.
   final _formKey = GlobalKey<FormState>();
-  
+
   // Controllers "listen" to what you type in the text boxes.
   final _mobileController = TextEditingController();
   final _passwordController = TextEditingController();
 
   String _completePhoneNumber = '';
-  bool _isLoading = false; 
-  bool _obscurePassword = true; 
-  bool _isAdminSelected = false; 
-  
+  bool _isLoading = false;
+  bool _obscurePassword = true;
+  bool _isAdminSelected = false;
+
   // Biometric authentication (Fingerprint/Face ID)
   final LocalAuthentication auth = LocalAuthentication();
+  final _storage = const FlutterSecureStorage();
   bool _canCheckBiometrics = false;
+  bool _isFaceId = false;
+  bool _isBiometricEnrolled = false;
 
   // Animation variables to make the screen look smooth
   late AnimationController _animController;
@@ -51,53 +56,115 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
   void initState() {
     super.initState();
     _checkBiometrics(); // Check if the phone supports fingerprints
-    
+
     // Set up the "fade-in" and "slide-up" animations
     _animController = AnimationController(vsync: this, duration: const Duration(milliseconds: 800));
     _fadeAnimation = CurvedAnimation(parent: _animController, curve: Curves.easeOut);
     _slideAnimation = Tween<Offset>(begin: const Offset(0, 0.1), end: Offset.zero)
         .animate(CurvedAnimation(parent: _animController, curve: Curves.easeOut));
-    
+
     _animController.forward(); // Start the animation
   }
 
   // Check if fingerprint/face ID is available on this device
   Future<void> _checkBiometrics() async {
-    bool canCheckBiometrics;
+    bool canCheckBiometrics = false;
+    bool isFaceId = false;
+    bool isBiometricEnrolled = false;
+    
     try {
       canCheckBiometrics = await auth.canCheckBiometrics || await auth.isDeviceSupported();
+      if (canCheckBiometrics) {
+        final availableBiometrics = await auth.getAvailableBiometrics();
+        if (availableBiometrics.contains(BiometricType.face) || 
+            availableBiometrics.contains(BiometricType.strong)) {
+          isFaceId = true;
+        }
+        isBiometricEnrolled = await auth.isDeviceSupported();
+      }
     } catch (e) {
-      canCheckBiometrics = false;
+      debugPrint('Error checking biometrics: $e');
     }
-    if (mounted) setState(() => _canCheckBiometrics = canCheckBiometrics);
+    
+    if (mounted) {
+      setState(() {
+        _canCheckBiometrics = canCheckBiometrics;
+        _isFaceId = isFaceId;
+        _isBiometricEnrolled = isBiometricEnrolled;
+      });
+    }
   }
 
   // The actual Biometric Login process
   Future<void> _authenticate() async {
-    bool authenticated = false;
     try {
-      authenticated = await auth.authenticate(
-        localizedReason: 'Scan your fingerprint to login',
-        options: const AuthenticationOptions(stickyAuth: true, biometricOnly: true),
+      // 1. Trigger the device's biometric prompt
+      final String biometricType = _isFaceId ? 'Face' : 'Fingerprint';
+      final bool authenticated = await auth.authenticate(
+        localizedReason: 'Authenticate with $biometricType to login',
+        options: const AuthenticationOptions(
+          stickyAuth: true,
+          biometricOnly: true,
+        ),
       );
+
+      if (authenticated && mounted) {
+        setState(() => _isLoading = true);
+        
+        // 2. Retrieve the secure biometric token from the phone's "Vault"
+        final tokenKey = _isAdminSelected ? 'admin_biometric_token' : 'user_biometric_token';
+        final biometricToken = await _storage.read(key: tokenKey);
+
+        if (biometricToken != null) {
+          // 3. Log in directly using the token
+          final response = await ApiService.loginWithBiometric(biometricToken);
+          if (mounted) _handleLoginSuccess(response);
+        } else {
+          setState(() => _isLoading = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Biometric not linked. Please login with password first.')),
+          );
+        }
+      }
     } catch (e) {
       debugPrint('Error auth: $e');
+      if (mounted) {
+         String errorMsg = e.toString();
+         if (errorMsg.contains('NotEnrolled') || errorMsg.contains('NotAvailable')) {
+            errorMsg = 'No biometrics set up on this device. Please add a screen lock and fingerprint/face in Android settings.';
+         } else {
+            errorMsg = 'Biometric error: $errorMsg';
+         }
+         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(errorMsg)));
+      }
+      setState(() => _isLoading = false);
     }
+  }
 
-    if (authenticated && mounted) {
-      final prefs = await SharedPreferences.getInstance();
-      final mobile = prefs.getString(_isAdminSelected ? 'saved_admin_mobile' : 'saved_mobile');
-      final password = prefs.getString(_isAdminSelected ? 'saved_admin_password' : 'saved_password');
+  void _handleLoginSuccess(Map<String, dynamic> response) async {
+    final user = response['user'];
 
-      if (mobile != null && password != null) {
-        setState(() {
-          _completePhoneNumber = mobile;
-          _passwordController.text = password;
-        });
-        _login(); 
+    // Pre-fetch the branding in the background without blocking navigation
+    // This removes the "stuck" feeling after a successful login
+    ref.read(brandingProvider.notifier).fetchBranding(company: user['company']).catchError((e) {
+      debugPrint("Background branding fetch failed: $e");
+    });
+
+    if (_isAdminSelected) {
+      if (user['role'] == 'Admin') {
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const AdminContainer()));
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('No saved ${_isAdminSelected ? "admin " : ""}credentials. Login manually first.')));
+          const SnackBar(content: Text('Access Denied: You are not an Admin.')),
+        );
+      }
+    } else {
+      if (user['role'] == 'Admin') {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Access Denied: Please use Admin portal.')),
+        );
+      } else {
+        Navigator.pushReplacementNamed(context, '/home');
       }
     }
   }
@@ -117,44 +184,24 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
     if (_formKey.currentState!.validate()) {
       setState(() => _isLoading = true); // Show the loading spinner
       try {
-        // 2. Send the data to the server
+        // 2. Generate or retrieve biometric token for security
+        final tokenKey = _isAdminSelected ? 'admin_biometric_token' : 'user_biometric_token';
+        String? biometricToken = await _storage.read(key: tokenKey);
+        
+        if (biometricToken == null) {
+           biometricToken = const Uuid().v4();
+           await _storage.write(key: tokenKey, value: biometricToken);
+        }
+
+        // 3. Send the data to the server
         final response = await ApiService.login(
           _completePhoneNumber,
           _passwordController.text,
+          biometricToken: biometricToken,
         );
 
         if (mounted) {
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setString(_isAdminSelected ? 'saved_admin_mobile' : 'saved_mobile', _completePhoneNumber);
-          await prefs.setString(_isAdminSelected ? 'saved_admin_password' : 'saved_password', _passwordController.text);
-
-          final user = response['user'];
-
-          // Pre-fetch the branding before navigating so the theme is applied instantly
-          try {
-            await ref.read(brandingProvider.notifier).fetchBranding(company: user['company']).timeout(const Duration(seconds: 4));
-          } catch (e) {
-            debugPrint("Failed to load branding strictly on login: $e");
-          }
-
-          if (_isAdminSelected) {
-            if (user['role'] == 'Admin') {
-              Navigator.pushReplacement(
-                  context, MaterialPageRoute(builder: (context) => const AdminContainer()));
-            } else {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Access Denied: You are not an Admin. Please use the Employee portal.')),
-              );
-            }
-          } else {
-            if (user['role'] == 'Admin') {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Access Denied: You are an Admin. Please use the Admin portal.')),
-              );
-            } else {
-              Navigator.pushReplacementNamed(context, '/home');
-            }
-          }
+          _handleLoginSuccess(response);
         }
       } catch (e) {
         // Show an error message if login fails
@@ -187,7 +234,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
                     // The Branded Logo at the top
                     BrandedLogo(size: 100, showText: false),
                     const SizedBox(height: 24),
-                    Text('Time Tracker', style: PulseTextStyles.h1),
+                    Text('Trackzo', style: PulseTextStyles.h1),
                     const SizedBox(height: 8),
                     Text(_isAdminSelected ? 'Manage your organization securely' : 'Track your work, effortlessly', style: PulseTextStyles.body),
                     const SizedBox(height: 40),
@@ -222,7 +269,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
                                 children: [
                                   Expanded(
                                     child: GestureDetector(
-                                      onTap: () => setState(() => _isAdminSelected = false),
+                                      onTap: _isLoading ? null : () => setState(() => _isAdminSelected = false),
                                       child: Container(
                                         decoration: BoxDecoration(
                                           color: !_isAdminSelected ? PulseColors.primary : Colors.transparent,
@@ -240,7 +287,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
                                   ),
                                   Expanded(
                                     child: GestureDetector(
-                                      onTap: () => setState(() => _isAdminSelected = true),
+                                      onTap: _isLoading ? null : () => setState(() => _isAdminSelected = true),
                                       child: Container(
                                         decoration: BoxDecoration(
                                           color: _isAdminSelected ? PulseColors.primary : Colors.transparent,
@@ -309,12 +356,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
                             Align(
                               alignment: Alignment.centerRight,
                               child: TextButton(
-                                onPressed: () {
+                                onPressed: _isLoading ? null : () {
                                   Navigator.push(context,
                                       MaterialPageRoute(builder: (_) => const ForgotPasswordScreen()));
                                 },
                                 child: Text('Forgot Password?',
-                                    style: PulseTextStyles.caption.copyWith(color: PulseColors.primaryLight)),
+                                    style: PulseTextStyles.caption.copyWith(
+                                      color: _isLoading ? PulseColors.textHint : PulseColors.primaryLight,
+                                    )),
                               ),
                             ),
                             const SizedBox(height: 8),
@@ -333,20 +382,32 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
                                 child: Column(
                                   children: [
                                     GestureDetector(
-                                      onTap: _authenticate,
+                                      onTap: _isLoading ? null : _authenticate,
                                       child: Container(
                                         padding: const EdgeInsets.all(16),
                                         decoration: BoxDecoration(
-                                          color: PulseColors.surfaceVariant,
+                                          color: _isLoading ? PulseColors.surfaceVariant : PulseColors.surfaceVariant,
                                           shape: BoxShape.circle,
                                           border: Border.all(color: PulseColors.border),
                                         ),
-                                        child: Icon(Icons.fingerprint,
-                                            size: 36, color: PulseColors.primary),
+                                        child: _isLoading 
+                                          ? SizedBox(
+                                              width: 36, 
+                                              height: 36, 
+                                              child: CircularProgressIndicator(strokeWidth: 3, color: PulseColors.primary)
+                                            )
+                                          : Icon(
+                                              _isFaceId ? Icons.face_rounded : Icons.fingerprint,
+                                              size: 36, 
+                                              color: PulseColors.primary
+                                            ),
                                       ),
                                     ),
                                     const SizedBox(height: 8),
-                                    Text('Biometric Login', style: PulseTextStyles.caption),
+                                    Text(
+                                        'Login with ${_isFaceId ? "Face ID" : "Biometrics"}', 
+                                        style: PulseTextStyles.caption
+                                    ),
                                   ],
                                 ),
                               ),
@@ -355,7 +416,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
                         ),
                       ),
                     ),
-                    
+
                     // --- Bottom Sign Up Link ---
                     const SizedBox(height: 24),
                     Row(
@@ -363,9 +424,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
                       children: [
                         Text(_isAdminSelected ? "Register your company? " : "Don't have an account? ", style: PulseTextStyles.body),
                         GestureDetector(
-                          onTap: () => Navigator.pushNamed(context, _isAdminSelected ? '/admin-register' : '/register'),
+                          onTap: _isLoading ? null : () => Navigator.pushNamed(context, _isAdminSelected ? '/admin-register' : '/register'),
                           child: Text('Sign Up',
-                              style: PulseTextStyles.bodyBold.copyWith(color: PulseColors.primary)),
+                              style: PulseTextStyles.bodyBold.copyWith(
+                                color: _isLoading ? PulseColors.textHint : PulseColors.primary,
+                              )),
                         ),
                       ],
                     ),

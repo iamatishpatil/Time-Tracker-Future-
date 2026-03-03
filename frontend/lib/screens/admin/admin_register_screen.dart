@@ -175,7 +175,7 @@ class _AdminRegisterScreenState extends State<AdminRegisterScreen> {
           child: Column(
             children: [
               GestureDetector(
-                onTap: _pickImage,
+                onTap: _isLoading ? null : _pickImage,
                 child: CircleAvatar(
                   radius: 45,
                   backgroundColor: PulseColors.primary.withOpacity(0.1),
@@ -203,7 +203,10 @@ class _AdminRegisterScreenState extends State<AdminRegisterScreen> {
                 decoration: InputDecoration(
                   labelText: 'Work Email',
                   prefixIcon: const Icon(Icons.email_outlined),
-                  suffixIcon: _isEmailVerified ? const Icon(Icons.verified, color: Colors.green) : TextButton(onPressed: () => _verify('Email'), child: const Text('Verify')),
+                  suffixIcon: _isEmailVerified ? const Icon(Icons.verified, color: Colors.green) : TextButton(
+                    onPressed: _isLoading ? null : () => _verify('Email'), 
+                    child: Text('Verify', style: TextStyle(color: _isLoading ? PulseColors.textHint : PulseColors.primary)),
+                  ),
                 ),
                 readOnly: _isEmailVerified,
                 validator: (val) => (val == null || val.isEmpty) ? 'Email required' : null,
@@ -220,7 +223,13 @@ class _AdminRegisterScreenState extends State<AdminRegisterScreen> {
                 enabled: !_isMobileVerified,
                 onChanged: (phone) => _completePhoneNumber = phone.completeNumber,
               ),
-              if (!_isMobileVerified) Align(alignment: Alignment.centerRight, child: TextButton(onPressed: () => _verify('Mobile'), child: const Text('Verify Mobile'))),
+              if (!_isMobileVerified) Align(
+                alignment: Alignment.centerRight, 
+                child: TextButton(
+                  onPressed: _isLoading ? null : () => _verify('Mobile'), 
+                  child: Text('Verify Mobile', style: TextStyle(color: _isLoading ? PulseColors.textHint : PulseColors.primary)),
+                ),
+              ),
               
               const SizedBox(height: 16),
               _buildField(_passwordController, 'Security Password', Icons.lock_reset_rounded, obscureText: true),
@@ -237,9 +246,9 @@ class _AdminRegisterScreenState extends State<AdminRegisterScreen> {
                 children: [
                   Text("Already have a hub? ", style: PulseTextStyles.body),
                   GestureDetector(
-                    onTap: () => Navigator.pushReplacementNamed(context, '/admin-login'),
+                    onTap: _isLoading ? null : () => Navigator.pushReplacementNamed(context, '/admin-login'),
                     child: Text('Login Admin',
-                        style: PulseTextStyles.bodyBold.copyWith(color: PulseColors.primary)),
+                        style: PulseTextStyles.bodyBold.copyWith(color: _isLoading ? PulseColors.textHint : PulseColors.primary)),
                   ),
                 ],
               ),

@@ -21,7 +21,7 @@ class BrandedLogo extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final branding = ref.watch(brandingProvider);
     final logoUrl = branding.logoUrl;
-    final companyName = branding.companyName ?? 'TIME TRACKER';
+    final companyName = branding.companyName ?? 'TRACKZO';
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -50,13 +50,15 @@ class BrandedLogo extends ConsumerWidget {
       height: size,
       padding: EdgeInsets.all(size * 0.1), // Reduced padding for better fit
       decoration: BoxDecoration(
-        shape: BoxShape.circle,
+        shape: BoxShape.rectangle,
+        borderRadius: BorderRadius.circular(20),
         color: PulseColors.surface,
         border: Border.all(color: PulseColors.primary.withOpacity(0.4), width: 1.5),
         boxShadow: PulseColors.brandShadow,
       ),
       child: logoUrl != null && logoUrl.isNotEmpty
-          ? ClipOval(
+          ? ClipRRect(
+              borderRadius: BorderRadius.circular(20),
               child: Image.network(
                 ApiService.getImageUrl(logoUrl),
                 fit: BoxFit.contain,
@@ -65,7 +67,12 @@ class BrandedLogo extends ConsumerWidget {
                   return Shimmer.fromColors(
                     baseColor: PulseColors.shimmerBase,
                     highlightColor: PulseColors.shimmerHighlight,
-                    child: Container(decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle)),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white, 
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                    ),
                   );
                 },
                 errorBuilder: (context, error, stackTrace) => _buildFallback(companyName),
@@ -78,22 +85,16 @@ class BrandedLogo extends ConsumerWidget {
   Widget _buildFallback(String companyName) {
     final initials = companyName.isNotEmpty 
         ? companyName.trim().split(' ').map((e) => e[0]).take(2).join().toUpperCase()
-        : 'TT';
+        : 'TZ';
 
     return Container(
       decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: PulseColors.brandGradient,
-      ),
-      child: Center(
-        child: Text(
-          initials,
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w900,
-            fontSize: size * 0.3,
-            letterSpacing: 1,
-          ),
+        shape: BoxShape.rectangle,
+        borderRadius: BorderRadius.circular(20),
+        color: Colors.white,
+        image: const DecorationImage(
+          image: AssetImage('assets/trackzo_logo.png'),
+          fit: BoxFit.contain,
         ),
       ),
     );

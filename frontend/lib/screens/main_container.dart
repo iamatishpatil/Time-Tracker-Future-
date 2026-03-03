@@ -55,19 +55,14 @@ class _MainContainerState extends ConsumerState<MainContainer> {
 
     final List<String> titles = ['Dashboard', 'Attendance', 'Leaves', 'Profile'];
 
-    // ANR Fix: Using IndexedStack keeps all screens alive, avoiding
-    // re-creation and redundant network calls on every tab switch.
+    // ANR Fix: Using AnimatedSwitcher for Lazy Loading
+    // Only the active screen is built, preventing the 12+ parallel network calls on login.
     return PulseScaffold(
       title: titles[_selectedIndex],
       drawer: CustomDrawer(user: _user!),
-      body: IndexedStack(
-        index: _selectedIndex,
-        children: [
-          const HomeScreen(),
-          const AttendanceHistoryScreen(),
-          const LeaveScreen(),
-          EditProfileScreen(user: _user!, onUserUpdated: _updateUser),
-        ],
+      body: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 300),
+        child: _buildScreen(_selectedIndex),
       ),
       bottomNavigationBar: Container(
         margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
@@ -135,5 +130,15 @@ class _MainContainerState extends ConsumerState<MainContainer> {
         ),
       ),
     );
+  }
+
+  Widget _buildScreen(int index) {
+    switch (index) {
+      case 0: return const HomeScreen(key: ValueKey('home'));
+      case 1: return const AttendanceHistoryScreen(key: ValueKey('history'));
+      case 2: return const LeaveScreen(key: ValueKey('leaves'));
+      case 3: return EditProfileScreen(key: const ValueKey('profile'), user: _user!, onUserUpdated: _updateUser);
+      default: return const HomeScreen(key: ValueKey('home'));
+    }
   }
 }

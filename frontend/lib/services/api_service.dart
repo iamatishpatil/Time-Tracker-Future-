@@ -13,18 +13,26 @@ import 'package:intl/intl.dart';
 class ApiService {
   // --- The Server Address ---
   // Every server has an address (IP). We use this to tell Flutter where to send data.
-  static String get baseUrl {
-    return 'http://192.168.1.26:3000/api';
-  }
+  static const String baseUrl = 'http://192.168.1.26:3000/api';
 
   // --- Performance: Default HTTP timeout ---
   static const Duration _defaultTimeout = Duration(seconds: 10);
 
   // --- Internal Security: JWT Injector ---
   static Future<Map<String, String>> _getHeaders(Map<String, String>? customHeaders) async {
+    final headers = await _getAuthHeaders();
+    if (customHeaders != null) headers.addAll(customHeaders);
+    if (!headers.containsKey('Content-Type')) {
+      headers['Content-Type'] = 'application/json';
+    }
+    return headers;
+  }
+
+  // --- Internal Security: JWT Injector for Multipart ---
+  static Future<Map<String, String>> _getAuthHeaders() async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('jwt_token');
-    final headers = {'Content-Type': 'application/json', ...?customHeaders};
+    final Map<String, String> headers = {};
     if (token != null) {
       headers['Authorization'] = 'Bearer $token';
     }
@@ -137,13 +145,18 @@ class ApiService {
   }
 
   // --- Login Logic ---
-  static Future<Map<String, dynamic>> login(String mobileNumber, String password) async {
+  static Future<Map<String, dynamic>> login(String mobileNumber, String password, {String? biometricToken}) async {
     try {
+      final body = {'mobileNumber': mobileNumber, 'password': password};
+      if (biometricToken != null) {
+        body['biometricToken'] = biometricToken;
+      }
+      
       // http.post sends a standard "package" of data to the server
       final response = await http.post(
         Uri.parse('$baseUrl/login'),
         headers: {'Content-Type': 'application/json'},
-        body: json.encode({'mobileNumber': mobileNumber, 'password': password}),
+        body: json.encode(body),
       );
 
       if (response.statusCode == 200) {
@@ -161,6 +174,36 @@ class ApiService {
         return data;
       } else {
         String errorMessage = 'Failed to login';
+        try {
+          final errorData = json.decode(response.body);
+          if (errorData['error'] != null) errorMessage = errorData['error'];
+        } catch (_) {}
+        throw Exception(errorMessage);
+      }
+    } catch (e) {
+      throw Exception(e.toString().replaceAll('Exception: ', ''));
+    }
+  }
+
+  // --- Biometric Login ---
+  static Future<Map<String, dynamic>> loginWithBiometric(String biometricToken) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/login/biometric'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'biometricToken': biometricToken}),
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('user', json.encode(data['user']));
+        if (data['token'] != null) {
+          await prefs.setString('jwt_token', data['token']);
+        }
+        return data;
+      } else {
+        String errorMessage = 'Biometric login failed';
         try {
           final errorData = json.decode(response.body);
           if (errorData['error'] != null) errorMessage = errorData['error'];
@@ -203,6 +246,9 @@ class ApiService {
       }
     });
 
+    // Add Auth Headers
+    request.headers.addAll(await _getAuthHeaders());
+
     // If profile picture is provided, add it to the request
     if (image != null) {
       request.files.add(await http.MultipartFile.fromPath('profilePicture', image.path));
@@ -244,6 +290,9 @@ class ApiService {
     if (long != null) request.fields['long'] = long.toString();
     if (address != null) request.fields['address'] = address;
 
+    // Add Auth Headers
+    request.headers.addAll(await _getAuthHeaders());
+
     if (photo != null) {
       request.files.add(await http.MultipartFile.fromPath('photo', photo.path));
     }
@@ -273,6 +322,9 @@ class ApiService {
     if (lat != null) request.fields['lat'] = lat.toString();
     if (long != null) request.fields['long'] = long.toString();
     if (address != null) request.fields['address'] = address;
+
+    // Add Auth Headers
+    request.headers.addAll(await _getAuthHeaders());
 
     if (photo != null) {
       request.files.add(await http.MultipartFile.fromPath('photo', photo.path));
@@ -608,6 +660,9 @@ class ApiService {
     userData.forEach((key, value) {
       request.fields[key] = value.toString();
     });
+
+    // Add Auth Headers
+    request.headers.addAll(await _getAuthHeaders());
     
     if (image != null) {
       var multipartFile = await http.MultipartFile.fromPath('profilePicture', image.path);
@@ -756,16 +811,33 @@ class ApiService {
 
   // --- Holidays ---
   // Public holidays like "New Year's Day"
+  // --- Performance: Request Deduplication ---
+  static Future<List<dynamic>>? _holidaysFuture;
+
   static Future<List<dynamic>> getHolidays() async {
-    final company = await _getCompany();
-    if (company == null) {
-       print('[ApiService] WARNING: getHolidays called without company context');
-       return [];
-    }
-    String qs = '?company=${Uri.encodeComponent(company)}';
-    final response = await _get('$baseUrl/admin/holidays$qs');
-    if (response.statusCode == 200) return json.decode(response.body);
-    throw Exception('Failed to load holidays');
+    if (_holidaysFuture != null) return _holidaysFuture!;
+
+    _holidaysFuture = () async {
+      try {
+        final company = await _getCompany();
+        if (company == null) {
+          debugPrint('[ApiService] WARNING: getHolidays called without company context');
+          return [];
+        }
+        String qs = '?company=${Uri.encodeComponent(company)}';
+        final response = await _get('$baseUrl/admin/holidays$qs');
+        if (response.statusCode == 200) return json.decode(response.body) as List<dynamic>;
+        throw Exception('Failed to load holidays');
+      } catch (err) {
+        _holidaysFuture = null;
+        rethrow;
+      } finally {
+        // Clear after 5 seconds to allow fresh fetches later
+        Future.delayed(const Duration(seconds: 5), () => _holidaysFuture = null);
+      }
+    }();
+
+    return _holidaysFuture!;
   }
 
   static Future<void> addHoliday(String name, String date, {String type = 'Public', String duration = 'Full Day'}) async {
@@ -908,6 +980,9 @@ class ApiService {
     if (company == null) throw Exception('Company not found');
 
     var request = http.MultipartRequest('POST', Uri.parse('$baseUrl/admin/branding'));
+    
+    request.headers.addAll(await _getAuthHeaders());
+
     request.fields['company'] = company;
     if (themeColor != null) request.fields['themeColor'] = themeColor;
     if (secondaryColor != null) request.fields['secondaryColor'] = secondaryColor;

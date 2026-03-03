@@ -81,7 +81,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
               width: 130,
               height: 130,
               decoration: BoxDecoration(
-                shape: BoxShape.circle,
+                shape: BoxShape.rectangle,
+                borderRadius: BorderRadius.circular(20),
                 color: Colors.white,
                 border: Border.all(color: PulseColors.primary.withOpacity(0.3), width: 2),
                 boxShadow: [
@@ -92,7 +93,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
                   ),
                 ],
               ),
-              child: ClipOval(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(20),
                 child: logoUrl != null && logoUrl.isNotEmpty
                     ? Image.network(
                         ApiService.getImageUrl(logoUrl),
@@ -100,11 +102,11 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
                         width: 130,
                         height: 130,
                         errorBuilder: (context, error, stackTrace) => Image.asset(
-                          'assets/icon.png',
+                          'assets/trackzo_logo.png',
                           fit: BoxFit.cover,
                         ),
                       )
-                    : Image.asset('assets/icon.png', fit: BoxFit.cover),
+                    : Image.asset('assets/trackzo_logo.png', fit: BoxFit.cover),
               ),
             )
                 .animate()
@@ -115,7 +117,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
 
             // --- App Name ---
             Text(
-              'TIME TRACKER',
+              'TRACKZO',
               style: TextStyle(
                 fontSize: 26,
                 fontWeight: FontWeight.w900,

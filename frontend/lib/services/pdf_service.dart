@@ -45,8 +45,8 @@ class PdfService {
                   : null;
               
               String note = holidayDates.contains(dateStr) ? 'Holiday' : '';
-              String location = record['checkInAddress'] ?? '-';
-              if (location.length > 30) location = '${location.substring(0, 27)}...';
+              String location = 'In: ${record['checkInAddress'] ?? '-'}' + 
+                               (record['checkOutAddress'] != null ? '\nOut: ${record['checkOutAddress']}' : '');
               
               return [
                 DateFormat('MMM d, y').format(checkIn),
@@ -88,13 +88,14 @@ class PdfService {
           pw.TableHelper.fromTextArray(
             headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10, color: PdfColors.white),
             headerDecoration: const pw.BoxDecoration(color: PdfColors.deepPurple),
-            cellStyle: const pw.TextStyle(fontSize: 9),
-            headers: ['Employee', 'Date', 'In', 'Out', 'Status'],
+            cellStyle: const pw.TextStyle(fontSize: 8),
+            headers: ['Employee', 'Date', 'In', 'Out', 'Location', 'Status'],
             data: attendance.map((r) => [
               r['fullName'] ?? '-',
               DateFormat('MMM d').format(DateTime.parse(r['checkInTime']).toLocal()),
               DateFormat('hh:mm a').format(DateTime.parse(r['checkInTime']).toLocal()),
               r['checkOutTime'] != null ? DateFormat('hh:mm a').format(DateTime.parse(r['checkOutTime']).toLocal()) : '-',
+              'In: ${r['checkInAddress'] ?? '-'}' + (r['checkOutAddress'] != null ? '\nOut: ${r['checkOutAddress']}' : ''),
               r['status'] ?? 'Present'
             ]).toList(),
           ),

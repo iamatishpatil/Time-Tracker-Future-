@@ -80,7 +80,7 @@ class TimeTrackerApp extends ConsumerWidget {
     
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Time Tracker',
+      title: 'Trackzo',
       theme: PulseTheme.light(),
       home: const SplashScreen(),
       onGenerateRoute: (settings) {

@@ -136,7 +136,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with SingleTickerProvid
     if (permission == LocationPermission.deniedForever) return;
 
     final position = await Geolocator.getCurrentPosition(
-      desiredAccuracy: LocationAccuracy.medium,
+      desiredAccuracy: LocationAccuracy.high,
     );
 
     if (!mounted) return;
@@ -156,7 +156,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with SingleTickerProvid
         (_settings!['officeLat'] as num).toDouble(),
         (_settings!['officeLong'] as num).toDouble(),
       );
-      if (mounted) setState(() => _isInsideRadius = dist <= ((_settings!['officeRadiusMeters'] as num?)?.toDouble() ?? 100.0));
+      
+      // Feature: 20m grace buffer to account for GPS jitter
+      const double buffer = 20.0;
+      final double allowedRadius = ((_settings!['officeRadiusMeters'] as num?)?.toDouble() ?? 100.0) + buffer;
+      
+      if (mounted) setState(() => _isInsideRadius = dist <= allowedRadius);
     }
   }
 
@@ -214,9 +219,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with SingleTickerProvid
         _upcomingHolidays = upcoming;
         if (todayHoliday != null) _todayHoliday = todayHoliday['name'];
 
-        // If geofencing is off, always allow check-in
+        // Geofence Logic:
         if (settings['geofenceEnabled'] == 0 || settings['officeLat'] == null) {
           _isInsideRadius = true;
+        } else {
+          // Fix: If GPS already resolved before settings loaded, check geofence now
+          final double dist = Geolocator.distanceBetween(
+            _currentPosition.latitude, _currentPosition.longitude,
+            (settings['officeLat'] as num).toDouble(),
+            (settings['officeLong'] as num).toDouble(),
+          );
+          const double buffer = 20.0;
+          final double allowedRadius = ((settings['officeRadiusMeters'] as num?)?.toDouble() ?? 100.0) + buffer;
+          _isInsideRadius = dist <= allowedRadius;
         }
       });
     } catch (e) {
