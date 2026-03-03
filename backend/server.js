@@ -105,7 +105,18 @@ const pool = new Pool({
   idleTimeoutMillis: 30000,
 });
 
-// Migration of tables and initial data is handled by external SQL scripts.
+// Auto-migration: ensures schema columns are always present on live databases.
+const runMigrations = async () => {
+  const migrations = [
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS "biometricToken" TEXT`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS "rejectionReason" TEXT`,
+  ];
+  for (const sql of migrations) {
+    try { await pool.query(sql); } catch (err) { console.error('[MIGRATION ERROR]', err.message); }
+  }
+  console.log('[MIGRATIONS] Schema up to date.');
+};
+runMigrations();
 
 // Helper for sending OTP (Mocked)
 const sendOtpMock = (type, value, otp) => {
@@ -765,7 +776,7 @@ app.patch('/api/admin/users/:id/active', async (req, res) => {
 });
 
 app.patch('/api/admin/users/:id/approve', async (req, res) => {
-  const { isApproved rejectionReason } = req.body;
+  const { isApproved, rejectionReason } = req.body;
   const company = req.user.company;
   if (!company) return res.status(403).json({ error: 'Company context missing in token' });
   if (isApproved === undefined || !company) return res.status(400).json({ error: 'isApproved and company are required' });
@@ -1726,7 +1737,7 @@ app.get('/api/admin/reports/attendance', async (req, res) => {
 
 // Admin: Create Payslip
 app.post('/api/admin/payslips', async (req, res) => {
-  const { userId month, year, basicSalary, allowances, deductions, netSalary } = req.body;
+  const { userId, month, year, basicSalary, allowances, deductions, netSalary } = req.body;
   const company = req.user.company;
   if (!company) return res.status(403).json({ error: 'Company context missing in token' });
   if (!userId || !month || !year || basicSalary === undefined) {
