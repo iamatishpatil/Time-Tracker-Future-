@@ -47,7 +47,6 @@ class _AdminContainerState extends ConsumerState<AdminContainer> {
       const AdminAttendanceScreen(isTab: true),
       const AdminEmployeesScreen(isTab: true),
       const AdminLeavesScreen(isTab: true),
-      const AdminSettingsScreen(isTab: true),
     ];
 
     final List<String> titles = [
@@ -55,7 +54,6 @@ class _AdminContainerState extends ConsumerState<AdminContainer> {
       'Attendance Logs',
       'Employee Directory',
       'Leave Management',
-      'System Settings',
     ];
 
     return PulseScaffold(
@@ -98,7 +96,6 @@ class _AdminContainerState extends ConsumerState<AdminContainer> {
                 _buildNavItem(1, Icons.history_rounded, Icons.history_outlined, 'Attendance'),
                 _buildNavItem(2, Icons.people_rounded, Icons.people_outline_rounded, 'Staff'),
                 _buildNavItem(3, Icons.beach_access_rounded, Icons.beach_access_outlined, 'Leaves'),
-                _buildNavItem(4, Icons.settings_rounded, Icons.settings_outlined, 'Setup'),
               ],
             ),
           ),

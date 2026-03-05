@@ -78,14 +78,7 @@ class AdminDrawer extends StatelessWidget {
 
           const SizedBox(height: 8),
 
-          _DrawerTile(
-            icon: Icons.dashboard_rounded,
-            title: 'Dashboard',
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.pushReplacementNamed(context, '/admin');
-            },
-          ),
+
           _DrawerTile(
             icon: Icons.person_outline,
             title: 'Profile Settings',
@@ -127,14 +120,7 @@ class AdminDrawer extends StatelessWidget {
               return const SizedBox.shrink();
             },
           ),
-          _DrawerTile(
-            icon: Icons.celebration_outlined,
-            title: 'Holidays',
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.pushNamed(context, '/admin-holidays');
-            },
-          ),
+
           _DrawerTile(
             icon: Icons.settings_outlined,
             title: 'Settings',

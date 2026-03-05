@@ -153,7 +153,7 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
     if (!silent) setState(() => _isLoading = true);
     try {
       await ApiService.updateSettings({
-        'companyName': _nameController.text.trim(),
+        // companyName is intentionally excluded — it is set once at registration and cannot be changed.
         'officeLat': _officeLocation.latitude,
         'officeLong': _officeLocation.longitude,
         'officeRadiusMeters': _radius,
@@ -264,9 +264,35 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
                       Icon(Icons.business, color: PulseColors.primary, size: 20),
                       const SizedBox(width: 8),
                       Text('Company Name', style: PulseTextStyles.bodyBold),
+                      const Spacer(),
+                      Icon(Icons.lock_outline_rounded, color: PulseColors.textHint, size: 16),
+                      const SizedBox(width: 4),
+                      Text('Fixed at registration', style: PulseTextStyles.caption),
                     ]),
                     const SizedBox(height: 10),
-                    TextField(controller: _nameController, decoration: const InputDecoration(hintText: 'Enter company name')),
+                    TextField(
+                      controller: _nameController,
+                      readOnly: true,
+                      style: TextStyle(color: PulseColors.textHint),
+                      decoration: InputDecoration(
+                        hintText: 'Company name',
+                        filled: true,
+                        fillColor: PulseColors.surfaceVariant,
+                        suffixIcon: Icon(Icons.lock_rounded, color: PulseColors.textHint, size: 18),
+                        disabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: PulseColors.border),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: PulseColors.border),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: PulseColors.border),
+                        ),
+                      ),
+                    ),
                   ]),
                 ),
                 const SizedBox(height: 14),
