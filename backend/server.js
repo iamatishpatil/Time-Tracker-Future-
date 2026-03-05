@@ -25,6 +25,12 @@ app.use(bodyParser.json());
 app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+// Request Logger for Debugging
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  next();
+});
+
 // Security Middleware
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
@@ -353,6 +359,9 @@ app.post('/api/change-password', async (req, res) => {
 // --- Registration & Login ---
 
 app.post('/api/register', upload.single('profilePicture'), async (req, res) => {
+  if (!req.body) {
+    return res.status(400).json({ error: 'Request body is missing. Ensure you are sending form-data and have no conflicting headers.' });
+  }
   const { fullName, email, mobileNumber, gender, password, role, company, department, experience, technologies, address, latitude, longitude, shiftId, isActive } = req.body;
   const profilePicture = req.file ? `/uploads/${req.file.filename}` : null;
 
@@ -394,6 +403,9 @@ app.post('/api/register', upload.single('profilePicture'), async (req, res) => {
 
 
 app.post('/api/login', async (req, res) => {
+  if (!req.body || Object.keys(req.body).length === 0) {
+    return res.status(400).json({ error: 'Request body is missing or malformed. Ensure you are sending JSON and have "Content-Type: application/json" header.' });
+  }
   const { mobileNumber, password } = req.body;
   
   try {
