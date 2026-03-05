@@ -1,0 +1,1435 @@
+{
+    "info": {
+        "name": "Trackzo API",
+        "description": "Complete API collection for Trackzo Time Tracker app. Set the {{baseUrl}} variable to http://192.168.1.26:3000/api and {{token}} to your JWT after logging in.",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "variable": [
+        {
+            "key": "baseUrl",
+            "value": "http://192.168.1.26:3000/api"
+        },
+        {
+            "key": "token",
+            "value": "YOUR_JWT_TOKEN_HERE"
+        },
+        {
+            "key": "userId",
+            "value": "1"
+        },
+        {
+            "key": "company",
+            "value": "your_company_name"
+        }
+    ],
+    "item": [
+        {
+            "name": "🔓 Auth (Public)",
+            "item": [
+                {
+                    "name": "Register User",
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "url": "{{baseUrl}}/register",
+                        "body": {
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "fullName",
+                                    "value": "John Doe",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "email",
+                                    "value": "john@company.com",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "mobileNumber",
+                                    "value": "9876543210",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "password",
+                                    "value": "password123",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "role",
+                                    "value": "User",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "company",
+                                    "value": "{{company}}",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "gender",
+                                    "value": "Male",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "profilePicture",
+                                    "type": "file",
+                                    "src": ""
+                                }
+                            ]
+                        },
+                        "description": "Register a new user or admin. Role = 'Admin' triggers company provisioning."
+                    }
+                },
+                {
+                    "name": "Login",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": "{{baseUrl}}/login",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"mobileNumber\": \"9876543210\",\n  \"password\": \"password123\"\n}"
+                        },
+                        "description": "Returns JWT token and user object. Save the token to {{token}} variable."
+                    }
+                },
+                {
+                    "name": "Biometric Login",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": "{{baseUrl}}/login/biometric",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"biometricToken\": \"DEVICE_BIOMETRIC_TOKEN\"\n}"
+                        }
+                    }
+                },
+                {
+                    "name": "Send OTP",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": "{{baseUrl}}/otp/send",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"type\": \"mobile\",\n  \"value\": \"9876543210\"\n}"
+                        },
+                        "description": "OTP is currently hardcoded as 9999 in dev mode."
+                    }
+                },
+                {
+                    "name": "Verify OTP",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": "{{baseUrl}}/otp/verify",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"type\": \"mobile\",\n  \"value\": \"9876543210\",\n  \"otp\": \"9999\"\n}"
+                        }
+                    }
+                },
+                {
+                    "name": "Reset Password",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": "{{baseUrl}}/reset-password",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"mobileNumber\": \"9876543210\",\n  \"otp\": \"9999\",\n  \"newPassword\": \"newpassword123\"\n}"
+                        }
+                    }
+                },
+                {
+                    "name": "Change Password",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": "{{baseUrl}}/change-password",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"userId\": {{userId}},\n  \"oldPassword\": \"oldpass\",\n  \"newPassword\": \"newpass\"\n}"
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "👤 User (Employee)",
+            "item": [
+                {
+                    "name": "Get User Profile",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": "{{baseUrl}}/user/{{userId}}",
+                        "description": "Returns user with their shift details joined."
+                    }
+                },
+                {
+                    "name": "Update User Profile",
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": "{{baseUrl}}/user/{{userId}}",
+                        "body": {
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "fullName",
+                                    "value": "John Updated",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "email",
+                                    "value": "john@company.com",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "department",
+                                    "value": "Engineering",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "profilePicture",
+                                    "type": "file",
+                                    "src": ""
+                                }
+                            ]
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "🕐 Attendance",
+            "item": [
+                {
+                    "name": "Check In",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": "{{baseUrl}}/checkin",
+                        "body": {
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "userId",
+                                    "value": "{{userId}}",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "lat",
+                                    "value": "18.5204",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "long",
+                                    "value": "73.8567",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "address",
+                                    "value": "Office Building, Pune",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "photo",
+                                    "type": "file",
+                                    "src": ""
+                                }
+                            ]
+                        },
+                        "description": "Validates geofence if enabled. Records status as On Time or Late."
+                    }
+                },
+                {
+                    "name": "Check Out",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": "{{baseUrl}}/checkout",
+                        "body": {
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "userId",
+                                    "value": "{{userId}}",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "lat",
+                                    "value": "18.5204",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "long",
+                                    "value": "73.8567",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "address",
+                                    "value": "Office Building, Pune",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "photo",
+                                    "type": "file",
+                                    "src": ""
+                                }
+                            ]
+                        },
+                        "description": "Calculates overtime hours. Creates check-out notification."
+                    }
+                },
+                {
+                    "name": "Get Check-In Status",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": "{{baseUrl}}/attendance/status/{{userId}}",
+                        "description": "Returns { isCheckedIn: true/false }"
+                    }
+                },
+                {
+                    "name": "Get Dashboard Stats",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": "{{baseUrl}}/attendance/stats/{{userId}}",
+                        "description": "Server-side computed: todayHours, monthHours, attendanceRate"
+                    }
+                },
+                {
+                    "name": "Get My Attendance History",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": "{{baseUrl}}/attendance/{{userId}}"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "🏖️ Leaves (Employee)",
+            "item": [
+                {
+                    "name": "Apply for Leave",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": "{{baseUrl}}/leaves/apply",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"userId\": {{userId}},\n  \"leaveType\": \"Casual Leave\",\n  \"startDate\": \"2026-03-10\",\n  \"endDate\": \"2026-03-11\",\n  \"reason\": \"Personal work\"\n}"
+                        }
+                    }
+                },
+                {
+                    "name": "Get My Leave History",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": "{{baseUrl}}/leaves/{{userId}}"
+                    }
+                },
+                {
+                    "name": "Get Leave Balance",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": "{{baseUrl}}/leaves/balance/{{userId}}",
+                        "description": "Returns total, used, remaining + byType breakdown"
+                    }
+                },
+                {
+                    "name": "Get Leave Types",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/leaves/types?company={{company}}",
+                            "query": [
+                                {
+                                    "key": "company",
+                                    "value": "{{company}}"
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Cancel Leave",
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": "{{baseUrl}}/leaves/1/cancel",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"userId\": {{userId}}\n}"
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "🔔 Notifications",
+            "item": [
+                {
+                    "name": "Get My Notifications",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": "{{baseUrl}}/notifications/{{userId}}"
+                    }
+                },
+                {
+                    "name": "Mark Notification as Read",
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": "{{baseUrl}}/notifications/1/read"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "⚙️ Settings & Holidays (Shared)",
+            "item": [
+                {
+                    "name": "Get Company Settings",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/settings?company={{company}}",
+                            "query": [
+                                {
+                                    "key": "company",
+                                    "value": "{{company}}"
+                                }
+                            ]
+                        },
+                        "description": "Returns geofence, payroll, camera settings, theme colors, logo"
+                    }
+                },
+                {
+                    "name": "Get Holidays",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/admin/holidays?company={{company}}",
+                            "query": [
+                                {
+                                    "key": "company",
+                                    "value": "{{company}}"
+                                }
+                            ]
+                        },
+                        "description": "Returns company holidays + global holidays (company IS NULL)"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "💰 Payslips (Employee)",
+            "item": [
+                {
+                    "name": "Get My Payslips",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": "{{baseUrl}}/payslips/{{userId}}"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "🛡️ Admin — Dashboard",
+            "item": [
+                {
+                    "name": "Get Admin Stats",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/admin/stats?company={{company}}",
+                            "query": [
+                                {
+                                    "key": "company",
+                                    "value": "{{company}}"
+                                }
+                            ]
+                        },
+                        "description": "totalEmployees, presentToday, lateToday, onLeaveToday, absentToday"
+                    }
+                },
+                {
+                    "name": "Get Absent Employees Today",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/admin/absences?company={{company}}",
+                            "query": [
+                                {
+                                    "key": "company",
+                                    "value": "{{company}}"
+                                }
+                            ]
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "🛡️ Admin — Employees",
+            "item": [
+                {
+                    "name": "Get All Employees",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/admin/users?company={{company}}",
+                            "query": [
+                                {
+                                    "key": "company",
+                                    "value": "{{company}}"
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Create Employee",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": "{{baseUrl}}/admin/users",
+                        "body": {
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "fullName",
+                                    "value": "Jane Smith",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "mobileNumber",
+                                    "value": "9123456789",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "email",
+                                    "value": "jane@company.com",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "password",
+                                    "value": "pass123",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "role",
+                                    "value": "User",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "department",
+                                    "value": "Engineering",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "salary",
+                                    "value": "50000",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "shiftId",
+                                    "value": "1",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "weekOffs",
+                                    "value": "Saturday,Sunday",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "profilePicture",
+                                    "type": "file",
+                                    "src": ""
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Update Employee",
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": "{{baseUrl}}/user/{{userId}}",
+                        "body": {
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "fullName",
+                                    "value": "Jane Updated",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "salary",
+                                    "value": "60000",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "shiftId",
+                                    "value": "2",
+                                    "type": "text"
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Delete Employee",
+                    "request": {
+                        "method": "DELETE",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": "{{baseUrl}}/admin/users/{{userId}}",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"company\": \"{{company}}\"\n}"
+                        }
+                    }
+                },
+                {
+                    "name": "Approve / Reject Employee",
+                    "request": {
+                        "method": "PATCH",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": "{{baseUrl}}/admin/users/{{userId}}/approve",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"isApproved\": 1,\n  \"rejectionReason\": \"\"\n}"
+                        }
+                    }
+                },
+                {
+                    "name": "Activate / Deactivate Employee",
+                    "request": {
+                        "method": "PATCH",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": "{{baseUrl}}/admin/users/{{userId}}/active",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"isActive\": 1\n}"
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "🛡️ Admin — Attendance",
+            "item": [
+                {
+                    "name": "Get All Attendance",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/admin/attendance?company={{company}}&startDate=2026-03-01&endDate=2026-03-31",
+                            "query": [
+                                {
+                                    "key": "company",
+                                    "value": "{{company}}"
+                                },
+                                {
+                                    "key": "startDate",
+                                    "value": "2026-03-01"
+                                },
+                                {
+                                    "key": "endDate",
+                                    "value": "2026-03-31"
+                                },
+                                {
+                                    "key": "userId",
+                                    "value": "",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "department",
+                                    "value": "",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "limit",
+                                    "value": "100",
+                                    "disabled": true
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Create Manual Attendance",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": "{{baseUrl}}/admin/attendance",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"userId\": {{userId}},\n  \"checkInTime\": \"2026-03-05T09:00:00\",\n  \"checkOutTime\": \"2026-03-05T18:00:00\",\n  \"status\": \"Present\",\n  \"checkInAddress\": \"Office, Pune\"\n}"
+                        }
+                    }
+                },
+                {
+                    "name": "Update Attendance Record",
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": "{{baseUrl}}/admin/attendance/1",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"checkInTime\": \"2026-03-05T09:15:00\",\n  \"checkOutTime\": \"2026-03-05T18:30:00\",\n  \"status\": \"On Time\",\n  \"overtimeHours\": 0.5\n}"
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "🛡️ Admin — Leaves",
+            "item": [
+                {
+                    "name": "Get All Leave Requests",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/admin/leaves?company={{company}}",
+                            "query": [
+                                {
+                                    "key": "company",
+                                    "value": "{{company}}"
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Approve / Reject Leave",
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": "{{baseUrl}}/admin/leaves/1",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"status\": \"Approved\",\n  \"rejectionReason\": \"\"\n}"
+                        }
+                    }
+                },
+                {
+                    "name": "Get Leave Policies",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/admin/leave-policies?company={{company}}",
+                            "query": [
+                                {
+                                    "key": "company",
+                                    "value": "{{company}}"
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Save Leave Policy",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": "{{baseUrl}}/admin/leave-policies",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"leaveType\": \"Casual Leave\",\n  \"daysPerYear\": 12,\n  \"isPaid\": true\n}"
+                        }
+                    }
+                },
+                {
+                    "name": "Adjust Employee Leave Balance",
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": "{{baseUrl}}/admin/leave-balance",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"userId\": {{userId}},\n  \"leaveType\": \"Casual Leave\",\n  \"totalDays\": 15\n}"
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "🛡️ Admin — Holidays",
+            "item": [
+                {
+                    "name": "Add Holiday",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": "{{baseUrl}}/admin/holidays",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"name\": \"Holi\",\n  \"date\": \"2026-03-14\",\n  \"type\": \"Public\",\n  \"duration\": \"Full Day\"\n}"
+                        }
+                    }
+                },
+                {
+                    "name": "Delete Holiday",
+                    "request": {
+                        "method": "DELETE",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": "{{baseUrl}}/admin/holidays/1",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"company\": \"{{company}}\"\n}"
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "🛡️ Admin — Shifts",
+            "item": [
+                {
+                    "name": "Get All Shifts",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/admin/shifts?company={{company}}",
+                            "query": [
+                                {
+                                    "key": "company",
+                                    "value": "{{company}}"
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Create Shift",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": "{{baseUrl}}/admin/shifts",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"name\": \"Morning Shift\",\n  \"startTime\": \"08:00\",\n  \"endTime\": \"17:00\",\n  \"gracePeriodMins\": 15,\n  \"overtimeRate\": 1.5,\n  \"latePenaltyPerMin\": 2\n}"
+                        }
+                    }
+                },
+                {
+                    "name": "Update Shift",
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": "{{baseUrl}}/admin/shifts/1",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"name\": \"General Shift\",\n  \"startTime\": \"09:00\",\n  \"endTime\": \"18:00\",\n  \"gracePeriodMins\": 10,\n  \"overtimeRate\": 1.5,\n  \"latePenaltyPerMin\": 0\n}"
+                        }
+                    }
+                },
+                {
+                    "name": "Delete Shift",
+                    "request": {
+                        "method": "DELETE",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": "{{baseUrl}}/admin/shifts/1",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"company\": \"{{company}}\"\n}"
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "🛡️ Admin — Settings & Branding",
+            "item": [
+                {
+                    "name": "Update Settings",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": "{{baseUrl}}/admin/settings",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"companyName\": \"Acme Corp\",\n  \"officeLat\": 18.5204,\n  \"officeLong\": 73.8567,\n  \"officeRadiusMeters\": 200,\n  \"geofenceEnabled\": 1,\n  \"payrollEnabled\": 1,\n  \"cameraAuthEnabled\": 1,\n  \"workingDays\": [\"Mon\",\"Tue\",\"Wed\",\"Thu\",\"Fri\"],\n  \"weekendDays\": [\"Sat\",\"Sun\"]\n}"
+                        }
+                    }
+                },
+                {
+                    "name": "Update Branding (Logo + Colors)",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": "{{baseUrl}}/admin/branding",
+                        "body": {
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "company",
+                                    "value": "{{company}}",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "themeColor",
+                                    "value": "#7C4DFF",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "secondaryColor",
+                                    "value": "#7C4DFF",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "accentColor",
+                                    "value": "#00B8D4",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "logo",
+                                    "type": "file",
+                                    "src": ""
+                                }
+                            ]
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "🛡️ Admin — Payslips",
+            "item": [
+                {
+                    "name": "Get All Payslips",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/admin/payslips?company={{company}}",
+                            "query": [
+                                {
+                                    "key": "company",
+                                    "value": "{{company}}"
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Create Payslip",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": "{{baseUrl}}/admin/payslips",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"userId\": {{userId}},\n  \"month\": 3,\n  \"year\": 2026,\n  \"basicSalary\": 50000,\n  \"allowances\": 5000,\n  \"deductions\": 2000,\n  \"netSalary\": 53000\n}"
+                        },
+                        "description": "Automatically sends notification to employee."
+                    }
+                },
+                {
+                    "name": "Delete Payslip",
+                    "request": {
+                        "method": "DELETE",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": "{{baseUrl}}/admin/payslips/1",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"company\": \"{{company}}\"\n}"
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "🛡️ Admin — Reports",
+            "item": [
+                {
+                    "name": "Attendance Report",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/admin/reports/attendance?company={{company}}&startDate=2026-03-01&endDate=2026-03-31",
+                            "query": [
+                                {
+                                    "key": "company",
+                                    "value": "{{company}}"
+                                },
+                                {
+                                    "key": "startDate",
+                                    "value": "2026-03-01"
+                                },
+                                {
+                                    "key": "endDate",
+                                    "value": "2026-03-31"
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Payroll Report",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/admin/reports/payroll?company={{company}}&startDate=2026-03-01&endDate=2026-03-31",
+                            "query": [
+                                {
+                                    "key": "company",
+                                    "value": "{{company}}"
+                                },
+                                {
+                                    "key": "startDate",
+                                    "value": "2026-03-01"
+                                },
+                                {
+                                    "key": "endDate",
+                                    "value": "2026-03-31"
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Overtime Report",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/admin/reports/overtime?company={{company}}&startDate=2026-03-01&endDate=2026-03-31",
+                            "query": [
+                                {
+                                    "key": "company",
+                                    "value": "{{company}}"
+                                },
+                                {
+                                    "key": "startDate",
+                                    "value": "2026-03-01"
+                                },
+                                {
+                                    "key": "endDate",
+                                    "value": "2026-03-31"
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Salary Hours Report",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/admin/reports/salary-hours?company={{company}}&startDate=2026-03-01&endDate=2026-03-31",
+                            "query": [
+                                {
+                                    "key": "company",
+                                    "value": "{{company}}"
+                                },
+                                {
+                                    "key": "startDate",
+                                    "value": "2026-03-01"
+                                },
+                                {
+                                    "key": "endDate",
+                                    "value": "2026-03-31"
+                                }
+                            ]
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "🛡️ Admin — Notifications",
+            "item": [
+                {
+                    "name": "Send Checkout Reminders",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": "{{baseUrl}}/admin/notifications/reminders",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"company\": \"{{company}}\"\n}"
+                        },
+                        "description": "Sends checkout reminder to all employees who are still checked in."
+                    }
+                }
+            ]
+        }
+    ]
+}

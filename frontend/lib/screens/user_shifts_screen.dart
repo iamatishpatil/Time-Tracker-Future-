@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import '../../core/theme/pulse_colors.dart';
-import '../../core/theme/pulse_text_styles.dart';
-import '../../core/widgets/pulse_card.dart';
-import '../../core/widgets/pulse_shimmer.dart';
-import '../../core/widgets/pulse_empty_state.dart';
-import '../../services/api_service.dart';
+import '../core/theme/pulse_colors.dart';
+import '../core/theme/pulse_text_styles.dart';
+import '../core/widgets/pulse_card.dart';
+import '../core/widgets/pulse_shimmer.dart';
+import '../core/widgets/pulse_empty_state.dart';
+import '../services/api_service.dart';
 
 class UserShiftsScreen extends StatefulWidget {
   const UserShiftsScreen({super.key});

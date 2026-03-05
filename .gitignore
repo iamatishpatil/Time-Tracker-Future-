@@ -1,0 +1,49 @@
+# ==========================================
+# Backend — Node.js
+# ==========================================
+backend/node_modules/
+backend/.env
+backend/.env.development
+backend/.env.staging
+backend/.env.production
+backend/*.log
+backend/uploads/
+
+# ==========================================
+# Frontend — Flutter
+# ==========================================
+frontend/.dart_tool/
+frontend/.flutter-plugins
+frontend/.flutter-plugins-dependencies
+frontend/.packages
+frontend/build/
+frontend/.pub-cache/
+frontend/.pub/
+frontend/pubspec.lock
+
+# Android build artifacts
+frontend/android/.gradle/
+frontend/android/local.properties
+frontend/android/key.properties
+frontend/android/app/google-services.json
+
+# iOS build artifacts
+frontend/ios/.symlinks/
+frontend/ios/Pods/
+frontend/ios/Flutter/Flutter.framework/
+frontend/ios/Flutter/Flutter.podspec
+frontend/ios/Runner.xcworkspace/
+
+# ==========================================
+# General
+# ==========================================
+*.log
+*.DS_Store
+Thumbs.db
+.vscode/settings.json
+.idea/
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3

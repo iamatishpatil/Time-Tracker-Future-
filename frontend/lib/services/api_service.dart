@@ -496,12 +496,16 @@ class ApiService {
 
   // Find out how many leave days are LEFT for the user (e.g., 10 Sick leaves remaining)
   static Future<Map<String, dynamic>> getLeaveBalance(int userId) async {
-    final response = await _get('$baseUrl/leaves/balance/$userId');
-    if (response.statusCode == 200) {
-      return json.decode(response.body);
-    } else {
-      throw Exception('Failed to load leave balance');
+    try {
+      final response = await _get('$baseUrl/leaves/balance/$userId');
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      }
+    } catch (e) {
+      debugPrint('[ApiService] getLeaveBalance error: $e');
     }
+    // Return safe defaults so screens don't crash
+    return {'total': 0, 'used': 0, 'remaining': 0};
   }
 
   // Get a list of the types of leave allowed by the company
@@ -768,15 +772,20 @@ class ApiService {
   // --- Company Settings ---
   // Settings like "Company Name", "Country", or "Currency"
   static Future<Map<String, dynamic>> getSettings({String? company}) async {
-    final effectiveCompany = company ?? await _getCompany();
-    String qs = effectiveCompany != null ? '?company=${Uri.encodeComponent(effectiveCompany)}' : '';
-    final response = await _get('$baseUrl/settings$qs')
-        .timeout(const Duration(seconds: 10));
-    if (response.statusCode == 200) {
-      return json.decode(response.body);
-    } else {
-      throw Exception('Failed to load settings');
+    try {
+      final effectiveCompany = company ?? await _getCompany();
+      String qs = effectiveCompany != null ? '?company=${Uri.encodeComponent(effectiveCompany)}' : '';
+      final response = await _get('$baseUrl/settings$qs')
+          .timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      }
+      debugPrint('[ApiService] getSettings returned ${response.statusCode}');
+    } catch (e) {
+      debugPrint('[ApiService] getSettings error: $e');
     }
+    // Return safe empty map so screens don't crash
+    return {};
   }
 
   static Future<void> updateSettings(Map<String, dynamic> settingsData) async {
@@ -815,6 +824,7 @@ class ApiService {
   static Future<List<dynamic>>? _holidaysFuture;
 
   static Future<List<dynamic>> getHolidays() async {
+    // If a request is already in-flight, reuse it
     if (_holidaysFuture != null) return _holidaysFuture!;
 
     _holidaysFuture = () async {
@@ -822,18 +832,26 @@ class ApiService {
         final company = await _getCompany();
         if (company == null) {
           debugPrint('[ApiService] WARNING: getHolidays called without company context');
-          return [];
+          _holidaysFuture = null;
+          return <dynamic>[];
         }
         String qs = '?company=${Uri.encodeComponent(company)}';
         final response = await _get('$baseUrl/admin/holidays$qs');
-        if (response.statusCode == 200) return json.decode(response.body) as List<dynamic>;
-        throw Exception('Failed to load holidays');
-      } catch (err) {
+        if (response.statusCode == 200) {
+          final data = json.decode(response.body) as List<dynamic>;
+          // Clear cache after 5 seconds so future navigations get fresh data
+          Future.delayed(const Duration(seconds: 5), () => _holidaysFuture = null);
+          return data;
+        }
+        // Non-200: clear cache immediately and return empty
         _holidaysFuture = null;
-        rethrow;
-      } finally {
-        // Clear after 5 seconds to allow fresh fetches later
-        Future.delayed(const Duration(seconds: 5), () => _holidaysFuture = null);
+        debugPrint('[ApiService] getHolidays returned ${response.statusCode}');
+        return <dynamic>[];
+      } catch (err) {
+        // On network error: clear cache so next call retries
+        _holidaysFuture = null;
+        debugPrint('[ApiService] getHolidays error: $err');
+        return <dynamic>[];
       }
     }();
 
@@ -1025,9 +1043,14 @@ class ApiService {
   }
 
   static Future<List<dynamic>> getUserPayslips(int userId) async {
-    final response = await _get('$baseUrl/payslips/$userId');
-    if (response.statusCode == 200) return json.decode(response.body);
-    throw Exception('Failed to load your payslips');
+    try {
+      final response = await _get('$baseUrl/payslips/$userId');
+      if (response.statusCode == 200) return json.decode(response.body);
+      debugPrint('[ApiService] getUserPayslips returned ${response.statusCode}');
+    } catch (e) {
+      debugPrint('[ApiService] getUserPayslips error: $e');
+    }
+    return [];
   }
 
   static Future<void> deletePayslip(int id) async {

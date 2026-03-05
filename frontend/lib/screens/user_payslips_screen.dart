@@ -46,7 +46,7 @@ class _UserPayslipsScreenState extends State<UserPayslipsScreen> {
             _user = user;
             _settings = settings;
             _payslips = data;
-            _isPayrollEnabled = settings['payrollEnabled'] != 0;
+            _isPayrollEnabled = (settings['payrollEnabled'] ?? 1) != 0;
           });
         }
       }

@@ -57,7 +57,23 @@ const authenticateToken = (req, res, next) => {
 
 // Multitenancy Helper: Verify if a userId belongs to the requester's company
 const verifyCompanyOwnership = async (req, res, targetUserId) => {
-    const requesterCompany = req.user.company;
+    // Primary: use company from the JWT token
+    let requesterCompany = req.user.company;
+
+    // Fallback: if the JWT was issued before the company field was set (stale token),
+    // look up the requester's company directly from the DB using their user ID.
+    if (!requesterCompany && req.user.id) {
+        try {
+            const selfResult = await pool.query('SELECT company FROM users WHERE id = $1', [req.user.id]);
+            if (selfResult.rowCount > 0) {
+                requesterCompany = selfResult.rows[0].company;
+            }
+        } catch (err) {
+            console.error('verifyCompanyOwnership DB fallback error:', err);
+            return false;
+        }
+    }
+
     if (!requesterCompany) return false;
     
     try {
@@ -1387,9 +1403,6 @@ app.get('/api/leaves/types', async (req, res) => {
 
 // IMPORTANT: This route MUST be above /api/leaves/:userId to prevent 'balance' matching as a userId
 app.get('/api/leaves/balance/:userId', async (req, res) => {
-  if (!(await verifyCompanyOwnership(req, res, req.params.userId))) {
-    return res.status(403).json({ error: 'Access denied: User belongs to a different company' });
-  }
   if (!(await verifyCompanyOwnership(req, res, req.params.userId))) {
     return res.status(403).json({ error: 'Access denied: User belongs to a different company' });
   }
