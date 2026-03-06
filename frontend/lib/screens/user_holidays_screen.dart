@@ -83,7 +83,7 @@ class _UserHolidaysScreenState extends State<UserHolidaysScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.beach_access_outlined, size: 64, color: PulseColors.textHint.withOpacity(0.3)),
+            Icon(Icons.beach_access_outlined, size: 64, color: PulseColors.textHint.withValues(alpha: 0.3)),
             const SizedBox(height: 16),
             Text(emptyTitle, style: PulseTextStyles.bodyBold.copyWith(color: PulseColors.textHint)),
           ],
@@ -114,7 +114,7 @@ class _UserHolidaysScreenState extends State<UserHolidaysScreen> {
                     width: 54,
                     padding: const EdgeInsets.symmetric(vertical: 10),
                     decoration: BoxDecoration(
-                      color: color.withOpacity(0.15),
+                      color: color.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Column(
@@ -152,7 +152,7 @@ class _UserHolidaysScreenState extends State<UserHolidaysScreen> {
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                           margin: const EdgeInsets.only(bottom: 4),
                           decoration: BoxDecoration(
-                            color: PulseColors.accent.withOpacity(0.2),
+                            color: PulseColors.accent.withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
@@ -166,7 +166,7 @@ class _UserHolidaysScreenState extends State<UserHolidaysScreen> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
-                          color: color.withOpacity(0.2),
+                          color: color.withValues(alpha: 0.2),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(

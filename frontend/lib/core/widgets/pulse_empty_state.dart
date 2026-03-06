@@ -33,25 +33,25 @@ class PulseEmptyState extends StatelessWidget {
                 shape: BoxShape.circle,
                 gradient: LinearGradient(
                   colors: [
-                    PulseColors.primary.withOpacity(0.08),
-                    PulseColors.brandVibrant.withOpacity(0.04),
+                    PulseColors.primary.withValues(alpha: 0.08),
+                    PulseColors.brandVibrant.withValues(alpha: 0.04),
                   ],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
                 border: Border.all(
-                  color: PulseColors.primary.withOpacity(0.15),
+                  color: PulseColors.primary.withValues(alpha: 0.15),
                   width: 2,
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: PulseColors.primary.withOpacity(0.08),
+                    color: PulseColors.primary.withValues(alpha: 0.08),
                     blurRadius: 24,
                     spreadRadius: 0,
                   ),
                 ],
               ),
-              child: Icon(icon, size: 44, color: PulseColors.primary.withOpacity(0.5)),
+              child: Icon(icon, size: 44, color: PulseColors.primary.withValues(alpha: 0.5)),
             )
                 .animate()
                 .fadeIn(duration: 500.ms)

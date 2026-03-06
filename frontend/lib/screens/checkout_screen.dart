@@ -13,6 +13,7 @@ import 'package:latlong2/latlong.dart';
 import '../core/theme/pulse_colors.dart';
 import '../core/theme/pulse_text_styles.dart';
 import '../core/widgets/pulse_card.dart';
+import '../core/widgets/pulse_clock.dart';
 import '../services/api_service.dart';
 
 import '../core/widgets/pulse_scaffold.dart';
@@ -25,9 +26,7 @@ class CheckoutScreen extends StatefulWidget {
 }
 
 class _CheckoutScreenState extends State<CheckoutScreen> with SingleTickerProviderStateMixin {
-  String _currentTime = '';
-  String _currentDate = '';
-  late Timer _timer;
+  late Timer _geofenceTimer;
   Map<String, dynamic>? _user;
   bool _isLoading = false;
 
@@ -42,9 +41,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> with SingleTickerProvid
   @override
   void initState() {
     super.initState();
-    _updateTime();
-    // Update the clock every second
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) => _updateTime());
+    // Update the geofence check every 60 seconds
+    _geofenceTimer = Timer.periodic(const Duration(seconds: 60), (timer) => _checkGeofencePeriodic());
     _loadUserData();
     _getCurrentLocation();
 
@@ -57,22 +55,26 @@ class _CheckoutScreenState extends State<CheckoutScreen> with SingleTickerProvid
 
   @override
   void dispose() {
-    _timer.cancel();
+    _geofenceTimer.cancel();
     _pulseController.dispose();
     super.dispose();
   }
 
-  void _updateTime() {
-    final now = DateTime.now();
-    // ANR Fix: Only call setState if the displayed strings actually changed
-    // Prevents redundant rebuilds every second when nothing has visually changed
-    final newTime = DateFormat('hh:mm:ss a').format(now);
-    final newDate = DateFormat('EEEE, d MMMM y').format(now);
-    if (mounted && (newTime != _currentTime || newDate != _currentDate)) {
-      setState(() {
-        _currentTime = newTime;
-        _currentDate = newDate;
-      });
+
+  Future<void> _checkGeofencePeriodic() async {
+    if (_user == null) return;
+    try {
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      ).timeout(const Duration(seconds: 10));
+      
+      await ApiService.reportLocation(
+        _user!['id'],
+        position.latitude,
+        position.longitude,
+      );
+    } catch (e) {
+      debugPrint('Periodic geofence check error: $e');
     }
   }
 
@@ -235,9 +237,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> with SingleTickerProvid
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                     decoration: BoxDecoration(
-                      color: PulseColors.success.withOpacity(0.1),
+                      color: PulseColors.success.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: PulseColors.success.withOpacity(0.2)),
+                      border: Border.all(color: PulseColors.success.withValues(alpha: 0.2)),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -259,16 +261,17 @@ class _CheckoutScreenState extends State<CheckoutScreen> with SingleTickerProvid
                     ),
                   ),
                   const SizedBox(height: 24),
-                  Text(_currentTime, style: PulseTextStyles.h1.copyWith(
-                    color: PulseColors.brandPrimary,
-                    fontSize: 42,
-                    letterSpacing: -1,
-                  )),
-                  const SizedBox(height: 8),
-                  Text(_currentDate, style: PulseTextStyles.body.copyWith(
-                    color: PulseColors.textSecondary,
-                    fontWeight: FontWeight.w500,
-                  )),
+                  PulseClock(
+                    timeStyle: PulseTextStyles.h1.copyWith(
+                      color: PulseColors.brandPrimary,
+                      fontSize: 42,
+                      letterSpacing: -1,
+                    ),
+                    dateStyle: PulseTextStyles.body.copyWith(
+                      color: PulseColors.textSecondary,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -327,7 +330,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> with SingleTickerProvid
                         Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: PulseColors.brandLight.withOpacity(0.5),
+                            color: PulseColors.brandLight.withValues(alpha: 0.5),
                             shape: BoxShape.circle,
                           ),
                           child: Icon(Icons.location_on, size: 16, color: PulseColors.brandPrimary),
@@ -370,7 +373,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> with SingleTickerProvid
                         gradient: PulseColors.brandGradient,
                         boxShadow: [
                           BoxShadow(
-                            color: PulseColors.brandPrimary.withOpacity(0.4),
+                            color: PulseColors.brandPrimary.withValues(alpha: 0.4),
                             blurRadius: 24,
                             offset: const Offset(0, 8),
                           ),

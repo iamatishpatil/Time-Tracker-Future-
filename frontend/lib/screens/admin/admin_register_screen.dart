@@ -178,7 +178,7 @@ class _AdminRegisterScreenState extends State<AdminRegisterScreen> {
                 onTap: _isLoading ? null : _pickImage,
                 child: CircleAvatar(
                   radius: 45,
-                  backgroundColor: PulseColors.primary.withOpacity(0.1),
+                  backgroundColor: PulseColors.primary.withValues(alpha: 0.1),
                   backgroundImage: _profileImage != null ? FileImage(File(_profileImage!.path)) : null,
                   child: _profileImage == null ? Icon(Icons.add_a_photo_outlined, color: PulseColors.primary) : null,
                 ),

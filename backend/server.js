@@ -132,6 +132,7 @@ const runMigrations = async () => {
   const migrations = [
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS "biometricToken" TEXT`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS "rejectionReason" TEXT`,
+    `ALTER TABLE attendance ADD COLUMN IF NOT EXISTS "isOutside" INTEGER DEFAULT 0`
   ];
   for (const sql of migrations) {
     try { await pool.query(sql); } catch (err) { console.error('[MIGRATION ERROR]', err.message); }
@@ -188,6 +189,56 @@ const calculateDistance = (lat1, lon1, lat2, lon2) => {
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 
   return R * c; // in metres
+};
+
+// Helper: Check geofence breach and notify
+const checkGeofenceBreach = async (userId, lat, long, company) => {
+  try {
+    // 1. Get Settings
+    const settingsResult = await pool.query('SELECT "officeLat", "officeLong", "officeRadiusMeters" FROM settings WHERE company = $1 OR "companyName" = $2 ORDER BY id DESC LIMIT 1', [company, company]);
+    const settings = settingsResult.rows[0];
+    if (!settings || !settings.officeLat) return;
+
+    // 2. Calculate distance
+    const distance = calculateDistance(lat, long, settings.officeLat, settings.officeLong);
+    const buffer = 20.0;
+    const isNowOutside = distance > (settings.officeRadiusMeters + buffer);
+
+    // 3. Get current status from attendance
+    const attendanceResult = await pool.query('SELECT id, "isOutside" FROM attendance WHERE "userId" = $1 AND "checkOutTime" IS NULL ORDER BY "checkInTime" DESC LIMIT 1', [userId]);
+    const attendance = attendanceResult.rows[0];
+    if (!attendance) return;
+
+    const wasOutside = attendance.isOutside === 1;
+
+    // 4. If status changed, notify and update DB
+    if (isNowOutside && !wasOutside) {
+        // Just went outside
+        const employeeResult = await pool.query('SELECT "fullName" FROM users WHERE id = $1', [userId]);
+        const employeeName = employeeResult.rows[0]?.fullName || 'Employee';
+        
+        await pool.query('UPDATE attendance SET "isOutside" = 1 WHERE id = $1', [attendance.id]);
+        
+        // Notify Employee
+        await createNotification(userId, '📍 Outside Workspace', 'You are going out side the radius. Please return to your work area.');
+        // Notify Admins
+        await notifyCompanyAdmins(company, '📍 Geofence Breach', `${employeeName} is going outside the radius.`);
+        
+    } else if (!isNowOutside && wasOutside) {
+        // Just came back inside
+        const employeeResult = await pool.query('SELECT "fullName" FROM users WHERE id = $1', [userId]);
+        const employeeName = employeeResult.rows[0]?.fullName || 'Employee';
+
+        await pool.query('UPDATE attendance SET "isOutside" = 0 WHERE id = $1', [attendance.id]);
+
+        // Notify Employee
+        await createNotification(userId, '✅ Back in Workspace', 'You have returned to the office radius.');
+        // Notify Admins
+        await notifyCompanyAdmins(company, '✅ Geofence Resolved', `${employeeName} came inside the radius.`);
+    }
+  } catch (err) {
+    console.error('Error in checkGeofenceBreach:', err);
+  }
 };
 
 
@@ -699,7 +750,7 @@ app.post('/api/checkout', upload.single('photo'), async (req, res) => {
 
     // 5. Update record
     await pool.query(
-      `UPDATE attendance SET "checkOutTime" = $1, "checkOutLat" = $2, "checkOutLong" = $3, "checkOutAddress" = $4, "checkOutPhoto" = $5, "overtimeHours" = $6
+      `UPDATE attendance SET "checkOutTime" = $1, "checkOutLat" = $2, "checkOutLong" = $3, "checkOutAddress" = $4, "checkOutPhoto" = $5, "overtimeHours" = $6, "isOutside" = 0
        WHERE "userId" = $7 AND "checkOutTime" IS NULL`,
       [now, lat, long, address, photo, overtime, userId]
     );
@@ -770,11 +821,36 @@ app.get('/api/attendance/:userId', async (req, res) => {
   if (!(await verifyCompanyOwnership(req, res, req.params.userId))) {
     return res.status(403).json({ error: 'Access denied: User belongs to a different company' });
   }
+  const { startDate, endDate } = req.query;
   try {
-    const result = await pool.query('SELECT * FROM attendance WHERE "userId" = $1 ORDER BY "checkInTime" DESC', [req.params.userId]);
+    let query = 'SELECT * FROM attendance WHERE "userId" = $1';
+    const params = [req.params.userId];
+
+    if (startDate && endDate) {
+      query += ' AND "checkInTime" BETWEEN $2 AND $3';
+      params.push(startDate + ' 00:00:00', endDate + ' 23:59:59');
+    }
+
+    query += ' ORDER BY "checkInTime" DESC';
+    const result = await pool.query(query, params);
     res.json(result.rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// New Endpoint: Geofence alert from app
+app.post('/api/attendance/geofence-alert', async (req, res) => {
+  const { userId, lat, long } = req.body;
+  const company = req.user.company;
+  
+  if (!userId || !lat || !long) return res.status(400).json({ error: 'Missing data' });
+  
+  try {
+     await checkGeofenceBreach(userId, lat, long, company);
+     res.json({ message: 'Status checked' });
+  } catch (err) {
+     res.status(500).json({ error: err.message });
   }
 });
 

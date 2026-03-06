@@ -20,6 +20,7 @@ import '../core/theme/pulse_colors.dart';
 import '../core/theme/pulse_text_styles.dart';
 import '../core/widgets/pulse_card.dart';
 import '../core/widgets/pulse_shimmer.dart';
+import '../core/widgets/pulse_clock.dart'; // [ADD]
 import '../services/api_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/providers/branding_provider.dart';
@@ -32,11 +33,6 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> with SingleTickerProviderStateMixin {
-  // --- Clock ---
-  String _timeString = '';
-  String _dateString = '';
-  Timer? _clockTimer;
-
   Map<String, dynamic>? _user;
   bool _isLoading = true;
   bool _isCheckedIn = false;
@@ -65,9 +61,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with SingleTickerProvid
   @override
   void initState() {
     super.initState();
-    _timeString = _formatTime(DateTime.now());
-    _dateString = _formatDate(DateTime.now());
-    _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) => _tickClock());
     _animationController = AnimationController(vsync: this, duration: const Duration(seconds: 2))..repeat(reverse: true);
     _pulseAnimation = Tween<double>(begin: 1.0, end: 1.05).animate(
       CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
@@ -77,24 +70,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with SingleTickerProvid
 
   @override
   void dispose() {
-    _clockTimer?.cancel();
     _animationController.dispose();
     super.dispose();
   }
 
-  void _tickClock() {
-    if (!mounted) return;
-    final now = DateTime.now();
-    final t = _formatTime(now);
-    final d = _formatDate(now);
-    // ANR Fix: Only rebuild when strings actually change
-    if (t != _timeString || d != _dateString) {
-      setState(() { _timeString = t; _dateString = d; });
-    }
-  }
-
-  String _formatTime(DateTime dt) => DateFormat('hh:mm:ss a').format(dt);
-  String _formatDate(DateTime dt) => DateFormat('EEEE, MMMM d').format(dt);
 
   Future<void> _initializeData() async {
     try {
@@ -345,13 +324,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with SingleTickerProvid
                       child: CircleAvatar(
                         radius: 26,
                         backgroundColor: PulseColors.surface,
-                        backgroundImage: _settings?['companyLogo'] != null
-                            ? CachedNetworkImageProvider(ApiService.getImageUrl(_settings!['companyLogo']))
-                            : (_user?['profilePicture'] != null
-                                ? CachedNetworkImageProvider(ApiService.getImageUrl(_user!['profilePicture']))
-                                : null),
-                        child: (_settings?['companyLogo'] == null && _user?['profilePicture'] == null)
-                            ? Icon(Icons.business, size: 24, color: PulseColors.primary)
+                        backgroundImage: _user?['profilePicture'] != null
+                            ? CachedNetworkImageProvider(ApiService.getImageUrl(_user!['profilePicture']))
+                            : null,
+                        child: _user?['profilePicture'] == null
+                            ? const Icon(Icons.person, size: 24, color: PulseColors.textHint)
                             : null,
                       ),
                     ),
@@ -418,27 +395,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with SingleTickerProvid
                     ),
                   ),
 
-                // --- Clock Card ---
                 PulseCard(
                   glowEffect: true,
                   padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 16),
-                  child: Column(
-                    children: [
-                      _buildClockDisplay(),
-                      const SizedBox(height: 12),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: PulseColors.primary.withValues(alpha: 0.05),
-                          borderRadius: BorderRadius.circular(30),
-                        ),
-                        child: Text(
-                          _dateString.toUpperCase(),
-                          style: PulseTextStyles.captionBold.copyWith(letterSpacing: 2.5, fontSize: 10, color: PulseColors.primary),
-                        ),
-                      ),
-                    ],
-                  ),
+                  child: const PulseClock(detailed: true),
                 ),
                 const SizedBox(height: 16),
 
@@ -507,6 +467,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with SingleTickerProvid
     );
   }
 
+
   Widget _buildGeofenceBadge() {
     final inside = _settings == null || _settings!['geofenceEnabled'] == 0 || _isInsideRadius;
     final color = inside ? PulseColors.success : PulseColors.error;
@@ -523,30 +484,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with SingleTickerProvid
           Container(width: 7, height: 7, decoration: BoxDecoration(shape: BoxShape.circle, color: color)),
           const SizedBox(width: 7),
           Text(inside ? 'IN RANGE' : 'OFF-SITE', style: PulseTextStyles.captionBold.copyWith(color: color, fontSize: 10)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildClockDisplay() {
-    final parts = _timeString.split(' ');
-    if (parts.length < 2) return Text(_timeString, style: PulseTextStyles.mono.copyWith(fontSize: 52));
-
-    final [timePart, ampm] = parts;
-    final tp = timePart.split(':');
-    if (tp.length < 3) return Text(_timeString, style: PulseTextStyles.mono.copyWith(fontSize: 52));
-
-    return RichText(
-      text: TextSpan(
-        style: PulseTextStyles.mono.copyWith(fontSize: 52, letterSpacing: -2),
-        children: [
-          TextSpan(text: tp[0], style: const TextStyle(fontWeight: FontWeight.w900, color: PulseColors.textPrimary)),
-          TextSpan(text: ':', style: TextStyle(color: PulseColors.primary.withValues(alpha: 0.3))),
-          TextSpan(text: tp[1], style: const TextStyle(fontWeight: FontWeight.w700, color: PulseColors.textSecondary)),
-          TextSpan(text: ':', style: TextStyle(color: PulseColors.primary.withValues(alpha: 0.3))),
-          TextSpan(text: tp[2], style: const TextStyle(fontWeight: FontWeight.w200, color: PulseColors.textHint, fontSize: 36)),
-          const TextSpan(text: ' '),
-          TextSpan(text: ampm, style: PulseTextStyles.captionBold.copyWith(color: PulseColors.primary, fontSize: 16, letterSpacing: 0)),
         ],
       ),
     );

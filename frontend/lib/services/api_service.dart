@@ -13,7 +13,7 @@ import 'package:intl/intl.dart';
 class ApiService {
   // --- The Server Address ---
   // Every server has an address (IP). We use this to tell Flutter where to send data.
-  static const String baseUrl = 'http://192.168.1.26:3000/api';
+  static const String baseUrl = 'http://10.157.170.65:3000/api';
 
   // --- Performance: Default HTTP timeout ---
   static const Duration _defaultTimeout = Duration(seconds: 10);
@@ -314,6 +314,22 @@ class ApiService {
     }
   }
 
+  // --- Geofencing: Report Periodic Location ---
+  static Future<void> reportLocation(int userId, double lat, double long) async {
+    try {
+      await _post(
+        '$baseUrl/attendance/geofence-alert',
+        body: json.encode({
+          'userId': userId,
+          'lat': lat,
+          'long': long,
+        }),
+      );
+    } catch (e) {
+      debugPrint('reportLocation error: $e');
+    }
+  }
+
   static Future<void> checkOut(int userId, {double? lat, double? long, String? address, XFile? photo}) async {
     var uri = Uri.parse('$baseUrl/checkout');
     var request = http.MultipartRequest('POST', uri);
@@ -348,8 +364,14 @@ class ApiService {
   }
 
   // --- Fetching Attendance Data ---
-  static Future<List<dynamic>> getAttendance(int userId) async {
-    final response = await _get('$baseUrl/attendance/$userId');
+  static Future<List<dynamic>> getAttendance(int userId, {DateTime? startDate, DateTime? endDate}) async {
+    String url = '$baseUrl/attendance/$userId';
+    if (startDate != null && endDate != null) {
+      final startStr = DateFormat('yyyy-MM-dd').format(startDate);
+      final endStr = DateFormat('yyyy-MM-dd').format(endDate);
+      url += '?startDate=$startStr&endDate=$endStr';
+    }
+    final response = await _get(url);
     if (response.statusCode == 200) {
       return json.decode(response.body);
     } else {

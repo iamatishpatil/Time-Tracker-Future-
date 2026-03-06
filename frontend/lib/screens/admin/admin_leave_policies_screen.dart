@@ -53,7 +53,7 @@ class _AdminLeavePoliciesScreenState extends State<AdminLeavePoliciesScreen> {
               subtitle: Text(isPaid ? 'Salary is not deducted' : 'Salary is deducted', style: PulseTextStyles.caption),
               value: isPaid,
               onChanged: (v) => setD(() => isPaid = v),
-              activeColor: PulseColors.success,
+              activeThumbColor: PulseColors.success,
               contentPadding: EdgeInsets.zero,
             ),
           ]),
@@ -148,7 +148,7 @@ class _AdminLeavePoliciesScreenState extends State<AdminLeavePoliciesScreen> {
                     child: Row(children: [
                       Container(
                         padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(12)),
+                        decoration: BoxDecoration(color: color.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(12)),
                         child: Icon(isPaid ? Icons.attach_money : Icons.money_off, color: color, size: 22),
                       ),
                       const SizedBox(width: 12),

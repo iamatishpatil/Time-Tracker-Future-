@@ -156,7 +156,7 @@ class _AdminShiftsScreenState extends State<AdminShiftsScreen> {
                             Container(
                               padding: const EdgeInsets.all(10),
                               decoration: BoxDecoration(
-                                color: PulseColors.primary.withOpacity(0.15),
+                                color: PulseColors.primary.withValues(alpha: 0.15),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Icon(Icons.schedule, color: PulseColors.primary, size: 22),

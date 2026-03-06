@@ -66,7 +66,7 @@ class _AdminAbsentScreenState extends State<AdminAbsentScreen> {
                           ])),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                            decoration: BoxDecoration(color: PulseColors.error.withOpacity(0.15), borderRadius: BorderRadius.circular(20)),
+                            decoration: BoxDecoration(color: PulseColors.error.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(20)),
                             child: Text('Absent', style: PulseTextStyles.captionBold.copyWith(color: PulseColors.error, fontSize: 11)),
                           ),
                         ]),

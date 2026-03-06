@@ -80,9 +80,9 @@ class _UserShiftsScreenState extends State<UserShiftsScreen> {
                           children: weekOffs.map((day) => Container(
                             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                             decoration: BoxDecoration(
-                              color: PulseColors.warning.withOpacity(0.15),
+                              color: PulseColors.warning.withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(20),
-                              border: Border.all(color: PulseColors.warning.withOpacity(0.3)),
+                              border: Border.all(color: PulseColors.warning.withValues(alpha: 0.3)),
                             ),
                             child: Text(day, style: PulseTextStyles.captionBold.copyWith(color: PulseColors.warning)),
                           )).toList(),
@@ -111,7 +111,7 @@ class _UserShiftsScreenState extends State<UserShiftsScreen> {
                             Container(
                               padding: const EdgeInsets.all(10),
                               decoration: BoxDecoration(
-                                color: PulseColors.primary.withOpacity(0.15),
+                                color: PulseColors.primary.withValues(alpha: 0.15),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Icon(Icons.schedule,

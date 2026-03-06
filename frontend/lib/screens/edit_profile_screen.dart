@@ -221,7 +221,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                               border: Border.all(color: PulseColors.primary, width: 3),
                               boxShadow: [
                                 BoxShadow(
-                                  color: PulseColors.primary.withOpacity(0.3),
+                                  color: PulseColors.primary.withValues(alpha: 0.3),
                                   blurRadius: 16,
                                   spreadRadius: 2,
                                 ),

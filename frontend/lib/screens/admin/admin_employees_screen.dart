@@ -173,9 +173,9 @@ class _AdminEmployeesScreenState extends State<AdminEmployeesScreen> {
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                               decoration: BoxDecoration(
-                                color: PulseColors.warning.withOpacity(0.08),
+                                color: PulseColors.warning.withValues(alpha: 0.08),
                                 borderRadius: BorderRadius.circular(20),
-                                border: Border.all(color: PulseColors.warning.withOpacity(0.3), width: 1),
+                                border: Border.all(color: PulseColors.warning.withValues(alpha: 0.3), width: 1),
                               ),
                               child: Text('PENDING', style: PulseTextStyles.chip.copyWith(color: PulseColors.warning)),
                             ),
@@ -260,10 +260,10 @@ class _AdminEmployeesScreenState extends State<AdminEmployeesScreen> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
-                          color: isActive ? PulseColors.success.withOpacity(0.08) : PulseColors.error.withOpacity(0.08),
+                          color: isActive ? PulseColors.success.withValues(alpha: 0.08) : PulseColors.error.withValues(alpha: 0.08),
                           borderRadius: BorderRadius.circular(20),
                           border: Border.all(
-                            color: (isActive ? PulseColors.success : PulseColors.error).withOpacity(0.3),
+                            color: (isActive ? PulseColors.success : PulseColors.error).withValues(alpha: 0.3),
                             width: 1,
                           ),
                         ),
@@ -289,7 +289,7 @@ class _AdminEmployeesScreenState extends State<AdminEmployeesScreen> {
                               if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
                             }
                           },
-                          activeColor: PulseColors.success,
+                          activeThumbColor: PulseColors.success,
                           materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         ),
                       ),

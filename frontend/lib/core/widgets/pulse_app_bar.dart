@@ -39,7 +39,7 @@ class PulseAppBar extends StatelessWidget implements PreferredSizeWidget {
         preferredSize: const Size.fromHeight(1),
         child: Container(
           height: 0.5,
-          color: PulseColors.border.withOpacity(0.4),
+          color: PulseColors.border.withValues(alpha: 0.4),
         ),
       ),
     );

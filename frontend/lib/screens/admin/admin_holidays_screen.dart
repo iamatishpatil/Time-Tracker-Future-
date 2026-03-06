@@ -177,7 +177,7 @@ class _AdminHolidaysScreenState extends State<AdminHolidaysScreen> {
             child: Row(children: [
               Container(
                 padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(12)),
+                decoration: BoxDecoration(color: color.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(12)),
                 child: Icon(Icons.celebration, color: color, size: 22),
               ),
               const SizedBox(width: 12),
@@ -188,7 +188,7 @@ class _AdminHolidaysScreenState extends State<AdminHolidaysScreen> {
                      const SizedBox(width: 6),
                      Container(
                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                       decoration: BoxDecoration(color: PulseColors.accent.withOpacity(0.2), borderRadius: BorderRadius.circular(6)),
+                       decoration: BoxDecoration(color: PulseColors.accent.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(6)),
                        child: Text('½ Day', style: PulseTextStyles.captionBold.copyWith(color: PulseColors.accent, fontSize: 9)),
                      ),
                    ],

@@ -31,7 +31,7 @@ class AdminDrawer extends StatelessWidget {
             ),
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [PulseColors.surface, PulseColors.primary.withOpacity(0.1)],
+                colors: [PulseColors.surface, PulseColors.primary.withValues(alpha: 0.1)],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -64,7 +64,7 @@ class AdminDrawer extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: PulseColors.primary.withOpacity(0.15),
+                    color: PulseColors.primary.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
@@ -190,8 +190,8 @@ class _DrawerTile extends StatelessWidget {
         child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(14),
-          splashColor: PulseColors.primary.withOpacity(0.06),
-          highlightColor: PulseColors.primary.withOpacity(0.03),
+          splashColor: PulseColors.primary.withValues(alpha: 0.06),
+          highlightColor: PulseColors.primary.withValues(alpha: 0.03),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             child: Row(
@@ -199,7 +199,7 @@ class _DrawerTile extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: (isDestructive ? PulseColors.error : PulseColors.primary).withOpacity(0.08),
+                    color: (isDestructive ? PulseColors.error : PulseColors.primary).withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(icon, color: color, size: 18),
@@ -215,7 +215,7 @@ class _DrawerTile extends StatelessWidget {
                   ),
                 ),
                 if (!isDestructive)
-                  Icon(Icons.chevron_right_rounded, color: PulseColors.textHint.withOpacity(0.5), size: 18),
+                  Icon(Icons.chevron_right_rounded, color: PulseColors.textHint.withValues(alpha: 0.5), size: 18),
               ],
             ),
           ),

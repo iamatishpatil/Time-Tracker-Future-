@@ -239,8 +239,8 @@ class _LeaveScreenState extends State<LeaveScreen> {
           // by looping through the dates and skipping Sundays and Public Holidays.
           if (_startDate != null && _endDate != null) ...[
             PulseCard(
-              color: PulseColors.accent.withOpacity(0.1),
-              borderColor: PulseColors.accent.withOpacity(0.2),
+              color: PulseColors.accent.withValues(alpha: 0.1),
+              borderColor: PulseColors.accent.withValues(alpha: 0.2),
               padding: const EdgeInsets.all(12),
               child: Builder(builder: (context) {
                 double days = 0;
@@ -374,7 +374,7 @@ class _LeaveScreenState extends State<LeaveScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: statusColor.withOpacity(0.15),
+                    color: statusColor.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Text(

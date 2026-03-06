@@ -26,6 +26,7 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
   bool _isLoading = true;
   String _userName = 'User';
   List<dynamic> _holidays = [];
+  DateTimeRange? _selectedRange;
 
   @override
   void initState() {
@@ -42,7 +43,11 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
         _userName = user['fullName'] ?? 'User';
         // Performance Fix: Fetch both IN PARALLEL
         final results = await Future.wait([
-          ApiService.getAttendance(user['id']),
+          ApiService.getAttendance(
+            user['id'],
+            startDate: _selectedRange?.start,
+            endDate: _selectedRange?.end,
+          ),
           ApiService.getHolidays(),
         ]);
         final history = results[0] as List<dynamic>;
@@ -58,6 +63,34 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
       debugPrint('Error loading history: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _selectDateRange() async {
+    final DateTimeRange? picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+      initialDateRange: _selectedRange,
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: ColorScheme.light(
+              primary: PulseColors.primary,
+              onPrimary: Colors.white,
+              onSurface: PulseColors.textPrimary,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null && picked != _selectedRange) {
+      setState(() {
+        _selectedRange = picked;
+      });
+      _loadHistory();
     }
   }
 
@@ -97,12 +130,23 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(_userName, style: PulseTextStyles.bodyBold),
-                              Text(
-                                '${_history.length} ${_history.length == 1 ? 'Record' : 'Records'}',
-                                style: PulseTextStyles.caption,
-                              ),
+                              if (_selectedRange != null)
+                                Text(
+                                  '${DateFormat('MMM d').format(_selectedRange!.start)} - ${DateFormat('MMM d').format(_selectedRange!.end)}',
+                                  style: PulseTextStyles.caption.copyWith(color: PulseColors.primary),
+                                )
+                              else
+                                Text(
+                                  '${_history.length} ${_history.length == 1 ? 'Record' : 'Records'}',
+                                  style: PulseTextStyles.caption,
+                                ),
                             ],
                           ),
+                        ),
+                        IconButton(
+                          icon: Icon(Icons.filter_list_rounded, color: PulseColors.primary, size: 22),
+                          onPressed: _selectDateRange,
+                          tooltip: 'Filter by Date',
                         ),
                         IconButton(
                           icon: Icon(Icons.picture_as_pdf_rounded, color: PulseColors.primaryLight, size: 22),

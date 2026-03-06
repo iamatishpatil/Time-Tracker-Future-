@@ -84,10 +84,10 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
                 shape: BoxShape.rectangle,
                 borderRadius: BorderRadius.circular(20),
                 color: Colors.white,
-                border: Border.all(color: PulseColors.primary.withOpacity(0.3), width: 2),
+                border: Border.all(color: PulseColors.primary.withValues(alpha: 0.3), width: 2),
                 boxShadow: [
                   BoxShadow(
-                    color: PulseColors.primary.withOpacity(0.25),
+                    color: PulseColors.primary.withValues(alpha: 0.25),
                     blurRadius: 28,
                     spreadRadius: 3,
                   ),

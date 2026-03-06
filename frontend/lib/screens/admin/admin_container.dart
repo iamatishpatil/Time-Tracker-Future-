@@ -90,12 +90,11 @@ class _AdminContainerState extends ConsumerState<AdminContainer> {
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _buildNavItem(0, Icons.dashboard_rounded, Icons.dashboard_outlined, 'Home'),
-                _buildNavItem(1, Icons.history_rounded, Icons.history_outlined, 'Attendance'),
-                _buildNavItem(2, Icons.people_rounded, Icons.people_outline_rounded, 'Staff'),
-                _buildNavItem(3, Icons.beach_access_rounded, Icons.beach_access_outlined, 'Leaves'),
+                Expanded(child: _buildNavItem(0, Icons.dashboard_rounded, Icons.dashboard_outlined, 'Home')),
+                Expanded(child: _buildNavItem(1, Icons.history_rounded, Icons.history_outlined, 'Attendance')),
+                Expanded(child: _buildNavItem(2, Icons.people_rounded, Icons.people_outline_rounded, 'Staff')),
+                Expanded(child: _buildNavItem(3, Icons.beach_access_rounded, Icons.beach_access_outlined, 'Leaves')),
               ],
             ),
           ),
@@ -111,30 +110,34 @@ class _AdminContainerState extends ConsumerState<AdminContainer> {
       behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        margin: const EdgeInsets.symmetric(horizontal: 2),
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
         decoration: BoxDecoration(
           color: isSelected ? PulseColors.brandLight.withOpacity(0.5) : Colors.transparent,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(16),
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              isSelected ? activeIcon : inactiveIcon,
-              color: isSelected ? PulseColors.brandPrimary : PulseColors.textHint,
-              size: 20,
-            ),
-            if (isSelected) ...[
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: PulseTextStyles.captionBold.copyWith(
-                  color: PulseColors.primary,
-                  fontSize: 11,
-                ),
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                isSelected ? activeIcon : inactiveIcon,
+                color: isSelected ? PulseColors.brandPrimary : PulseColors.textHint,
+                size: 20,
               ),
+              if (isSelected) ...[
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: PulseTextStyles.captionBold.copyWith(
+                    color: PulseColors.primary,
+                    fontSize: 11,
+                  ),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );

@@ -155,7 +155,7 @@ class _EmployeeFormScreenState extends State<EmployeeFormScreen> {
                           Container(
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              border: Border.all(color: PulseColors.primary.withOpacity(0.4), width: 3),
+                              border: Border.all(color: PulseColors.primary.withValues(alpha: 0.4), width: 3),
                             ),
                             child: CircleAvatar(
                               radius: 48,
@@ -293,7 +293,7 @@ class _EmployeeFormScreenState extends State<EmployeeFormScreen> {
                         ),
                         value: _isActive,
                         onChanged: (v) => setState(() => _isActive = v),
-                        activeColor: PulseColors.success,
+                        activeThumbColor: PulseColors.success,
                       ),
                     ),
                     const SizedBox(height: 28),

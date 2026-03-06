@@ -121,8 +121,8 @@ class _AdminAttendanceScreenState extends State<AdminAttendanceScreen> {
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 14),
                     child: PulseCard(
-                      color: color.withOpacity(0.1),
-                      borderColor: color.withOpacity(0.3),
+                      color: color.withValues(alpha: 0.1),
+                      borderColor: color.withValues(alpha: 0.3),
                       padding: const EdgeInsets.all(12),
                       child: Row(
                         children: [
@@ -136,7 +136,7 @@ class _AdminAttendanceScreenState extends State<AdminAttendanceScreen> {
                           ),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(color: color.withOpacity(0.2), borderRadius: BorderRadius.circular(6)),
+                            decoration: BoxDecoration(color: color.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(6)),
                             child: Text(holiday['type'].toString().toUpperCase(), style: PulseTextStyles.captionBold.copyWith(color: color, fontSize: 8)),
                           ),
                         ],
@@ -235,7 +235,7 @@ class _AdminAttendanceScreenState extends State<AdminAttendanceScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
-                    color: (isLate ? PulseColors.error : PulseColors.success).withOpacity(0.15),
+                    color: (isLate ? PulseColors.error : PulseColors.success).withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Text(record['status'] ?? 'On Time', style: PulseTextStyles.captionBold.copyWith(color: isLate ? PulseColors.error : PulseColors.success, fontSize: 10)),

@@ -188,7 +188,7 @@ class _AdminPayrollScreenState extends State<AdminPayrollScreen> {
             child: Row(children: [
               Container(
                 padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(color: PulseColors.warning.withOpacity(0.15), borderRadius: BorderRadius.circular(12)),
+                decoration: BoxDecoration(color: PulseColors.warning.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(12)),
                 child: const Icon(Icons.timer, color: PulseColors.warning, size: 22),
               ),
               const SizedBox(width: 12),
@@ -221,7 +221,7 @@ class _AdminPayrollScreenState extends State<AdminPayrollScreen> {
             child: Row(children: [
               Container(
                 padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(color: PulseColors.accent.withOpacity(0.15), borderRadius: BorderRadius.circular(12)),
+                decoration: BoxDecoration(color: PulseColors.accent.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(12)),
                 child: Icon(Icons.access_time, color: PulseColors.accent, size: 22),
               ),
               const SizedBox(width: 12),

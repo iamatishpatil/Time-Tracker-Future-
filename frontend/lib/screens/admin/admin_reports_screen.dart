@@ -23,7 +23,10 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
   List<dynamic> _employees = [];
   List<dynamic> _attendance = [];
   List<dynamic> _holidays = [];
-  DateTime _selectedMonth = DateTime.now();
+  DateTimeRange _selectedRange = DateTimeRange(
+    start: DateTime(DateTime.now().year, DateTime.now().month, 1),
+    end: DateTime.now(),
+  );
 
   @override
   void initState() {
@@ -36,12 +39,9 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
     try {
       final employees = await ApiService.getAllUsers();
       
-      // Optimize: Only fetch attendance for the selected month from the server
-      final start = DateTime(_selectedMonth.year, _selectedMonth.month, 1);
-      final lastDay = DateTime(_selectedMonth.year, _selectedMonth.month + 1, 0);
       final attendance = await ApiService.getAllAttendance(
-        startDate: start,
-        endDate: lastDay,
+        startDate: _selectedRange.start,
+        endDate: _selectedRange.end,
       );
       
       final holidays = await ApiService.getHolidays();
@@ -52,26 +52,28 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
   }
 
   // --- The Brains: Stats Calculation ---
-  // This loops through every attendance record for a specific user and 
-  // matches it against the selected month and the holiday calendar.
-  Map<String, dynamic> _calculateMonthlyStats(String userId) {
+  Map<String, dynamic> _calculateRangeStats(String userId) {
     int present = 0, late = 0, halfDays = 0, holidaysCount = 0;
 
-    // 1. Count scheduled public holidays in this month
+    // 1. Count scheduled public holidays in this range
     for (var h in _holidays) {
       final hDate = DateTime.parse(h['date']);
-      if (hDate.year == _selectedMonth.year && hDate.month == _selectedMonth.month && h['type'] == 'Public') holidaysCount++;
+      if (hDate.isAfter(_selectedRange.start.subtract(const Duration(days: 1))) && 
+          hDate.isBefore(_selectedRange.end.add(const Duration(days: 1))) && 
+          h['type'] == 'Public') {
+        holidaysCount++;
+      }
     }
 
     // 2. Count actual "Punch-ins" for the user
     for (var record in _attendance) {
       if (record['userId'].toString() != userId.toString()) continue;
       final date = DateTime.parse(record['checkInTime']);
-      if (date.year == _selectedMonth.year && date.month == _selectedMonth.month) {
+      if (date.isAfter(_selectedRange.start.subtract(const Duration(days: 1))) && 
+          date.isBefore(_selectedRange.end.add(const Duration(days: 1)))) {
         present++;
         if (record['status'] == 'Late') late++;
         final dateStr = DateFormat('yyyy-MM-dd').format(date);
-        // Check if they worked on a half-day holiday
         final holiday = _holidays.firstWhere((h) => h['date'] == dateStr, orElse: () => null);
         if (holiday != null && holiday['duration'] == 'Half Day') halfDays++;
       }
@@ -84,13 +86,21 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Monthly Reports'),
+        title: const Text('Custom Reports'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.calendar_today),
+            icon: const Icon(Icons.date_range),
             onPressed: () async {
-              final date = await showDatePicker(context: context, initialDate: _selectedMonth, firstDate: DateTime(2020), lastDate: DateTime(2030));
-              if (date != null) setState(() => _selectedMonth = date);
+              final picked = await showDateRangePicker(
+                context: context,
+                firstDate: DateTime(2020),
+                lastDate: DateTime.now().add(const Duration(days: 365)),
+                initialDateRange: _selectedRange,
+              );
+              if (picked != null) {
+                setState(() => _selectedRange = picked);
+                _loadData();
+              }
             },
           ),
         ],
@@ -101,7 +111,10 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
               children: [
                 Padding(
                   padding: const EdgeInsets.all(16),
-                  child: Text(DateFormat('MMMM yyyy').format(_selectedMonth), style: PulseTextStyles.h2.copyWith(color: PulseColors.primary)),
+                  child: Text(
+                    '${DateFormat('MMM d, yyyy').format(_selectedRange.start)} - ${DateFormat('MMM d, yyyy').format(_selectedRange.end)}',
+                    style: PulseTextStyles.h3.copyWith(color: PulseColors.primary),
+                  ),
                 ),
                 Expanded(
                   child: ListView.builder(
@@ -109,7 +122,7 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
                     itemCount: _employees.length,
                     itemBuilder: (context, index) {
                       final emp = _employees[index];
-                      final stats = _calculateMonthlyStats(emp['id'].toString());
+                      final stats = _calculateRangeStats(emp['id'].toString());
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 10),
                         child: PulseCard(
@@ -117,7 +130,7 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
                           child: Column(children: [
                             Row(children: [
                               CircleAvatar(
-                                radius: 20, backgroundColor: PulseColors.primary.withOpacity(0.2),
+                                radius: 20, backgroundColor: PulseColors.primary.withValues(alpha: 0.2),
                                 child: Text(emp['fullName'][0], style: PulseTextStyles.bodyBold.copyWith(color: PulseColors.primary)),
                               ),
                               const SizedBox(width: 12),
@@ -128,13 +141,19 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
                               IconButton(
                                 icon: Icon(Icons.picture_as_pdf, color: PulseColors.error, size: 20),
                                 onPressed: () {
-                                  // Generate a professional PDF "Timesheet" for this specific employee
+                                  // Filter attendance for ONLY this employee AND within the selected range
                                   final userAttendance = _attendance.where((r) {
                                     final d = DateTime.parse(r['checkInTime']);
                                     return r['userId'].toString() == emp['id'].toString() &&
-                                        d.year == _selectedMonth.year && d.month == _selectedMonth.month;
+                                        d.isAfter(_selectedRange.start.subtract(const Duration(days: 1))) &&
+                                        d.isBefore(_selectedRange.end.add(const Duration(days: 1)));
                                   }).toList();
-                                  PdfService.generateAttendanceReport(emp['fullName'], userAttendance, holidays: _holidays);
+                                  
+                                  PdfService.generateAttendanceReport(
+                                    emp['fullName'], 
+                                    userAttendance, 
+                                    holidays: _holidays
+                                  );
                                 },
                               ),
                             ]),
