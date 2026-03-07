@@ -3,9 +3,9 @@
 # ==========================================
 backend/node_modules/
 backend/.env
-backend/.env.development
-backend/.env.staging
-backend/.env.production
+# backend/.env.development
+# backend/.env.staging
+# backend/.env.production
 backend/*.log
 backend/uploads/
 
