@@ -94,9 +94,9 @@ class _PulseClockState extends State<PulseClock> {
             style: PulseTextStyles.mono.copyWith(fontSize: 52, letterSpacing: -2),
             children: [
               TextSpan(text: tp[0], style: const TextStyle(fontWeight: FontWeight.w900, color: PulseColors.textPrimary)),
-              TextSpan(text: ':', style: TextStyle(color: PulseColors.primary.withValues(alpha: 0.3))),
+              TextSpan(text: ':', style: TextStyle(color: PulseColors.primary.withOpacity(0.3))),
               TextSpan(text: tp[1], style: const TextStyle(fontWeight: FontWeight.w700, color: PulseColors.textSecondary)),
-              TextSpan(text: ':', style: TextStyle(color: PulseColors.primary.withValues(alpha: 0.3))),
+              TextSpan(text: ':', style: TextStyle(color: PulseColors.primary.withOpacity(0.3))),
               TextSpan(text: tp[2], style: const TextStyle(fontWeight: FontWeight.w200, color: PulseColors.textHint, fontSize: 36)),
               const TextSpan(text: ' '),
               TextSpan(text: ampm, style: PulseTextStyles.captionBold.copyWith(color: PulseColors.primary, fontSize: 16, letterSpacing: 0)),
@@ -108,7 +108,7 @@ class _PulseClockState extends State<PulseClock> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
             decoration: BoxDecoration(
-              color: PulseColors.primary.withValues(alpha: 0.05),
+              color: PulseColors.primary.withOpacity(0.05),
               borderRadius: BorderRadius.circular(30),
             ),
             child: Text(

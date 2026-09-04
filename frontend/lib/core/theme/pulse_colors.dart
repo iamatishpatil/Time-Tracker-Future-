@@ -42,8 +42,8 @@ class PulseColors {
   static Color get onAccent => _brandAccent.computeLuminance() > 0.5 ? Colors.black : Colors.white;
   static Color get onVibrant => _brandVibrant.computeLuminance() > 0.5 ? Colors.black : Colors.white;
 
-  static Color get primaryContainer => _brandPrimary.withValues(alpha: 0.08);
-  static Color get secondaryContainer => _brandSecondary.withValues(alpha: 0.08);
+  static Color get primaryContainer => _brandPrimary.withOpacity(0.08);
+  static Color get secondaryContainer => _brandSecondary.withOpacity(0.08);
   
   // Background & Surface
   static const Color background = Color(0xFFF8F9FD);
@@ -87,7 +87,7 @@ class PulseColors {
   
   // Advanced Gradients
   static LinearGradient get primaryGradient => LinearGradient(
-    colors: [_brandPrimary, _brandVibrant, _brandPrimary.withValues(alpha: 0.8)],
+    colors: [_brandPrimary, _brandVibrant, _brandPrimary.withOpacity(0.8)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
     stops: const [0.0, 0.5, 1.0],
@@ -95,9 +95,9 @@ class PulseColors {
 
   static LinearGradient get meshGradient => LinearGradient(
     colors: [
-      _brandPrimary.withValues(alpha: 0.15),
-      _brandAccent.withValues(alpha: 0.1),
-      _brandPrimary.withValues(alpha: 0.05),
+      _brandPrimary.withOpacity(0.15),
+      _brandAccent.withOpacity(0.1),
+      _brandPrimary.withOpacity(0.05),
     ],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
@@ -105,21 +105,21 @@ class PulseColors {
 
   static LinearGradient get glassGradient => LinearGradient(
     colors: [
-      Colors.white.withValues(alpha: 0.2),
-      Colors.white.withValues(alpha: 0.05),
+      Colors.white.withOpacity(0.2),
+      Colors.white.withOpacity(0.05),
     ],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
 
   static LinearGradient get surfaceGradient => LinearGradient(
-    colors: [Colors.white, _brandPrimary.withValues(alpha: 0.02)],
+    colors: [Colors.white, _brandPrimary.withOpacity(0.02)],
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
   );
 
   static LinearGradient get drawerGradient => LinearGradient(
-    colors: [_brandPrimary, _brandPrimary.withValues(alpha: 0.85)],
+    colors: [_brandPrimary, _brandPrimary.withOpacity(0.85)],
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
   );
@@ -140,12 +140,12 @@ class PulseColors {
   // Modern Shadows
   static List<BoxShadow> get premiumShadow => [
     BoxShadow(
-      color: Colors.black.withValues(alpha: 0.03),
+      color: Colors.black.withOpacity(0.03),
       blurRadius: 10,
       offset: const Offset(0, 4),
     ),
     BoxShadow(
-      color: _brandPrimary.withValues(alpha: 0.05),
+      color: _brandPrimary.withOpacity(0.05),
       blurRadius: 20,
       offset: const Offset(0, 10),
       spreadRadius: -2,
@@ -154,7 +154,7 @@ class PulseColors {
 
   static List<BoxShadow> get brandShadow => [
     BoxShadow(
-      color: _brandPrimary.withValues(alpha: 0.15),
+      color: _brandPrimary.withOpacity(0.15),
       blurRadius: 24,
       offset: const Offset(0, 12),
       spreadRadius: -4,
@@ -163,7 +163,7 @@ class PulseColors {
 
   static List<BoxShadow> get brandGlow => [
     BoxShadow(
-      color: _brandPrimary.withValues(alpha: 0.3),
+      color: _brandPrimary.withOpacity(0.3),
       blurRadius: 15,
       spreadRadius: 1,
     ),
@@ -171,7 +171,7 @@ class PulseColors {
 
   static List<BoxShadow> get glassShadow => [
     BoxShadow(
-      color: Colors.black.withValues(alpha: 0.03),
+      color: Colors.black.withOpacity(0.03),
       blurRadius: 12,
       offset: const Offset(0, 4),
     ),

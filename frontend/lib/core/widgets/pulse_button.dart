@@ -114,7 +114,7 @@ class _PulseButtonState extends State<PulseButton>
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
                           colors: [
-                            Colors.white.withValues(alpha: 0.2),
+                            Colors.white.withOpacity(0.2),
                             Colors.transparent,
                           ],
                         ),

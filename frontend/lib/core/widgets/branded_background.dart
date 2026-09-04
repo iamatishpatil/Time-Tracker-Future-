@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/branding_provider.dart';
 import '../theme/pulse_colors.dart';
-import '../../services/api_service.dart';
+import 'package:frontend/core/services/api_service.dart';
 
 class BrandedBackground extends ConsumerWidget {
   final Widget? child;

@@ -36,7 +36,7 @@ class PulseCard extends StatelessWidget {
         color: glassEffect ? Colors.transparent : (color ?? PulseColors.surface),
         borderRadius: BorderRadius.circular(borderRadius),
         border: Border.all(
-          color: borderColor ?? (glassEffect ? Colors.white.withValues(alpha: 0.2) : PulseColors.border),
+          color: borderColor ?? (glassEffect ? Colors.white.withOpacity(0.2) : PulseColors.border),
           width: 1,
         ),
         boxShadow: shadows ?? (glowEffect ? PulseColors.brandShadow : (glassEffect ? PulseColors.glassShadow : PulseColors.premiumShadow)),

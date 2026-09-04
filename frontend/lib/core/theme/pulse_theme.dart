@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -39,7 +40,7 @@ class PulseTheme {
         elevation: 0,
         scrolledUnderElevation: 2,
         centerTitle: true,
-        surfaceTintColor: PulseColors.primary.withValues(alpha: 0.05),
+        surfaceTintColor: PulseColors.primary.withOpacity(0.05),
         systemOverlayStyle: SystemUiOverlayStyle.dark,
         titleTextStyle: GoogleFonts.outfit(
           color: PulseColors.textPrimary,
@@ -54,12 +55,12 @@ class PulseTheme {
       ),
 
       // Cards
-      cardTheme: CardThemeData(
+      cardTheme: const CardThemeData(
         color: PulseColors.surface,
         elevation: 0,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(24),
-          side: const BorderSide(color: PulseColors.border, width: 1),
+          borderRadius: BorderRadius.all(Radius.circular(24)),
+          side: BorderSide(color: PulseColors.border, width: 1),
         ),
         margin: EdgeInsets.zero,
       ),
@@ -78,7 +79,7 @@ class PulseTheme {
             letterSpacing: 0,
           ),
         ).copyWith(
-          overlayColor: WidgetStateProperty.all(Colors.white.withValues(alpha: 0.1)),
+          overlayColor: WidgetStateProperty.all(Colors.white.withOpacity(0.1)),
         ),
       ),
 
@@ -86,7 +87,7 @@ class PulseTheme {
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           foregroundColor: PulseColors.secondary,
-          side: BorderSide(color: PulseColors.secondary.withValues(alpha: 0.5), width: 1.5),
+          side: BorderSide(color: PulseColors.secondary.withOpacity(0.5), width: 1.5),
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           textStyle: GoogleFonts.plusJakartaSans(
@@ -99,15 +100,15 @@ class PulseTheme {
       // Input Decoration
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: PulseColors.primary.withValues(alpha: 0.03),
+        fillColor: PulseColors.primary.withOpacity(0.03),
         contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(18),
-          borderSide: BorderSide(color: PulseColors.primary.withValues(alpha: 0.1)),
+          borderSide: BorderSide(color: PulseColors.primary.withOpacity(0.1)),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(18),
-          borderSide: BorderSide(color: PulseColors.primary.withValues(alpha: 0.1)),
+          borderSide: BorderSide(color: PulseColors.primary.withOpacity(0.1)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(18),
@@ -119,8 +120,8 @@ class PulseTheme {
         ),
         labelStyle: GoogleFonts.inter(color: PulseColors.textSecondary, fontSize: 14),
         hintStyle: GoogleFonts.inter(color: PulseColors.textHint, fontSize: 14),
-        prefixIconColor: PulseColors.primary.withValues(alpha: 0.6),
-        suffixIconColor: PulseColors.primary.withValues(alpha: 0.6),
+        prefixIconColor: PulseColors.primary.withOpacity(0.6),
+        suffixIconColor: PulseColors.primary.withOpacity(0.6),
       ),
 
       // Bottom Navigation
@@ -136,7 +137,7 @@ class PulseTheme {
       // Drawer
       drawerTheme: DrawerThemeData(
         backgroundColor: PulseColors.surface,
-        surfaceTintColor: PulseColors.primary.withValues(alpha: 0.05),
+        surfaceTintColor: PulseColors.primary.withOpacity(0.05),
         elevation: 0,
         shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.horizontal(right: Radius.circular(24)),
@@ -146,12 +147,12 @@ class PulseTheme {
       // ProgressIndicator
       progressIndicatorTheme: ProgressIndicatorThemeData(
         color: PulseColors.primary,
-        linearTrackColor: PulseColors.primary.withValues(alpha: 0.1),
+        linearTrackColor: PulseColors.primary.withOpacity(0.1),
       ),
 
       // Chips
       chipTheme: ChipThemeData(
-        backgroundColor: PulseColors.primary.withValues(alpha: 0.08),
+        backgroundColor: PulseColors.primary.withOpacity(0.08),
         selectedColor: PulseColors.primary,
         labelStyle: GoogleFonts.inter(
           fontSize: 13,
@@ -240,7 +241,7 @@ class PulseTheme {
 
       // ListTile
       listTileTheme: ListTileThemeData(
-        iconColor: PulseColors.primary.withValues(alpha: 0.7),
+        iconColor: PulseColors.primary.withOpacity(0.7),
         textColor: PulseColors.textPrimary,
         titleTextStyle: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 16),
         subtitleTextStyle: GoogleFonts.inter(color: PulseColors.textSecondary, fontSize: 13),
@@ -250,7 +251,7 @@ class PulseTheme {
 
       // Icon
       iconTheme: IconThemeData(
-        color: PulseColors.primary.withValues(alpha: 0.8),
+        color: PulseColors.primary.withOpacity(0.8),
         size: 24,
       ),
     );

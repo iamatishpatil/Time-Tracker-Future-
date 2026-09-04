@@ -43,7 +43,7 @@ class PulseScaffold extends StatelessWidget {
       body: useBrandedBackground
           ? BrandedBackground(child: body)
           : body,
-      backgroundColor: brandVibrant ? PulseColors.brandLight.withValues(alpha: 0.5) : null,
+      backgroundColor: brandVibrant ? PulseColors.brandLight.withOpacity(0.5) : null,
     );
   }
 }

@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Frontend</string>
+	<string>Trackzo</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -13,7 +13,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>frontend</string>
+	<string>Trackzo</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -50,5 +50,15 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<key>NSCameraUsageDescription</key>
+	<string>Trackzo requires camera access for selfie verification during attendance check-in.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Trackzo requires location access to verify attendance check-in within the office radius.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Trackzo requires location access for geofence workspace verification.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Trackzo requires photo library access to upload profile pictures.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Trackzo requires Face ID access for secure biometric login.</string>
 </dict>
 </plist>

@@ -1,33 +1,37 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import 'core/theme/pulse_theme.dart';
 import 'core/providers/branding_provider.dart';
-import 'screens/splash_screen.dart';
-import 'screens/admin/admin_settings_screen.dart';
-import 'screens/login_screen.dart';
-import 'screens/register_screen.dart';
-import 'screens/checkout_screen.dart';
-import 'screens/admin/admin_attendance_screen.dart';
-import 'screens/admin/admin_employees_screen.dart';
-import 'screens/admin/admin_leaves_screen.dart';
-import 'screens/admin/admin_reports_screen.dart';
-import 'screens/attendance_history_screen.dart';
-import 'screens/leave_screen.dart';
-import 'screens/change_password_screen.dart';
-import 'screens/main_container.dart';
-import 'screens/notification_screen.dart';
-import 'screens/user_holidays_screen.dart';
-import 'screens/user_shifts_screen.dart';
-import 'screens/user_payslips_screen.dart';
-import 'screens/admin/admin_payslips_screen.dart';
-import 'screens/admin/admin_container.dart';
-import 'screens/admin/admin_holidays_screen.dart';
-import 'screens/admin/admin_login_screen.dart';
-import 'screens/admin/admin_register_screen.dart';
+import 'core/services/firebase_service.dart';
+
+import 'features/auth/screens/login_screen.dart';
+import 'features/auth/screens/register_screen.dart';
+import 'features/auth/screens/admin_login_screen.dart';
+import 'features/auth/screens/admin_register_screen.dart';
+import 'features/attendance/screens/splash_screen.dart';
+import 'features/attendance/screens/main_container.dart';
+import 'features/attendance/screens/attendance_history_screen.dart';
+import 'features/attendance/screens/checkout_screen.dart';
+import 'features/attendance/screens/notification_screen.dart';
+import 'features/leaves/screens/leave_screen.dart';
+import 'features/leaves/screens/user_holidays_screen.dart';
+import 'features/payroll/screens/user_shifts_screen.dart';
+import 'features/payroll/screens/user_payslips_screen.dart';
+import 'features/profile/screens/change_password_screen.dart';
+import 'features/admin/screens/admin_container.dart';
+import 'features/admin/screens/admin_attendance_screen.dart';
+import 'features/admin/screens/admin_employees_screen.dart';
+import 'features/admin/screens/admin_leaves_screen.dart';
+import 'features/admin/screens/admin_reports_screen.dart';
+import 'features/admin/screens/admin_payslips_screen.dart';
+import 'features/admin/screens/admin_settings_screen.dart';
+import 'features/admin/screens/admin_holidays_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await FirebaseService.initialize();
   
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
@@ -75,7 +79,6 @@ class TimeTrackerApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Watch branding to trigger rebuild when color changes
     ref.watch(brandingProvider);
     
     return MaterialApp(
@@ -112,4 +115,3 @@ class TimeTrackerApp extends ConsumerWidget {
     );
   }
 }
-

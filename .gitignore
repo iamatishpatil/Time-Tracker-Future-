@@ -8,6 +8,7 @@ backend/.env
 # backend/.env.production
 backend/*.log
 backend/uploads/
+backend/*-firebase-adminsdk-*.json
 
 # ==========================================
 # Frontend — Flutter

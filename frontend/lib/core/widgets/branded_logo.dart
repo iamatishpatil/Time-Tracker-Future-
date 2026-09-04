@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/branding_provider.dart';
 import '../theme/pulse_colors.dart';
 import '../theme/pulse_text_styles.dart';
-import '../../services/api_service.dart';
+import 'package:frontend/core/services/api_service.dart';
 
 class BrandedLogo extends ConsumerWidget {
   final double size;
