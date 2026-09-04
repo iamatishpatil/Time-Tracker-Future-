@@ -2,10 +2,9 @@
 # Backend — Node.js
 # ==========================================
 backend/node_modules/
+node_modules/
 backend/.env
-# backend/.env.development
-# backend/.env.staging
-# backend/.env.production
+backend/.env.*
 backend/*.log
 backend/uploads/
 backend/*-firebase-adminsdk-*.json
@@ -22,6 +21,11 @@ frontend/.pub-cache/
 frontend/.pub/
 frontend/pubspec.lock
 
+# Frontend analysis/debug output
+frontend/analysis*.txt
+frontend/analyze*.txt
+frontend/final_analysis*.txt
+
 # Android build artifacts
 frontend/android/.gradle/
 frontend/android/local.properties
@@ -36,13 +40,22 @@ frontend/ios/Flutter/Flutter.podspec
 frontend/ios/Runner.xcworkspace/
 
 # ==========================================
+# Build Artifacts
+# ==========================================
+*.apk
+*.aab
+*.ipa
+
+# ==========================================
 # General
 # ==========================================
 *.log
 *.DS_Store
+.DS_Store
 Thumbs.db
-.vscode/settings.json
+.vscode/
 .idea/
+__MACOSX/
 
 # Database files
 *.db
